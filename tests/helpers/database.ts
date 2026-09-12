@@ -30,6 +30,7 @@ const TABLES_IN_DELETE_ORDER = [
   'users',
   'units',
   'tenant_features',
+  'tenant_sequences',
   'tenants',
   'plan_entitlements',
   'plans',

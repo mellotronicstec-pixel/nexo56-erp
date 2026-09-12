@@ -13,6 +13,16 @@ Decisões e alternativas ficam nos [ADRs](../adr/README.md).
 - [Design System e identidade](design-system.md)
 - [Deploy](../hostinger.md)
 
+### Camada de dados (Prompt 02)
+
+- [Convenções de modelagem](../database/conventions.md)
+- [Schema físico](../database/schema.md)
+- [Data Dictionary](../database/data-dictionary.md)
+- [Matriz de ownership](../database/ownership-matrix.md)
+- [Sensibilidade de dados](../database/data-sensitivity.md)
+- [ERD](../database/erd.md)
+- [Governança e LGPD](../database/lgpd.md)
+
 ## Forma geral
 
 Monólito modular em Next.js, um processo Node, um banco MariaDB.

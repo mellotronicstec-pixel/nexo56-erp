@@ -110,10 +110,22 @@ npm run db:migrate       # aplica
 
 ### Tabelas
 
-17 no total: `tenants`, `units`, `users`, `user_units`, `sessions`, `roles`,
-`permissions`, `role_permissions`, `user_roles`, `features`,
-`feature_dependencies`, `plans`, `plan_entitlements`, `tenant_features`,
-`audit_logs`, `domain_events`, `jobs`.
+18 no total: `tenants`, `units`, `tenant_sequences`, `users`, `user_units`,
+`sessions`, `roles`, `permissions`, `role_permissions`, `user_roles`,
+`features`, `feature_dependencies`, `plans`, `plan_entitlements`,
+`tenant_features`, `audit_logs`, `domain_events`, `jobs`.
+
+### Documentação do modelo
+
+| Documento                                                   | Conteúdo                                                                        |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| [Convenções](docs/database/conventions.md)                  | Nomenclatura, IDs, tempo, dinheiro, nulos, soft delete, FKs, índices, paginação |
+| [Schema físico](docs/database/schema.md)                    | Cada tabela: finalidade, ownership, PK, FKs, índices, política de delete        |
+| [Data Dictionary](docs/database/data-dictionary.md)         | Significado, tipo e obrigatoriedade das colunas                                 |
+| [Matriz de ownership](docs/database/ownership-matrix.md)    | Escopo de cada entidade, existente e futura                                     |
+| [Sensibilidade de dados](docs/database/data-sensitivity.md) | Classificação PII, financeiro, credencial                                       |
+| [ERD](docs/database/erd.md)                                 | Diagrama Mermaid — schema atual e modelo conceitual futuro                      |
+| [Governança e LGPD](docs/database/lgpd.md)                  | Finalidade, minimização, retenção, direitos do titular                          |
 
 ---
 
@@ -190,6 +202,15 @@ produção nunca pode ser alcançado por um teste que trunca tabelas.
 ```sql
 CREATE DATABASE nexo56_test CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
+
+**Privilégio adicional:** o teste de upgrade de migration cria e descarta
+bancos temporários com prefixo `nexo56_`. Conceda ao usuário de teste:
+
+```sql
+GRANT ALL PRIVILEGES ON `nexo56\_%`.* TO 'seu_usuario'@'localhost';
+```
+
+No CI isso já é atendido porque a suíte roda como `root` no serviço MariaDB.
 
 A limpeza entre testes **preserva o schema** (`DELETE`, nunca `DROP DATABASE`).
 Se preferir subir o MariaDB de teste em container, isso é uma escolha **local**:
