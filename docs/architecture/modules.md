@@ -1,0 +1,48 @@
+# Módulos da fundação
+
+Somente módulos **estruturais**. Não há módulo de negócio, nem placeholder de
+módulo futuro (Prompt 01, itens 8 e 82).
+
+| Módulo                 | Responsabilidade                                                 | Tabelas                                                                             |
+| ---------------------- | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `auth`                 | senha, sessão, login, contexto autenticado                       | `sessions`                                                                          |
+| `tenancy`              | empresa (tenant) e unidades; provisionamento                     | `tenants`, `units`                                                                  |
+| `users`                | usuários e vínculo com unidades                                  | `users`, `user_units`                                                               |
+| `access-control`       | papéis, permissões e guard                                       | `roles`, `permissions`, `role_permissions`, `user_roles`                            |
+| `features`             | catálogo, entitlements, configuração do tenant, Effective Access | `features`, `feature_dependencies`, `plans`, `plan_entitlements`, `tenant_features` |
+| `audit`                | trilha de auditoria                                              | `audit_logs`                                                                        |
+| `events`               | eventos de domínio e despacho                                    | `domain_events`                                                                     |
+| `jobs`                 | fila, executor e handlers técnicos                               | `jobs`                                                                              |
+| `core` (compartilhado) | env, banco, erros, log, IDs, contexto, rate limit                | —                                                                                   |
+
+## Dependências entre módulos
+
+```
+core  ←── todos
+
+tenancy ──→ features (plano do tenant)
+users   ──→ tenancy
+auth    ──→ users, tenancy, audit, events
+access-control ──→ users, tenancy, features, auth
+features ──→ tenancy, audit, events
+audit   ──→ core
+events  ──→ core
+jobs    ──→ auth (handler de limpeza de sessão), core
+```
+
+Sem ciclo na camada de aplicação. Entre os arquivos de `schema.ts` existe um
+ciclo **de tipo** deliberado (`tenants.plan_id → plans` e
+`tenant_features.tenant_id → tenants`), resolvido pelas referências preguiçosas
+do Drizzle (`references(() => ...)`), que só são avaliadas na geração da
+migration — não na carga do módulo.
+
+## Regras para acrescentar um módulo
+
+1. Criar `src/modules/<nome>/{domain,application,infrastructure}`.
+2. Declarar as tabelas em `infrastructure/schema.ts` **com `tenant_id`** quando
+   forem entidades de negócio, e exportá-las em `src/core/db/schema.ts`.
+3. Declarar a feature em `FEATURE_CATALOG` e as permissões em
+   `PERMISSION_CATALOG` — nunca criar chave solta em runtime.
+4. Responder às 12 perguntas do item 102 da Constituição.
+5. Acrescentar testes de travessia entre tenants para as novas consultas.
+6. Gerar migration (`npm run db:generate`) e revisar o SQL antes de aplicar.

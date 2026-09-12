@@ -1,0 +1,46 @@
+# dependencias
+node_modules/
+.pnp
+.pnp.js
+
+# build
+.next/
+out/
+build/
+dist/
+*.tsbuildinfo
+next-env.d.ts
+
+# ambiente e segredos
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+secrets/
+
+# logs
+*.log
+npm-debug.log*
+logs/
+
+# testes e cobertura
+coverage/
+.vitest/
+
+# dumps de banco
+*.sql.gz
+*.dump
+dumps/
+
+# sistema operacional / editores
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+!.vscode/extensions.json
+
+# temporarios
+tmp/
+.cache/

@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [main, 'claude/**']
+  pull_request:
+    branches: [main]
+
+# Sem deploy automático para produção nesta etapa (Prompt 01, item 70).
+jobs:
+  verificacao:
+    name: Lint, typecheck, testes e build
+    runs-on: ubuntu-latest
+
+    services:
+      mariadb:
+        image: mariadb:10.11
+        env:
+          MARIADB_ROOT_PASSWORD: ci-root-password
+          MARIADB_DATABASE: nexo56_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      # Valores exclusivos de CI. Não são segredos reais e o banco é efêmero.
+      APP_URL: http://localhost:3000
+      DATABASE_URL: mysql://root:ci-root-password@127.0.0.1:3306/nexo56_ci
+      TEST_DATABASE_URL: mysql://root:ci-root-password@127.0.0.1:3306/nexo56_test
+      SESSION_SECRET: ci-session-secret-com-mais-de-32-caracteres-ok
+      JOB_SECRET: ci-job-secret-com-mais-de-32-caracteres-okay!!
+      LOG_LEVEL: error
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Formatação
+        run: npm run format:check
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Preparar banco de CI
+        run: |
+          mysql -h 127.0.0.1 -u root -pci-root-password -e "
+            CREATE DATABASE IF NOT EXISTS nexo56_ci
+              CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+            CREATE DATABASE IF NOT EXISTS nexo56_test
+              CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+
+      - name: Migrations
+        run: npm run db:migrate
+
+      - name: Testes
+        run: npm test
+
+      - name: Build de produção
+        run: npm run build

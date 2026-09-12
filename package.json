@@ -1,0 +1,51 @@
+{
+  "name": "nexo56-erp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Nexo56 ERP \u2014 fundacao tecnica (Prompt 01).",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "node --conditions=react-server --import tsx scripts/migrate.ts",
+    "db:seed": "node --conditions=react-server --import tsx scripts/seed.ts",
+    "bootstrap": "node --conditions=react-server --import tsx scripts/bootstrap.ts",
+    "jobs:run": "node --conditions=react-server --import tsx scripts/run-jobs.ts"
+  },
+  "engines": {
+    "node": ">=22.0.0 <23"
+  },
+  "type": "module",
+  "dependencies": {
+    "drizzle-orm": "^0.45.2",
+    "mysql2": "^3.24.4",
+    "next": "^16.3.5",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "server-only": "^0.0.1",
+    "zod": "^4.6.2"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3.3.7",
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/node": "^22.20.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "drizzle-kit": "^0.31.10",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^16.3.5",
+    "postcss": "^8.5.28",
+    "prettier": "^3.9.6",
+    "tailwindcss": "^4.3.3",
+    "tsx": "^4.23.13",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.0"
+  }
+}
