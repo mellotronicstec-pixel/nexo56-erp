@@ -17,7 +17,8 @@ export interface NavItem {
   href: string;
   label: string;
   featureKey: string;
-  permission: PermissionKey;
+  /** Nulo = basta estar autenticado e ter a feature disponivel. */
+  permission: PermissionKey | null;
 }
 
 export interface NavSection {
@@ -26,6 +27,18 @@ export interface NavSection {
 }
 
 export const NAV_SECTIONS: readonly NavSection[] = [
+  {
+    title: 'Minha area',
+    items: [
+      {
+        href: '/minha-conta',
+        label: 'Minha conta',
+        featureKey: FEATURES.CORE_AUTH,
+        // Toda pessoa autenticada gerencia a propria senha e sessoes.
+        permission: null,
+      },
+    ],
+  },
   {
     title: 'Administracao',
     items: [

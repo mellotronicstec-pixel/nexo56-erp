@@ -96,12 +96,12 @@ describe('unidade autorizada do usuario', () => {
 
   it('pedir A2 sem vinculo nao concede acesso — cai na unidade autorizada', async () => {
     const context = await contextFor(tenantA, unitA2);
-    expect(context?.unitId).toBe(tenantA.unitId);
+    expect(context?.activeUnitId).toBe(tenantA.unitId);
   });
 
   it('pedir a unidade de outro tenant e ignorado', async () => {
     const context = await contextFor(tenantA, tenantB.unitId);
-    expect(context?.unitId).toBe(tenantA.unitId);
+    expect(context?.activeUnitId).toBe(tenantA.unitId);
     expect(context?.authorizedUnitIds).not.toContain(tenantB.unitId);
   });
 
@@ -113,7 +113,7 @@ describe('unidade autorizada do usuario', () => {
 
     const context = await contextFor(tenantA, unitA2);
     expect(context?.authorizedUnitIds).toHaveLength(2);
-    expect(context?.unitId).toBe(unitA2);
+    expect(context?.activeUnitId).toBe(unitA2);
   });
 });
 
@@ -133,7 +133,7 @@ describe('escopo por unidade nos registros (ainda nao implementado)', () => {
   it('hoje a permissao vale no tenant inteiro, nao por unidade', async () => {
     const context = await contextFor(tenantA);
     // Nenhuma permissao carrega escopo de unidade nesta etapa.
-    expect(context?.permissions.size).toBeGreaterThan(0);
+    expect(context?.tenantPermissions.size).toBeGreaterThan(0);
     expect(Object.keys(context ?? {})).not.toContain('unitScopedPermissions');
   });
 });

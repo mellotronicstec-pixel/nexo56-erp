@@ -41,8 +41,12 @@ async function connectToUpgradeDatabase(): Promise<mysql.Connection> {
   });
 }
 
-/** Pasta temporaria com apenas a primeira migration, simulando o Prompt 01. */
-function buildFoundationOnlyFolder(): string {
+/**
+ * Pasta temporaria contendo as migrations ATE a etapa indicada, para simular um
+ * banco parado naquele prompt. O journal reduzido faz o migrator aplicar apenas
+ * o que existia ate ali.
+ */
+function buildFolderUpTo(lastTag: string): string {
   const folder = mkdtempSync(join(tmpdir(), 'nexo56-migrations-'));
   cpSync('./drizzle', folder, { recursive: true });
 
@@ -50,10 +54,15 @@ function buildFoundationOnlyFolder(): string {
   const journal = JSON.parse(readFileSync(journalPath, 'utf8')) as {
     entries: Array<{ tag: string }>;
   };
-  journal.entries = journal.entries.filter((entry) => entry.tag.startsWith('0000'));
+  journal.entries = journal.entries.filter((entry) => entry.tag <= `${lastTag}_zzz`);
   writeFileSync(journalPath, JSON.stringify(journal, null, 2));
 
   return folder;
+}
+
+/** Atalho para o estado do Prompt 01. */
+function buildFoundationOnlyFolder(): string {
+  return buildFolderUpTo('0000');
 }
 
 beforeAll(async () => {
@@ -69,7 +78,7 @@ afterAll(async () => {
   await adminConnection.end();
 });
 
-describe('upgrade do Prompt 01 para o Prompt 02', () => {
+describe('upgrade incremental entre prompts', () => {
   it('preserva todos os dados existentes e adiciona as novas estruturas', async () => {
     // --- 1. banco na fundacao do Prompt 01 -----------------------------------
     const foundationFolder = buildFoundationOnlyFolder();
@@ -197,6 +206,108 @@ describe('upgrade do Prompt 01 para o Prompt 02', () => {
     }
   });
 
+  it('leva um banco do Prompt 02, com dados, ate o Prompt 03 sem perda', async () => {
+    const stepDb = 'nexo56_migration_step03_test';
+    await adminConnection.query(`DROP DATABASE IF EXISTS \`${stepDb}\``);
+    await adminConnection.query(
+      `CREATE DATABASE \`${stepDb}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`,
+    );
+
+    const folder = buildFolderUpTo('0001');
+    const connection = await mysql.createConnection({
+      uri: urlForDatabase(stepDb),
+      timezone: 'Z',
+      multipleStatements: true,
+    });
+
+    try {
+      // --- banco no estado do Prompt 02 --------------------------------------
+      await migrate(drizzle(connection), { migrationsFolder: folder });
+
+      const [beforeTables] = await connection.query<mysql.RowDataPacket[]>('SHOW TABLES');
+      const beforeNames = beforeTables.map((row) => Object.values(row)[0] as string);
+      expect(beforeNames).not.toContain('user_unit_roles');
+      expect(beforeNames).not.toContain('password_reset_tokens');
+
+      await connection.query(`
+        INSERT INTO plans (id, \`key\`, name, description, is_internal, created_at, updated_at)
+        VALUES ('plan-p2', 'internal', 'Plano interno', '', 1, NOW(3), NOW(3));
+
+        INSERT INTO tenants (id, slug, name, status, timezone, plan_id, created_at, updated_at)
+        VALUES ('tenant-p2', 'empresa-p2', 'Empresa P2', 'active', 'America/Sao_Paulo', 'plan-p2', NOW(3), NOW(3));
+
+        INSERT INTO units (id, tenant_id, name, status, created_at, updated_at)
+        VALUES ('unit-p2', 'tenant-p2', 'Unidade P2', 'active', NOW(3), NOW(3));
+
+        INSERT INTO users (id, tenant_id, email, name, password_hash, status, created_at, updated_at)
+        VALUES ('user-p2', 'tenant-p2', 'p2@empresa.invalid', 'Usuario P2', 'scrypt$65536$8$2$c2FsdA==$aGFzaA==', 'active', NOW(3), NOW(3));
+
+        INSERT INTO user_units (user_id, unit_id, tenant_id, created_at)
+        VALUES ('user-p2', 'unit-p2', 'tenant-p2', NOW(3));
+
+        INSERT INTO roles (id, tenant_id, \`key\`, name, description, is_system, created_at, updated_at)
+        VALUES ('role-p2', 'tenant-p2', 'admin', 'Administrador', '', 1, NOW(3), NOW(3));
+
+        INSERT INTO user_roles (user_id, role_id, tenant_id, created_at)
+        VALUES ('user-p2', 'role-p2', 'tenant-p2', NOW(3));
+
+        INSERT INTO sessions (id, user_id, tenant_id, token_hash, expires_at, last_used_at, created_at)
+        VALUES ('sessao-p2', 'user-p2', 'tenant-p2', 'hash-p2', DATE_ADD(NOW(3), INTERVAL 1 DAY), NOW(3), NOW(3));
+
+        INSERT INTO tenant_sequences (tenant_id, sequence_type, current_value, prefix, padding, updated_at)
+        VALUES ('tenant-p2', 'service_order', 42, 'OS', 6, NOW(3));
+      `);
+
+      // --- aplica o Prompt 03 -------------------------------------------------
+      await migrate(drizzle(connection), { migrationsFolder: './drizzle' });
+
+      const [rows] = await connection.query<mysql.RowDataPacket[]>(`
+        SELECT
+          (SELECT COUNT(*) FROM tenants)          AS tenants,
+          (SELECT COUNT(*) FROM users)            AS users,
+          (SELECT COUNT(*) FROM user_units)       AS user_units,
+          (SELECT COUNT(*) FROM user_roles)       AS user_roles,
+          (SELECT COUNT(*) FROM sessions)         AS sessions,
+          (SELECT current_value FROM tenant_sequences WHERE tenant_id='tenant-p2') AS sequence_value
+      `);
+
+      expect(rows[0]).toMatchObject({
+        tenants: 1,
+        users: 1,
+        user_units: 1,
+        user_roles: 1,
+        sessions: 1,
+        sequence_value: 42,
+      });
+
+      // A atribuicao tenant-wide existente continua valendo, sem migracao de linhas.
+      const [assignment] = await connection.query<mysql.RowDataPacket[]>(
+        "SELECT user_id, role_id, created_by FROM user_roles WHERE user_id = 'user-p2'",
+      );
+      expect(assignment[0]).toMatchObject({
+        user_id: 'user-p2',
+        role_id: 'role-p2',
+        created_by: null,
+      });
+
+      // Papel por unidade EXIGE membership, imposto pelo banco (item 20).
+      await connection.query(`
+        INSERT INTO units (id, tenant_id, name, status, created_at, updated_at)
+        VALUES ('unit-p2b', 'tenant-p2', 'Unidade sem vinculo', 'active', NOW(3), NOW(3))
+      `);
+      await expect(
+        connection.query(`
+          INSERT INTO user_unit_roles (user_id, role_id, unit_id, tenant_id, created_at)
+          VALUES ('user-p2', 'role-p2', 'unit-p2b', 'tenant-p2', NOW(3))
+        `),
+      ).rejects.toThrow();
+    } finally {
+      await connection.end();
+      rmSync(folder, { recursive: true, force: true });
+      await adminConnection.query(`DROP DATABASE IF EXISTS \`${stepDb}\``);
+    }
+  });
+
   it('cria um banco vazio do zero com todas as migrations', async () => {
     const freshDb = 'nexo56_migration_fresh_test';
     await adminConnection.query(`DROP DATABASE IF EXISTS \`${freshDb}\``);
@@ -216,10 +327,33 @@ describe('upgrade do Prompt 01 para o Prompt 02', () => {
       const [tables] = await connection.query<mysql.RowDataPacket[]>('SHOW TABLES');
       const names = tables.map((row) => Object.values(row)[0] as string);
 
-      expect(names).toContain('tenant_sequences');
-      expect(names).toContain('tenants');
-      // 18 tabelas de negocio/infra + o journal do drizzle
-      expect(names.length).toBe(19);
+      // Presenca das estruturas de cada etapa — e nao uma contagem fixa, que
+      // quebraria a cada prompt sem indicar problema real.
+      expect(names).toEqual(
+        expect.arrayContaining([
+          // Prompt 01
+          'tenants',
+          'units',
+          'users',
+          'user_units',
+          'sessions',
+          'roles',
+          'permissions',
+          'role_permissions',
+          'user_roles',
+          'features',
+          'plans',
+          'tenant_features',
+          'audit_logs',
+          'domain_events',
+          'jobs',
+          // Prompt 02
+          'tenant_sequences',
+          // Prompt 03
+          'user_unit_roles',
+          'password_reset_tokens',
+        ]),
+      );
     } finally {
       await connection.end();
       await adminConnection.query(`DROP DATABASE IF EXISTS \`${freshDb}\``);

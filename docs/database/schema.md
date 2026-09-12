@@ -106,8 +106,24 @@ linha quando usuário **e** unidade pertencem ao mesmo tenant.
 | Sensibilidade | **Credencial** (hash do token)                                      |
 | Módulo        | `auth`                                                              |
 
-Guarda apenas o **SHA-256** do token. IP e user-agent não são armazenados
-(LGPD). A FK composta impede sessão carimbada com tenant diferente do usuário.
+Guarda apenas o **SHA-256** do token. IP não é armazenado; do user-agent só um
+resumo curto em `user_agent_summary`, para a pessoa reconhecer o próprio
+dispositivo (LGPD). A FK composta impede sessão carimbada com tenant diferente
+do usuário.
+
+### `password_reset_tokens` _(novo no Prompt 03)_
+
+| Item          | Valor                                                       |
+| ------------- | ----------------------------------------------------------- |
+| Finalidade    | Redefinição de senha por código de uso único                |
+| Ownership     | tenant                                                      |
+| PK            | `id`                                                        |
+| FKs           | **`(user_id, tenant_id) → users(id, tenant_id)`** `CASCADE` |
+| Unique        | `uq_password_reset_token_hash (token_hash)`                 |
+| Índices       | `ix_password_reset_user`, `ix_password_reset_expires`       |
+| Delete        | Hard delete na limpeza; `used_at` marca o consumo           |
+| Sensibilidade | **Credencial** (hash do código)                             |
+| Módulo        | `auth`                                                      |
 
 ---
 
@@ -139,6 +155,22 @@ Guarda apenas o **SHA-256** do token. IP e user-agent não são armazenados
 | PK     | `(role_id, permission_key)`           | `(user_id, role_id)`                                                    |
 | FKs    | `role_id`, `permission_key` `CASCADE` | **`(user_id, tenant_id) → users`** · **`(role_id, tenant_id) → roles`** |
 | Delete | Hard delete                           | Hard delete                                                             |
+| Escopo | —                                     | atribuição de escopo **TENANT**                                         |
+
+### `user_unit_roles` — atribuição com escopo de unidade _(novo no Prompt 03)_
+
+| Item       | Valor                                                                                                                                                      |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Finalidade | Papel válido **somente** na unidade indicada (escopo UNIT)                                                                                                 |
+| Ownership  | associação, tenant + unit obrigatórios                                                                                                                     |
+| PK         | `(user_id, role_id, unit_id)`                                                                                                                              |
+| FKs        | `(user_id, tenant_id) → users` · `(role_id, tenant_id) → roles` · `(unit_id, tenant_id) → units` · **`(user_id, unit_id) → user_units`** — todas `CASCADE` |
+| Índices    | `ix_user_unit_roles_tenant`, `ix_user_unit_roles_unit`, `ix_user_unit_roles_role`                                                                          |
+| Delete     | Hard delete; cascata ao remover o vínculo de unidade                                                                                                       |
+| Módulo     | `access-control`                                                                                                                                           |
+
+`user_roles` **não foi alterada** e mantém a semântica original. A quarta FK faz
+do "papel por unidade exige vínculo" uma regra do banco, não da aplicação.
 
 ---
 
@@ -198,15 +230,23 @@ duplicada — não uma verificação na aplicação.
 
 ## Proteção cross-tenant no banco (Prompt 02, item 34)
 
-Cinco FKs compostas, verificadas por teste automatizado:
+Nove FKs compostas, verificadas por teste automatizado — cinco do Prompt 02 e
+quatro acrescentadas pelo Prompt 03:
 
-| Constraint                  | Impede                                           |
-| --------------------------- | ------------------------------------------------ |
-| `fk_user_units_user_tenant` | vincular usuário de outro tenant                 |
-| `fk_user_units_unit_tenant` | vincular unidade de outro tenant                 |
-| `fk_user_roles_user_tenant` | atribuir papel a usuário de outro tenant         |
-| `fk_user_roles_role_tenant` | atribuir papel definido em outro tenant          |
-| `fk_sessions_user_tenant`   | sessão carimbada com tenant diferente do usuário |
+| Constraint                       | Impede                                            |
+| -------------------------------- | ------------------------------------------------- |
+| `fk_user_units_user_tenant`      | vincular usuário de outro tenant                  |
+| `fk_user_units_unit_tenant`      | vincular unidade de outro tenant                  |
+| `fk_user_roles_user_tenant`      | atribuir papel a usuário de outro tenant          |
+| `fk_user_roles_role_tenant`      | atribuir papel definido em outro tenant           |
+| `fk_sessions_user_tenant`        | sessão carimbada com tenant diferente do usuário  |
+| `fk_user_unit_roles_user_tenant` | papel por unidade para usuário de outro tenant    |
+| `fk_user_unit_roles_role_tenant` | papel por unidade com perfil de outro tenant      |
+| `fk_user_unit_roles_unit_tenant` | papel por unidade em unidade de outro tenant      |
+| `fk_user_unit_roles_membership`  | **papel por unidade sem vínculo naquela unidade** |
+
+E `fk_password_reset_user_tenant` impede código de redefinição carimbado com
+tenant diferente do usuário.
 
 Antes do Prompt 02 essas associações eram aceitas pelo banco (bloqueadas apenas
 pela aplicação). Testes em `tests/integration/cross-tenant-constraints.test.ts`.

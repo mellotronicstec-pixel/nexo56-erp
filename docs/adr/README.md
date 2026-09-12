@@ -5,28 +5,32 @@ Cada ADR informa **contexto**, **decisão**, **motivo**, **alternativas** e
 **consequências**.
 
 Os ADRs 001–012 vêm do Prompt 01 (fundação técnica); 013–018 do Prompt 02
-(camada de dados).
+(camada de dados); 019–022 do Prompt 03 (acesso, papéis e sessões).
 
 Um ADR não é reescrito quando a decisão muda: cria-se um novo ADR que o
 substitui, e o antigo passa a `Substituído por ADR-XXX`.
 
-| ADR                                        | Assunto                                          | Status |
-| ------------------------------------------ | ------------------------------------------------ | ------ |
-| [001](ADR-001-stack-principal.md)          | Stack principal                                  | Aceito |
-| [002](ADR-002-monolito-modular.md)         | Monólito modular                                 | Aceito |
-| [003](ADR-003-mariadb-e-orm.md)            | MariaDB/MySQL e ORM                              | Aceito |
-| [004](ADR-004-multi-tenancy.md)            | Estratégia multi-tenant compartilhada            | Aceito |
-| [005](ADR-005-isolamento-tenant-aware.md)  | Isolamento tenant-aware                          | Aceito |
-| [006](ADR-006-autenticacao-e-sessoes.md)   | Autenticação e sessões                           | Aceito |
-| [007](ADR-007-rbac.md)                     | RBAC                                             | Aceito |
-| [008](ADR-008-effective-access.md)         | Feature Catalog, Entitlements e Effective Access | Aceito |
-| [009](ADR-009-eventos-internos.md)         | Eventos internos                                 | Aceito |
-| [010](ADR-010-background-jobs.md)          | Background jobs e evolução cron → queue          | Aceito |
-| [011](ADR-011-design-system.md)            | Design System e identidade                       | Aceito |
-| [012](ADR-012-deploy-hostinger.md)         | Deploy Hostinger                                 | Aceito |
-| [013](ADR-013-numeracao-humana.md)         | Numeração humana por tenant                      | Aceito |
-| [014](ADR-014-dinheiro.md)                 | Representação monetária                          | Aceito |
-| [015](ADR-015-ownership-tenant-unidade.md) | Ownership entre tenant e unidade                 | Aceito |
-| [016](ADR-016-soft-delete-e-historico.md)  | Soft delete, arquivamento e histórico            | Aceito |
-| [017](ADR-017-datas-e-timezone.md)         | Datas, horários e fuso                           | Aceito |
-| [018](ADR-018-constraints-cross-tenant.md) | Constraints cross-tenant no banco                | Aceito |
+| ADR                                                    | Assunto                                          | Status |
+| ------------------------------------------------------ | ------------------------------------------------ | ------ |
+| [001](ADR-001-stack-principal.md)                      | Stack principal                                  | Aceito |
+| [002](ADR-002-monolito-modular.md)                     | Monólito modular                                 | Aceito |
+| [003](ADR-003-mariadb-e-orm.md)                        | MariaDB/MySQL e ORM                              | Aceito |
+| [004](ADR-004-multi-tenancy.md)                        | Estratégia multi-tenant compartilhada            | Aceito |
+| [005](ADR-005-isolamento-tenant-aware.md)              | Isolamento tenant-aware                          | Aceito |
+| [006](ADR-006-autenticacao-e-sessoes.md)               | Autenticação e sessões                           | Aceito |
+| [007](ADR-007-rbac.md)                                 | RBAC                                             | Aceito |
+| [008](ADR-008-effective-access.md)                     | Feature Catalog, Entitlements e Effective Access | Aceito |
+| [009](ADR-009-eventos-internos.md)                     | Eventos internos                                 | Aceito |
+| [010](ADR-010-background-jobs.md)                      | Background jobs e evolução cron → queue          | Aceito |
+| [011](ADR-011-design-system.md)                        | Design System e identidade                       | Aceito |
+| [012](ADR-012-deploy-hostinger.md)                     | Deploy Hostinger                                 | Aceito |
+| [013](ADR-013-numeracao-humana.md)                     | Numeração humana por tenant                      | Aceito |
+| [014](ADR-014-dinheiro.md)                             | Representação monetária                          | Aceito |
+| [015](ADR-015-ownership-tenant-unidade.md)             | Ownership entre tenant e unidade                 | Aceito |
+| [016](ADR-016-soft-delete-e-historico.md)              | Soft delete, arquivamento e histórico            | Aceito |
+| [017](ADR-017-datas-e-timezone.md)                     | Datas, horários e fuso                           | Aceito |
+| [018](ADR-018-constraints-cross-tenant.md)             | Constraints cross-tenant no banco                | Aceito |
+| [019](ADR-019-escopo-de-atribuicao-de-perfil.md)       | Escopo de atribuição de perfil (TENANT × UNIT)   | Aceito |
+| [020](ADR-020-vinculo-de-unidade-nao-e-autorizacao.md) | Vínculo de unidade não é autorização             | Aceito |
+| [021](ADR-021-politica-de-autorizacao.md)              | Política de autorização (deny by default)        | Aceito |
+| [022](ADR-022-ciclo-de-vida-da-sessao.md)              | Ciclo de vida da sessão e revogação              | Aceito |

@@ -1,9 +1,13 @@
 import 'server-only';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { getDb } from '@/core/db/client';
 import { newId } from '@/core/ids/id';
-import { PERMISSION_CATALOG } from '@/modules/access-control/domain/permissions';
-import { permissions } from '@/modules/access-control/infrastructure/schema';
+import { PERMISSION_CATALOG, SYSTEM_ROLES } from '@/modules/access-control/domain/permissions';
+import {
+  permissions,
+  rolePermissions,
+  roles,
+} from '@/modules/access-control/infrastructure/schema';
 import { FEATURE_CATALOG, findDependencyCycle } from '@/modules/features/domain/catalog';
 import {
   featureDependencies,
@@ -26,6 +30,8 @@ export interface SyncResult {
   featuresUpserted: number;
   permissionsUpserted: number;
   internalPlanId: string;
+  /** Quantos papeis de sistema foram realinhados ao catalogo. */
+  systemRolesUpdated: number;
 }
 
 export async function syncCatalog(): Promise<SyncResult> {
@@ -88,12 +94,52 @@ export async function syncCatalog(): Promise<SyncResult> {
   }
 
   const internalPlanId = await ensureInternalPlan();
+  const systemRolesUpdated = await syncSystemRolePermissions();
 
   return {
     featuresUpserted: FEATURE_CATALOG.length,
     permissionsUpserted: PERMISSION_CATALOG.length,
     internalPlanId,
+    systemRolesUpdated,
   };
+}
+
+/**
+ * Mantem os papeis de SISTEMA alinhados ao catalogo (Prompt 03, item 79).
+ *
+ * O perfil Administrador significa "acesso administrativo completo". Quando um
+ * prompt acrescenta permissoes ao catalogo, os Administradores ja existentes
+ * precisam passar a te-las — caso contrario, um tenant criado antes da
+ * atualizacao ficaria sem conseguir usar as capacidades novas, e o produto
+ * teria dois tipos de administrador dependendo da data de cadastro.
+ *
+ * Descoberto por teste de ponta a ponta: apos o upgrade, o administrador
+ * existente nao conseguia gerenciar acesso, porque `users.manage_access` havia
+ * nascido depois do seu perfil.
+ *
+ * Idempotente: so insere o que falta, nunca remove permissao concedida a mao.
+ */
+async function syncSystemRolePermissions(): Promise<number> {
+  const db = getDb();
+  const now = new Date();
+
+  const systemRoles = await db
+    .select({ id: roles.id })
+    .from(roles)
+    .where(and(eq(roles.isSystem, true), eq(roles.key, SYSTEM_ROLES.ADMIN)));
+
+  const allPermissions = PERMISSION_CATALOG.map((permission) => permission.key);
+
+  for (const role of systemRoles) {
+    for (const permissionKey of allPermissions) {
+      await db
+        .insert(rolePermissions)
+        .values({ roleId: role.id, permissionKey, createdAt: now })
+        .onDuplicateKeyUpdate({ set: { roleId: role.id } });
+    }
+  }
+
+  return systemRoles.length;
 }
 
 /**

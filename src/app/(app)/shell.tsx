@@ -7,7 +7,7 @@ import { Avatar, Button } from '@/design-system/components';
 import { BrandMark } from '@/design-system/components/brand-mark';
 import { cn } from '@/design-system/cn';
 import type { NavSection } from './navigation';
-import { logoutAction } from './actions';
+import { logoutAction, switchUnitAction } from './actions';
 
 /**
  * Shell autenticado (Prompt 01, item 56).
@@ -24,13 +24,64 @@ export interface ShellUser {
   unitName: string | null;
 }
 
+export interface ShellUnit {
+  id: string;
+  name: string;
+}
+
+/**
+ * Seletor de unidade ativa (Prompt 03, item 23).
+ *
+ * A lista contem APENAS unidades autorizadas — e mesmo assim o servidor
+ * revalida a escolha antes de gravar o cookie, e o contexto revalida a cada
+ * requisicao. O cliente pede; quem decide e o backend.
+ *
+ * Com uma unica unidade, nao aparece seletor algum (item 24).
+ */
+function UnitSwitcher({
+  units,
+  activeUnitId,
+}: {
+  units: ShellUnit[];
+  activeUnitId: string | null;
+}) {
+  if (units.length <= 1) return null;
+
+  return (
+    <form action={switchUnitAction} className="flex items-center gap-2">
+      <label htmlFor="unit-switcher" className="sr-only">
+        Unidade ativa
+      </label>
+      <select
+        id="unit-switcher"
+        name="unitId"
+        defaultValue={activeUnitId ?? ''}
+        className="h-9 max-w-[200px] rounded-md border border-ink-300 bg-white px-2 text-ui text-ink-800 shadow-xs"
+      >
+        {units.map((unit) => (
+          <option key={unit.id} value={unit.id}>
+            {unit.name}
+          </option>
+        ))}
+      </select>
+      <Button type="submit" variant="secondary" size="sm">
+        Trocar
+      </Button>
+    </form>
+  );
+}
+
 export function Shell({
   sections,
   user,
+  units,
+  activeUnitId,
   children,
 }: {
   sections: NavSection[];
   user: ShellUser;
+  units: ShellUnit[];
+  activeUnitId: string | null;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -116,6 +167,14 @@ export function Shell({
                 Fechar
               </Button>
             </div>
+            {units.length > 1 ? (
+              <div className="border-b border-ink-200 px-4 py-3">
+                <p className="mb-2 text-small font-semibold tracking-wide text-ink-400 uppercase">
+                  Unidade ativa
+                </p>
+                <UnitSwitcher units={units} activeUnitId={activeUnitId} />
+              </div>
+            ) : null}
             {nav}
           </div>
         </div>
@@ -143,6 +202,9 @@ export function Shell({
           </div>
 
           <div className="flex items-center gap-3">
+            <div className="hidden lg:block">
+              <UnitSwitcher units={units} activeUnitId={activeUnitId} />
+            </div>
             <div className="hidden text-right sm:block">
               <p className="text-ui font-medium text-ink-800">{user.name}</p>
               <p className="text-small text-ink-500">{user.email}</p>

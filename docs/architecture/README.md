@@ -1,17 +1,23 @@
 # Arquitetura do Nexo56 — visão geral
 
-Documentação da fundação técnica entregue no **Prompt 01**.
+Documentação da fundação técnica (**Prompt 01**), da camada de dados
+(**Prompt 02**) e do controle de acesso (**Prompt 03**).
 Decisões e alternativas ficam nos [ADRs](../adr/README.md).
 
 ## Índice
 
 - [Módulos e dependências](modules.md)
 - [Multi-tenancy e isolamento](multi-tenancy.md)
-- [Autenticação, RBAC e Effective Access](auth.md)
+- [Autenticação e sessões](auth.md)
 - [Eventos, jobs e auditoria](events-jobs-audit.md)
 - [Segurança](security.md)
 - [Design System e identidade](design-system.md)
 - [Deploy](../hostinger.md)
+
+### Controle de acesso (Prompt 03)
+
+- [Papéis, permissões e escopo por unidade](access-control.md)
+- [Matriz de acesso](access-matrix.md)
 
 ### Camada de dados (Prompt 02)
 
@@ -59,9 +65,10 @@ cron do hPanel → npm run jobs:run → JobExecutor → handlers
 1. `runWithContext` abre o contexto de execução e gera o **correlation ID**.
 2. `getCurrentContext()` lê o cookie, valida a sessão **no banco** e monta o
    `TenantContext` (tenant, usuário, unidades autorizadas, papéis, permissões).
-3. O guard (`requireAccess` / `requireAccessForPage`) consulta o
-   **Effective Access**: a feature existe? o plano permite? o tenant ativou?
-   as dependências estão satisfeitas? o usuário tem permissão?
+3. O **AuthorizationService** decide, com negação por padrão: a unidade está
+   autorizada? a permissão vale **naquele escopo**? o recurso alvo pertence ao
+   contexto? E o **Effective Access**: a feature existe, o plano permite, o
+   tenant ativou, as dependências estão satisfeitas?
 4. O serviço executa a operação com consultas **escopadas por tenant**.
 5. Escrita relevante roda em transação com **auditoria** e **evento**; o evento
    só é despachado após o commit.
@@ -69,12 +76,14 @@ cron do hPanel → npm run jobs:run → JobExecutor → handlers
 
 ## Princípios que o código aplica
 
-| Princípio                         | Onde está                                   |
-| --------------------------------- | ------------------------------------------- |
-| O backend é a autoridade final    | `guard.ts`, revalidação em cada página/ação |
-| Tenant nunca vem do cliente       | `current-context.ts`, `tenant-scoped.ts`    |
-| Desativar não apaga dados         | `tenant-configuration.ts`                   |
-| Evento só depois do commit        | `unit-of-work.ts`                           |
-| Domínio não conhece cron          | `job-queue.ts` / `job-executor.ts`          |
-| Segredo nunca em log ou auditoria | `logger.ts` (`redact`), `audit-service.ts`  |
-| Core não depende de IA            | nenhuma dependência de IA no projeto        |
+| Princípio                          | Onde está                                                   |
+| ---------------------------------- | ----------------------------------------------------------- |
+| O backend é a autoridade final     | `authorization-service.ts`, revalidação em cada página/ação |
+| Nenhum superusuário embutido       | `permissions.ts` — Administrador é papel com permissões     |
+| Vínculo de unidade não é permissão | `user_units` × `user_roles`/`user_unit_roles`               |
+| Tenant nunca vem do cliente        | `current-context.ts`, `tenant-scoped.ts`                    |
+| Desativar não apaga dados          | `tenant-configuration.ts`                                   |
+| Evento só depois do commit         | `unit-of-work.ts`                                           |
+| Domínio não conhece cron           | `job-queue.ts` / `job-executor.ts`                          |
+| Segredo nunca em log ou auditoria  | `logger.ts` (`redact`), `audit-service.ts`                  |
+| Core não depende de IA             | nenhuma dependência de IA no projeto                        |

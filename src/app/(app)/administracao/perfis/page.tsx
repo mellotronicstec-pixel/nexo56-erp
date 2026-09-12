@@ -1,21 +1,39 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { Badge, Card, CardBody, CardHeader } from '@/design-system/components';
 import { requireAccessForPage } from '@/modules/access-control/application/guard';
+import { listRolesWithCounts } from '@/modules/access-control/application/role-service';
 import { PERMISSIONS } from '@/modules/access-control/domain/permissions';
 import { FEATURES } from '@/modules/features/domain/catalog';
-import { listRoles } from '@/modules/users/application/user-queries';
+import { effectivePermissions, hasPermission } from '@/modules/tenancy/domain/tenant-context';
+import { CreateRoleForm } from './role-forms';
+import { createRoleAction } from './actions';
 
-export const metadata: Metadata = { title: 'Perfis e permissoes' };
+export const metadata: Metadata = { title: 'Perfis de acesso' };
 
 export default async function RolesPage() {
   const { context } = await requireAccessForPage(
     FEATURES.CORE_ACCESS_CONTROL,
     PERMISSIONS.ROLES_VIEW,
   );
-  const roles = await listRoles(context);
+
+  const roles = await listRolesWithCounts(context);
+  const canManage = hasPermission(context, PERMISSIONS.ROLES_MANAGE);
 
   return (
     <div className="mx-auto max-w-5xl space-y-4">
+      {canManage ? (
+        <Card>
+          <CardHeader
+            title="Novo perfil"
+            description="Um perfil e um conjunto reutilizavel de permissoes."
+          />
+          <CardBody>
+            <CreateRoleForm action={createRoleAction} />
+          </CardBody>
+        </Card>
+      ) : null}
+
       <Card>
         <CardHeader
           title="Perfis de acesso"
@@ -25,24 +43,39 @@ export default async function RolesPage() {
           {roles.map((role) => (
             <div
               key={role.id}
-              className="flex items-start justify-between gap-4 rounded-md border border-ink-200 p-4"
+              className="flex flex-col gap-2 rounded-md border border-ink-200 p-4 sm:flex-row sm:items-center sm:justify-between"
             >
               <div className="min-w-0">
-                <p className="font-medium text-ink-900">{role.name}</p>
-                <p className="mt-0.5 text-small text-ink-500">{role.description}</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="font-medium text-ink-900">{role.name}</p>
+                  {role.isSystem ? <Badge tone="brand">sistema</Badge> : null}
+                  <Badge tone={role.permissionCount === 0 ? 'warning' : 'neutral'}>
+                    {role.permissionCount} permiss{role.permissionCount === 1 ? 'ao' : 'oes'}
+                  </Badge>
+                  <Badge>{role.assignmentCount} atribuicao(oes)</Badge>
+                </div>
+                {role.description ? (
+                  <p className="mt-1 text-small text-ink-500">{role.description}</p>
+                ) : null}
                 <p className="mt-1 font-mono text-small text-ink-400">{role.key}</p>
               </div>
-              {role.isSystem ? <Badge tone="brand">sistema</Badge> : null}
+
+              <Link
+                href={`/administracao/perfis/${role.id}`}
+                className="touch-target inline-flex items-center text-ui font-semibold text-brand-600 hover:text-brand-700 md:min-h-0"
+              >
+                Ver permissoes
+              </Link>
             </div>
           ))}
         </CardBody>
       </Card>
 
       <Card>
-        <CardHeader title="Suas permissoes" description="Permissoes efetivas da sessao atual" />
+        <CardHeader title="Seu acesso" description="Permissoes efetivas na unidade ativa" />
         <CardBody>
           <ul className="flex flex-wrap gap-2">
-            {[...context.permissions].sort().map((permission) => (
+            {[...effectivePermissions(context)].sort().map((permission) => (
               <li key={permission}>
                 <Badge>{permission}</Badge>
               </li>

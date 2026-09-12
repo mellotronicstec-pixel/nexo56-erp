@@ -62,24 +62,35 @@ Colunas triviais aparecem de forma condensada.
 
 ## `sessions`
 
-| Coluna          | Tipo          | Obrig.   | Significado                                               |
-| --------------- | ------------- | -------- | --------------------------------------------------------- |
-| `token_hash` 🔒 | `VARCHAR(64)` | NN, UK   | SHA-256 do token do cookie. O token em si nunca é gravado |
-| `expires_at`    | `DATETIME(3)` | NN       | Expiração absoluta                                        |
-| `revoked_at`    | `DATETIME(3)` | opcional | Preenchido no logout/suspensão. Nulo = ativa              |
-| `last_used_at`  | `DATETIME(3)` | NN       | Último uso                                                |
+| Coluna                  | Tipo           | Obrig.   | Significado                                                                                |
+| ----------------------- | -------------- | -------- | ------------------------------------------------------------------------------------------ |
+| `token_hash` 🔒         | `VARCHAR(64)`  | NN, UK   | SHA-256 do token do cookie. O token em si nunca é gravado                                  |
+| `expires_at`            | `DATETIME(3)`  | NN       | Expiração absoluta                                                                         |
+| `revoked_at`            | `DATETIME(3)`  | opcional | Preenchido no logout/suspensão. Nulo = ativa                                               |
+| `last_used_at`          | `DATETIME(3)`  | NN       | Último uso                                                                                 |
+| `user_agent_summary` 🔒 | `VARCHAR(120)` | opcional | Resumo curto ("Chrome no Windows"). **Não** é fingerprint: sem IP, sem user-agent completo |
+
+## `password_reset_tokens`
+
+| Coluna          | Tipo          | Obrig.   | Significado                                                    |
+| --------------- | ------------- | -------- | -------------------------------------------------------------- |
+| `token_hash` 🔒 | `VARCHAR(64)` | NN, UK   | SHA-256 do código entregue. O código em si nunca é gravado     |
+| `expires_at`    | `DATETIME(3)` | NN       | 60 minutos após a emissão                                      |
+| `used_at`       | `DATETIME(3)` | opcional | Preenchido no consumo. Torna o código de **uso único**         |
+| `created_by`    | `CHAR(36)`    | opcional | Administrador que iniciou o reset. Nulo = pelo próprio titular |
 
 ## `roles` · `permissions` · associações
 
-| Tabela             | Coluna                      | Tipo             | Significado                                          |
-| ------------------ | --------------------------- | ---------------- | ---------------------------------------------------- |
-| `roles`            | `key`                       | `VARCHAR(64)`    | Chave do papel, única por tenant (`admin`)           |
-| `roles`            | `is_system`                 | `BOOLEAN`        | Papel estrutural; a aplicação impede exclusão        |
-| `permissions`      | `key`                       | `VARCHAR(96)` PK | `<recurso>.<ação>` — `users.view`, `features.manage` |
-| `permissions`      | `feature_key`               | `VARCHAR(96)` FK | Feature a que a permissão pertence                   |
-| `user_units`       | `(user_id, unit_id)`        | PK               | Unidades que o usuário pode acessar                  |
-| `user_roles`       | `(user_id, role_id)`        | PK               | Papéis atribuídos                                    |
-| `role_permissions` | `(role_id, permission_key)` | PK               | Permissões do papel                                  |
+| Tabela             | Coluna                        | Tipo             | Significado                                                              |
+| ------------------ | ----------------------------- | ---------------- | ------------------------------------------------------------------------ |
+| `roles`            | `key`                         | `VARCHAR(64)`    | Chave do papel, única por tenant (`admin`)                               |
+| `roles`            | `is_system`                   | `BOOLEAN`        | Papel estrutural; a aplicação impede exclusão                            |
+| `permissions`      | `key`                         | `VARCHAR(96)` PK | `<recurso>.<ação>` — `users.view`, `features.manage`                     |
+| `permissions`      | `feature_key`                 | `VARCHAR(96)` FK | Feature a que a permissão pertence                                       |
+| `user_units`       | `(user_id, unit_id)`          | PK               | Unidades que o usuário pode acessar                                      |
+| `user_roles`       | `(user_id, role_id)`          | PK               | Papel atribuído com escopo **TENANT**                                    |
+| `user_unit_roles`  | `(user_id, role_id, unit_id)` | PK               | Papel atribuído com escopo **UNIT** — exige vínculo em `user_units` (FK) |
+| `role_permissions` | `(role_id, permission_key)`   | PK               | Permissões do papel                                                      |
 
 ## Modularidade
 

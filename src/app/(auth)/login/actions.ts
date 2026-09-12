@@ -61,11 +61,15 @@ export async function loginAction(
     try {
       await assertSameOrigin();
 
-      const outcome = await login({
-        email: formData.get('email'),
-        password: formData.get('password'),
-        tenantSlug: (formData.get('tenantSlug') as string | null)?.trim() || undefined,
-      });
+      const headerList = await headers();
+      const outcome = await login(
+        {
+          email: formData.get('email'),
+          password: formData.get('password'),
+          tenantSlug: (formData.get('tenantSlug') as string | null)?.trim() || undefined,
+        },
+        { userAgent: headerList.get('user-agent') },
+      );
 
       const cookieStore = await cookies();
       cookieStore.set(SESSION_COOKIE, outcome.session.token, {

@@ -15,6 +15,13 @@
       "when": 1789229848174,
       "tag": "0001_tenant_safe_constraints_and_sequences",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1789249706441,
+      "tag": "0002_unit_scoped_roles_and_password_reset",
+      "breakpoints": true
     }
   ]
 }

@@ -20,20 +20,22 @@ Classificação que orienta log, auditoria, exportação, retenção e acesso
 
 ## Classificação — dados existentes
 
-| Dado                                           | Tabela                 | Nível                                     | Tratamento atual                        |
-| ---------------------------------------------- | ---------------------- | ----------------------------------------- | --------------------------------------- |
-| Nome da empresa, slug                          | `tenants`              | Interno                                   | —                                       |
-| Nome da unidade                                | `units`                | Interno                                   | —                                       |
-| Nome do usuário                                | `users.name`           | **Pessoal**                               | Não vai para log                        |
-| E-mail do usuário                              | `users.email`          | **Pessoal**                               | Não vai para log; normalizado           |
-| Hash de senha                                  | `users.password_hash`  | **Credencial**                            | scrypt; redigido em log e auditoria     |
-| Hash do token de sessão                        | `sessions.token_hash`  | **Credencial**                            | SHA-256; o token nunca é gravado        |
-| IP, user-agent                                 | —                      | **Pessoal**                               | **Não coletados** (minimização)         |
-| Papéis e permissões                            | `roles`, `permissions` | Interno                                   | —                                       |
-| Trilha de auditoria                            | `audit_logs`           | Interno + **Pessoal** em `before`/`after` | Redação automática antes de gravar      |
-| Payload de evento                              | `domain_events`        | Interno                                   | Não carrega credencial                  |
-| Payload de job                                 | `jobs`                 | Interno                                   | Não carrega credencial                  |
-| `SESSION_SECRET`, `JOB_SECRET`, `DATABASE_URL` | ambiente               | **Credencial**                            | Nunca versionados; validados no startup |
+| Dado                                           | Tabela                             | Nível                                     | Tratamento atual                        |
+| ---------------------------------------------- | ---------------------------------- | ----------------------------------------- | --------------------------------------- |
+| Nome da empresa, slug                          | `tenants`                          | Interno                                   | —                                       |
+| Nome da unidade                                | `units`                            | Interno                                   | —                                       |
+| Nome do usuário                                | `users.name`                       | **Pessoal**                               | Não vai para log                        |
+| E-mail do usuário                              | `users.email`                      | **Pessoal**                               | Não vai para log; normalizado           |
+| Hash de senha                                  | `users.password_hash`              | **Credencial**                            | scrypt; redigido em log e auditoria     |
+| Hash do token de sessão                        | `sessions.token_hash`              | **Credencial**                            | SHA-256; o token nunca é gravado        |
+| Hash do código de redefinição                  | `password_reset_tokens.token_hash` | **Credencial**                            | SHA-256; o código nunca é gravado       |
+| Resumo do dispositivo                          | `sessions.user_agent_summary`      | **Pessoal** (baixo)                       | 120 caracteres, sem versão nem IP       |
+| IP, user-agent completo                        | —                                  | **Pessoal**                               | **Não coletados** (minimização)         |
+| Papéis e permissões                            | `roles`, `permissions`             | Interno                                   | —                                       |
+| Trilha de auditoria                            | `audit_logs`                       | Interno + **Pessoal** em `before`/`after` | Redação automática antes de gravar      |
+| Payload de evento                              | `domain_events`                    | Interno                                   | Não carrega credencial                  |
+| Payload de job                                 | `jobs`                             | Interno                                   | Não carrega credencial                  |
+| `SESSION_SECRET`, `JOB_SECRET`, `DATABASE_URL` | ambiente                           | **Credencial**                            | Nunca versionados; validados no startup |
 
 ### Redação automática
 

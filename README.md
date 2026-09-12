@@ -2,11 +2,12 @@
 
 Plataforma ERP/SaaS multiempresa para gestão de assistência técnica e reparo.
 
-**Estado atual: fundação técnica (Prompt 01).** Autenticação, multi-tenancy,
-RBAC, modularidade, auditoria, eventos, jobs e Design System base estão
-implementados e testados. **Os módulos de negócio ainda não existem** — Clientes,
-Equipamentos, Ordens de Serviço, Orçamentos, Estoque, Compras, Financeiro,
-Garantias e demais serão construídos nos prompts seguintes.
+**Estado atual: fundação técnica, camada de dados e controle de acesso
+(Prompts 01 a 03).** Autenticação, sessões, usuários, perfis, permissões com
+**escopo por unidade**, multi-tenancy, modularidade, auditoria, eventos, jobs e
+Design System base estão implementados e testados. **Os módulos de negócio ainda
+não existem** — Clientes, Equipamentos, Ordens de Serviço, Orçamentos, Estoque,
+Compras, Financeiro, Garantias e demais serão construídos nos prompts seguintes.
 
 ---
 
@@ -229,6 +230,21 @@ produção não depende de Docker.
 | Eventos          | despacho após commit, rollback não emite nem chama handler, falha de handler não derruba a operação                                         |
 | Jobs             | idempotência pelo UNIQUE, concorrência, handler desconhecido, backoff, recuperação de job travado                                           |
 
+### Cobertura do controle de acesso (Prompt 03)
+
+| Área                 | O que é testado                                                                                                                |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Escopo de papel      | TENANT vale nas unidades já acessadas; UNIT vale só na sua unidade e não em ação de nível tenant; composição sem duplicar      |
+| Vínculo de unidade   | papel por unidade exige vínculo (inclusive no banco); remover o vínculo remove os papéis daquela unidade, mas não os de tenant |
+| Escalonamento        | não concede o que não tem, não amplia o próprio acesso, nem o administrador                                                    |
+| Travessia de tenant  | papel, unidade, usuário, sessão e recurso de outra empresa negados — "registro não encontrado", sem confirmar existência       |
+| Último administrador | revogar, inativar e esvaziar permissões bloqueados; **inclusive com duas remoções simultâneas**                                |
+| Senha                | mínimo, máximo sem truncar, senha óbvia recusada, troca exige a atual, a antiga deixa de valer                                 |
+| Redefinição          | só o hash no banco, uso único, expiração, novo token invalida o anterior, conclui revogando todas as sessões                   |
+| Sessões              | lista e identifica a atual, encerra uma ou as outras, revogação administrativa, nunca devolve o hash                           |
+| Administração        | senha inicial aleatória, tenant vem do contexto, e-mail normalizado, inativar encerra sessões, evento só após o commit         |
+| Perfis de origem     | Administrador com todas as permissões; Atendente/Técnico/Financeiro sem permissões, editáveis                                  |
+
 ---
 
 ## 9. Build e produção
@@ -282,6 +298,9 @@ docs/             arquitetura, ADRs, Hostinger
 
 - **Visão geral:** [docs/architecture/README.md](docs/architecture/README.md)
 - **Decisões (ADRs):** [docs/adr/README.md](docs/adr/README.md)
+- **Autenticação e sessões:** [docs/architecture/auth.md](docs/architecture/auth.md)
+- **Papéis, permissões e escopo por unidade:** [docs/architecture/access-control.md](docs/architecture/access-control.md)
+- **Matriz de acesso:** [docs/architecture/access-matrix.md](docs/architecture/access-matrix.md)
 
 ---
 
@@ -294,8 +313,12 @@ Pontos centrais:
 
 - Senha com scrypt (`N=2^16, r=8, p=2`), sem dependência nativa.
 - Sessão server-side com token opaco; o banco guarda só o SHA-256.
-- Isolamento de tenant garantido no backend, com testes de travessia.
-- Autorização revalidada no servidor em toda página e ação.
+- Isolamento de tenant garantido no backend **e no banco** (FKs compostas).
+- Autorização com **negação por padrão**, num único serviço, revalidada no
+  servidor em toda página e ação.
+- **Nenhum superusuário embutido**: o Administrador é um papel com permissões.
+- Ninguém concede permissão que não tem, nem amplia o próprio acesso.
+- A empresa nunca fica sem administrador.
 - Segredos nunca em log nem em auditoria.
 - O frontend **nunca** é barreira de segurança.
 
@@ -315,12 +338,14 @@ Instruções: [public/brand/README.md](public/brand/README.md).
 
 ## 14. Dívida técnica conhecida
 
-| Item                                      | Detalhe                                                                                                               | Caminho                                 |
-| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
-| ESLint na linha 9.x                       | O `eslint-plugin-react` do `eslint-config-next@16` ainda não roda em ESLint 10                                        | atualizar quando o preset suportar      |
-| 4 vulnerabilidades moderadas de dev       | Cadeia `drizzle-kit → @esbuild-kit → esbuild`; afetam apenas o servidor de desenvolvimento, não o runtime de produção | aguardar atualização do drizzle-kit     |
-| CSP com `'unsafe-inline'` em `script-src` | O runtime do Next injeta scripts inline sem nonce em `next start`                                                     | CSP por nonce via middleware            |
-| Rate limit por processo                   | Store em memória; conta por instância                                                                                 | implementar `RateLimitStore` com Redis  |
-| Sem worker de outbox                      | Eventos são despachados em processo; a tabela já tem formato de outbox                                                | worker lendo `published_at IS NULL`     |
-| Build depende de rede para as fontes      | `next/font/google` baixa Sora e Inter no build                                                                        | versionar WOFF2 se houver build offline |
-| Sem escopo de permissão por unidade       | A permissão vale no tenant; `user_units` já delimita as unidades                                                      | evoluir o RBAC quando um módulo exigir  |
+| Item                                      | Detalhe                                                                                                               | Caminho                                    |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| ESLint na linha 9.x                       | O `eslint-plugin-react` do `eslint-config-next@16` ainda não roda em ESLint 10                                        | atualizar quando o preset suportar         |
+| 4 vulnerabilidades moderadas de dev       | Cadeia `drizzle-kit → @esbuild-kit → esbuild`; afetam apenas o servidor de desenvolvimento, não o runtime de produção | aguardar atualização do drizzle-kit        |
+| CSP com `'unsafe-inline'` em `script-src` | O runtime do Next injeta scripts inline sem nonce em `next start`                                                     | CSP por nonce via middleware               |
+| Rate limit por processo                   | Store em memória; conta por instância                                                                                 | implementar `RateLimitStore` com Redis     |
+| Sem worker de outbox                      | Eventos são despachados em processo; a tabela já tem formato de outbox                                                | worker lendo `published_at IS NULL`        |
+| Build depende de rede para as fontes      | `next/font/google` baixa Sora e Inter no build                                                                        | versionar WOFF2 se houver build offline    |
+| Sem 2FA                                   | Não há segundo fator; o pipeline de autorização comporta a condição adicional sem reconstrução                        | prompt futuro de segurança                 |
+| Sem autoatendimento de redefinição        | Nenhum serviço de e-mail configurado; o código é gerado por um administrador e entregue pessoalmente                  | configurar canal de e-mail                 |
+| Rate limit só no login                    | Troca de senha e ações administrativas não têm limite próprio                                                         | estender quando houver store compartilhado |

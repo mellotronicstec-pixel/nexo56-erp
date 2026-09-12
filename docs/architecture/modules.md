@@ -5,10 +5,10 @@ módulo futuro (Prompt 01, itens 8 e 82).
 
 | Módulo                 | Responsabilidade                                                 | Tabelas                                                                             |
 | ---------------------- | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| `auth`                 | senha, sessão, login, contexto autenticado                       | `sessions`                                                                          |
+| `auth`                 | senha, sessão, login, redefinição, contexto autenticado          | `sessions`, `password_reset_tokens`                                                 |
 | `tenancy`              | empresa (tenant) e unidades; provisionamento                     | `tenants`, `units`                                                                  |
 | `users`                | usuários e vínculo com unidades                                  | `users`, `user_units`                                                               |
-| `access-control`       | papéis, permissões e guard                                       | `roles`, `permissions`, `role_permissions`, `user_roles`                            |
+| `access-control`       | papéis, permissões, escopo por unidade e autorização             | `roles`, `permissions`, `role_permissions`, `user_roles`, `user_unit_roles`         |
 | `features`             | catálogo, entitlements, configuração do tenant, Effective Access | `features`, `feature_dependencies`, `plans`, `plan_entitlements`, `tenant_features` |
 | `audit`                | trilha de auditoria                                              | `audit_logs`                                                                        |
 | `events`               | eventos de domínio e despacho                                    | `domain_events`                                                                     |

@@ -32,8 +32,13 @@ erDiagram
     UNITS ||--o{ USER_UNITS : autoriza
     USERS ||--o{ USER_ROLES : possui
     ROLES ||--o{ USER_ROLES : atribuido
+    USERS ||--o{ USER_UNIT_ROLES : possui_na_unidade
+    ROLES ||--o{ USER_UNIT_ROLES : atribuido_na_unidade
+    UNITS ||--o{ USER_UNIT_ROLES : delimita
+    USER_UNITS ||--o{ USER_UNIT_ROLES : exigido_por
     ROLES ||--o{ ROLE_PERMISSIONS : concede
     PERMISSIONS ||--o{ ROLE_PERMISSIONS : concedida
+    USERS ||--o{ PASSWORD_RESET_TOKENS : redefine
 
     TENANTS {
         char36 id PK
@@ -71,6 +76,7 @@ erDiagram
         varchar token_hash UK "SHA-256, nunca o token"
         datetime expires_at
         datetime revoked_at
+        varchar user_agent_summary "resumo curto, sem IP"
     }
     ROLES {
         char36 id PK
@@ -83,6 +89,22 @@ erDiagram
         char36 user_id PK_FK "FK composta com tenant_id"
         char36 role_id PK_FK "FK composta com tenant_id"
         char36 tenant_id FK
+        escopo TENANT "vale nas unidades que o usuario acessa"
+    }
+    USER_UNIT_ROLES {
+        char36 user_id PK_FK "FK composta com tenant_id e com unit_id"
+        char36 role_id PK_FK "FK composta com tenant_id"
+        char36 unit_id PK_FK "FK composta com tenant_id"
+        char36 tenant_id FK
+        escopo UNIT "vale SO nesta unidade; exige vinculo"
+    }
+    PASSWORD_RESET_TOKENS {
+        char36 id PK
+        char36 user_id FK "FK composta com tenant_id"
+        char36 tenant_id FK
+        varchar token_hash UK "SHA-256, nunca o codigo"
+        datetime expires_at "60 minutos"
+        datetime used_at "uso unico"
     }
     PERMISSIONS {
         varchar key PK "catalogo GLOBAL"
@@ -157,6 +179,11 @@ erDiagram
   torna **impossível no banco** associar entidades de tenants diferentes.
 - `permissions`, `features`, `plans` e suas associações são **globais** — o
   catálogo do produto, idêntico para todos os tenants.
+- `USER_ROLES` e `USER_UNIT_ROLES` respondem à mesma pergunta em escopos
+  diferentes: papel válido no tenant × papel válido só naquela unidade. O
+  escopo pertence à **atribuição**, não ao perfil (ADR-019).
+- A relação `USER_UNITS → USER_UNIT_ROLES` é a FK que torna o vínculo de
+  unidade **pré-requisito no banco** para o papel de unidade (ADR-020).
 
 ---
 

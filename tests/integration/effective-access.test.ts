@@ -231,7 +231,7 @@ describe('acesso efetivamente permitido', () => {
   });
 
   it('o administrador do bootstrap recebe todas as permissoes estruturais', async () => {
-    expect(tenant.context.permissions.has(PERMISSIONS.ADMIN_ACCESS)).toBe(true);
-    expect(tenant.context.permissions.size).toBe(Object.keys(PERMISSIONS).length);
+    expect(tenant.context.tenantPermissions.has(PERMISSIONS.ADMIN_ACCESS)).toBe(true);
+    expect(tenant.context.tenantPermissions.size).toBe(Object.keys(PERMISSIONS).length);
   });
 });

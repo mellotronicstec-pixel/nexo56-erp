@@ -42,7 +42,10 @@ cadastro — não previsto nesta fase.
 
 Aplicada desde a fundação:
 
-- Sessões **não** guardam IP nem user-agent.
+- Sessões **não** guardam IP. Do user-agent, só um resumo curto ("Chrome no
+  Windows", 120 caracteres) — o suficiente para a pessoa reconhecer o próprio
+  dispositivo na lista de sessões, insuficiente para servir de fingerprint ou
+  histórico de localização.
 - O cadastro de usuário tem o mínimo: nome, e-mail, situação e vínculos.
 - O cookie carrega apenas um token opaco.
 - Log e auditoria passam por redação automática.
@@ -56,6 +59,7 @@ Aplicada desde a fundação:
 | Categoria                | Retenção pretendida                                  | Motivo                 |
 | ------------------------ | ---------------------------------------------------- | ---------------------- |
 | Sessões                  | Expiração + limpeza pelo job                         | Não há valor em manter |
+| Códigos de redefinição   | 60 minutos; consumidos ficam marcados                | Janela mínima de uso   |
 | Auditoria                | Longa; definida pelo controlador                     | Prova de conformidade  |
 | OS, garantia, financeiro | Enquanto durar a obrigação legal/fiscal e a garantia | Obrigação legal        |
 | Cadastro de cliente      | Enquanto houver relação; depois, anonimização        | Minimização            |
@@ -87,8 +91,13 @@ vínculo com a pessoa identificada.
 
 - Isolamento entre tenants garantido no backend **e no banco** (FKs compostas),
   com testes automatizados.
-- RBAC controla quem vê dado pessoal e financeiro.
-- Toda leitura de área sensível passa pelo Effective Access.
+- RBAC controla quem vê dado pessoal e financeiro, com **escopo por unidade**:
+  é possível limitar uma capacidade a uma única filial.
+- Vínculo de unidade **não** concede capacidade — quem acessa a filial só vê o
+  que o perfil permite.
+- Toda leitura de área sensível passa pelo Effective Access e pelo serviço de
+  autorização, com negação por padrão.
+- O titular vê e encerra as próprias sessões ativas em `/minha-conta`.
 - Administração da plataforma **não** implica acesso indiscriminado aos dados
   de cada empresa (Prompt 00, item 105).
 

@@ -12,13 +12,21 @@ export const PERMISSIONS = {
   ADMIN_ACCESS: 'admin.access',
   USERS_VIEW: 'users.view',
   USERS_MANAGE: 'users.manage',
+  /** Gerenciar unidades e perfis de OUTROS usuarios — separada de users.manage
+   *  justamente porque conceder acesso e mais perigoso que editar um nome. */
+  USERS_MANAGE_ACCESS: 'users.manage_access',
+  USERS_RESET_PASSWORD: 'users.reset_password',
   ROLES_VIEW: 'roles.view',
   ROLES_MANAGE: 'roles.manage',
+  /** Alterar QUAIS permissoes um perfil concede. E o vetor classico de
+   *  escalonamento de privilegio, entao nao fica embutida em roles.manage. */
+  ROLES_MANAGE_PERMISSIONS: 'roles.manage_permissions',
   UNITS_VIEW: 'units.view',
   UNITS_MANAGE: 'units.manage',
   FEATURES_VIEW: 'features.view',
   FEATURES_MANAGE: 'features.manage',
   AUDIT_VIEW: 'audit.view',
+  SESSIONS_REVOKE: 'sessions.revoke',
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -49,6 +57,30 @@ export const PERMISSION_CATALOG: readonly PermissionDefinition[] = [
     name: 'Administrar usuarios',
     description: 'Cria, edita e desativa usuarios da empresa.',
     featureKey: 'core.users',
+  },
+  {
+    key: PERMISSIONS.USERS_MANAGE_ACCESS,
+    name: 'Gerenciar acesso de usuarios',
+    description: 'Vincula usuarios a unidades e atribui perfis de acesso.',
+    featureKey: 'core.access_control',
+  },
+  {
+    key: PERMISSIONS.USERS_RESET_PASSWORD,
+    name: 'Redefinir senha de usuarios',
+    description: 'Inicia a redefinicao de senha de outro usuario da empresa.',
+    featureKey: 'core.auth',
+  },
+  {
+    key: PERMISSIONS.SESSIONS_REVOKE,
+    name: 'Encerrar sessoes de usuarios',
+    description: 'Encerra sessoes ativas de outros usuarios da empresa.',
+    featureKey: 'core.auth',
+  },
+  {
+    key: PERMISSIONS.ROLES_MANAGE_PERMISSIONS,
+    name: 'Alterar permissoes de perfis',
+    description: 'Altera quais permissoes cada perfil de acesso concede.',
+    featureKey: 'core.access_control',
   },
   {
     key: PERMISSIONS.ROLES_VIEW,
@@ -107,3 +139,148 @@ export const SYSTEM_ROLE_DEFINITIONS = [
     permissions: Object.values(PERMISSIONS) as PermissionKey[],
   },
 ] as const;
+
+/**
+ * Perfis iniciais oferecidos ao tenant (Prompt 03, item 12).
+ *
+ * Sao criados SEM permissoes: hoje o catalogo so tem capacidades estruturais
+ * (usuarios, perfis, unidades, modulos, auditoria), e atribuir qualquer uma
+ * delas a "Tecnico" ou "Atendente" seria arbitrario. Cada modulo posterior
+ * (OS, Estoque, Financeiro) acrescenta as suas capacidades reais, e entao
+ * estes perfis passam a fazer sentido pratico.
+ *
+ * Deliberadamente NAO sao `is_system`: a empresa pode renomear, ajustar ou
+ * excluir livremente. Apenas o Administrador e protegido, porque e o caminho
+ * administrativo do tenant (item 52).
+ */
+export const STARTER_ROLE_DEFINITIONS = [
+  {
+    key: 'atendente',
+    name: 'Atendente',
+    description:
+      'Perfil preparado para o atendimento. As capacidades serao ampliadas pelos modulos de Clientes e Ordens de Servico.',
+  },
+  {
+    key: 'tecnico',
+    name: 'Tecnico',
+    description:
+      'Perfil preparado para a operacao tecnica. As capacidades serao ampliadas pelos modulos de Ordens de Servico e Estoque.',
+  },
+  {
+    key: 'financeiro',
+    name: 'Financeiro',
+    description:
+      'Perfil preparado para a area financeira. As capacidades serao ampliadas pelo modulo Financeiro.',
+  },
+] as const;
+
+// ---------------------------------------------------------------------------
+// Escopo de atribuicao (Prompt 03, itens 15 a 17)
+// ---------------------------------------------------------------------------
+
+/**
+ * Escopo em que uma ATRIBUICAO de perfil vale.
+ *
+ * O escopo pertence a atribuicao, nao ao perfil: o mesmo perfil "Tecnico" pode
+ * valer no tenant inteiro para uma pessoa e apenas na Unidade Norte para outra.
+ *
+ * TENANT — o perfil vale nas unidades que o usuario ja acessa. NAO concede
+ *          vinculo a novas unidades (item 16).
+ * UNIT   — o perfil vale somente na unidade indicada, e exige vinculo previo
+ *          naquela unidade (item 20).
+ */
+export const ROLE_SCOPES = {
+  TENANT: 'TENANT',
+  UNIT: 'UNIT',
+} as const;
+
+export type RoleScope = (typeof ROLE_SCOPES)[keyof typeof ROLE_SCOPES];
+
+/** Rotulo em portugues; a interface nunca mostra TENANT/UNIT cru (item 70). */
+export const ROLE_SCOPE_LABEL: Record<RoleScope, string> = {
+  TENANT: 'Todas as unidades autorizadas',
+  UNIT: 'Somente uma unidade',
+};
+
+// ---------------------------------------------------------------------------
+// Agrupamento para a interface (item 69)
+// ---------------------------------------------------------------------------
+
+/**
+ * Areas usadas para agrupar permissoes na tela, para o administrador nao
+ * encarar uma parede de chaves tecnicas.
+ */
+export const PERMISSION_GROUPS = [
+  {
+    key: 'usuarios',
+    name: 'Usuarios',
+    description: 'Cadastro, situacao e acesso das pessoas da empresa.',
+    permissions: [
+      PERMISSIONS.USERS_VIEW,
+      PERMISSIONS.USERS_MANAGE,
+      PERMISSIONS.USERS_MANAGE_ACCESS,
+      PERMISSIONS.USERS_RESET_PASSWORD,
+      PERMISSIONS.SESSIONS_REVOKE,
+    ],
+  },
+  {
+    key: 'perfis',
+    name: 'Perfis de acesso',
+    description: 'Quais capacidades cada perfil concede.',
+    permissions: [
+      PERMISSIONS.ROLES_VIEW,
+      PERMISSIONS.ROLES_MANAGE,
+      PERMISSIONS.ROLES_MANAGE_PERMISSIONS,
+      PERMISSIONS.ADMIN_ACCESS,
+    ],
+  },
+  {
+    key: 'unidades',
+    name: 'Unidades',
+    description: 'Estrutura de unidades da empresa.',
+    permissions: [PERMISSIONS.UNITS_VIEW, PERMISSIONS.UNITS_MANAGE],
+  },
+  {
+    key: 'plataforma',
+    name: 'Modulos e auditoria',
+    description: 'Configuracao de funcionalidades e trilha de auditoria.',
+    permissions: [PERMISSIONS.FEATURES_VIEW, PERMISSIONS.FEATURES_MANAGE, PERMISSIONS.AUDIT_VIEW],
+  },
+] as const satisfies ReadonlyArray<{
+  key: string;
+  name: string;
+  description: string;
+  permissions: readonly PermissionKey[];
+}>;
+
+/**
+ * Permissoes consideradas de ALTO RISCO: concedem, direta ou indiretamente, a
+ * capacidade de ampliar o proprio acesso ou o de terceiros.
+ *
+ * Usadas pela politica anti-escalonamento (item 57): ninguem concede a um
+ * perfil uma permissao de alto risco que a propria pessoa nao possua.
+ */
+export const HIGH_RISK_PERMISSIONS: readonly PermissionKey[] = [
+  PERMISSIONS.ADMIN_ACCESS,
+  PERMISSIONS.USERS_MANAGE,
+  PERMISSIONS.USERS_MANAGE_ACCESS,
+  PERMISSIONS.USERS_RESET_PASSWORD,
+  PERMISSIONS.ROLES_MANAGE,
+  PERMISSIONS.ROLES_MANAGE_PERMISSIONS,
+  PERMISSIONS.SESSIONS_REVOKE,
+];
+
+/**
+ * Permissoes que caracterizam um administrador capaz de gerir o acesso da
+ * empresa. Usadas na protecao contra lockout (item 53): o tenant nunca pode
+ * ficar sem alguem que detenha TODAS elas.
+ */
+export const ADMINISTRATIVE_PERMISSIONS: readonly PermissionKey[] = [
+  PERMISSIONS.USERS_MANAGE,
+  PERMISSIONS.USERS_MANAGE_ACCESS,
+  PERMISSIONS.ROLES_MANAGE_PERMISSIONS,
+];
+
+export function isHighRisk(permission: string): boolean {
+  return (HIGH_RISK_PERMISSIONS as readonly string[]).includes(permission);
+}

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Alert, Badge, Card, CardBody, CardHeader } from '@/design-system/components';
 import { requireAccessForPage } from '@/modules/access-control/application/guard';
+import { hasPermission } from '@/modules/tenancy/domain/tenant-context';
 import { PERMISSIONS } from '@/modules/access-control/domain/permissions';
 import { FEATURES, findFeature } from '@/modules/features/domain/catalog';
 import { listTenantFeatureStates } from '@/modules/features/application/effective-access';
@@ -28,7 +29,7 @@ const REASON_LABEL: Record<
 export default async function ModulesPage() {
   const { context } = await requireAccessForPage(FEATURES.CORE_FEATURES, PERMISSIONS.FEATURES_VIEW);
   const states = await listTenantFeatureStates(context);
-  const canManage = context.permissions.has(PERMISSIONS.FEATURES_MANAGE);
+  const canManage = hasPermission(context, PERMISSIONS.FEATURES_MANAGE);
 
   return (
     <div className="mx-auto max-w-5xl space-y-4">

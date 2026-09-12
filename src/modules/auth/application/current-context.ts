@@ -6,14 +6,23 @@ import { getDb } from '@/core/db/client';
 import { enrichContext } from '@/core/context/request-context';
 import { AuthenticationError } from '@/core/errors';
 import type { PermissionKey } from '@/modules/access-control/domain/permissions';
-import { rolePermissions, roles, userRoles } from '@/modules/access-control/infrastructure/schema';
+import {
+  rolePermissions,
+  roles,
+  userRoles,
+  userUnitRoles,
+} from '@/modules/access-control/infrastructure/schema';
 import { findActiveSession, SESSION_COOKIE } from '@/modules/auth/application/session-service';
 import { tenants, units } from '@/modules/tenancy/infrastructure/schema';
-import type { TenantContext } from '@/modules/tenancy/domain/tenant-context';
+import type {
+  RoleAssignment,
+  TenantContext,
+  UnitRoleAssignment,
+} from '@/modules/tenancy/domain/tenant-context';
 import { users, userUnits } from '@/modules/users/infrastructure/schema';
 
 /**
- * Resolucao do contexto autenticado (Prompt 01, itens 19 e 20).
+ * Resolucao do contexto autenticado (Prompt 01 itens 19/20; Prompt 03 item 22).
  *
  * ESTE E O UNICO CAMINHO pelo qual um tenantId entra na aplicacao.
  *
@@ -21,6 +30,9 @@ import { users, userUnits } from '@/modules/users/infrastructure/schema';
  * do cookie. Nao existe parametro, cabecalho ou campo de formulario capaz de
  * influenciar qual tenant sera usado — manipular um ID na URL nao muda o
  * contexto, apenas faz a consulta escopada nao encontrar o registro.
+ *
+ * A unidade ativa vem de cookie, mas so vale se estiver entre as autorizadas:
+ * o cliente pode PEDIR uma unidade, nunca conceder acesso a ela (item 23).
  */
 
 export const UNIT_COOKIE = 'nexo56_unit';
@@ -39,12 +51,12 @@ export async function getCurrentContext(): Promise<TenantContext | null> {
 /**
  * Monta o contexto a partir de uma sessao JA validada.
  *
- * Separado de `getCurrentContext` para que a regra de montagem do contexto
- * (permissoes, unidades autorizadas, situacao de conta e empresa) possa ser
- * testada sem depender de cookies/HTTP.
+ * Separado de `getCurrentContext` para que a regra de montagem (permissoes,
+ * unidades autorizadas, situacao de conta e empresa) possa ser testada sem
+ * depender de cookies/HTTP.
  */
 export async function loadContextForSession(
-  session: { id: string; userId: string; tenantId: string },
+  session: { id: string; userId: string; tenantId: string; expiresAt?: Date },
   requestedUnitId?: string,
 ): Promise<TenantContext | null> {
   const db = getDb();
@@ -70,37 +82,77 @@ export async function loadContextForSession(
   const row = rows[0];
   if (!row) return null;
 
-  // Sessao valida mas conta/empresa desativada: o contexto deixa de existir.
+  // Sessao valida mas conta/empresa desativada: o contexto deixa de existir
+  // (Prompt 03, item 43).
   if (row.userStatus !== 'active' || row.tenantStatus !== 'active') return null;
 
-  const [roleRows, permissionRows, unitRows] = await Promise.all([
-    db
-      .select({ key: roles.key })
-      .from(userRoles)
-      .innerJoin(roles, eq(roles.id, userRoles.roleId))
-      .where(and(eq(userRoles.userId, row.userId), eq(userRoles.tenantId, row.tenantId))),
-    db
-      .select({ permissionKey: rolePermissions.permissionKey })
-      .from(userRoles)
-      .innerJoin(rolePermissions, eq(rolePermissions.roleId, userRoles.roleId))
-      .where(and(eq(userRoles.userId, row.userId), eq(userRoles.tenantId, row.tenantId))),
-    db
-      .select({ unitId: units.id })
-      .from(userUnits)
-      .innerJoin(units, eq(units.id, userUnits.unitId))
-      .where(
-        and(
-          eq(userUnits.userId, row.userId),
-          eq(userUnits.tenantId, row.tenantId),
-          eq(units.status, 'active'),
-        ),
-      ),
-  ]);
+  /**
+   * Quatro consultas em paralelo, cada uma com JOIN — nunca uma consulta por
+   * papel ou por unidade (item 93). O volume e pequeno e limitado ao usuario.
+   */
+  const [tenantRoleRows, tenantPermissionRows, unitRoleRows, unitPermissionRows, unitRows] =
+    await Promise.all([
+      // papeis de escopo TENANT
+      db
+        .select({ roleId: roles.id, roleKey: roles.key, roleName: roles.name })
+        .from(userRoles)
+        .innerJoin(roles, eq(roles.id, userRoles.roleId))
+        .where(and(eq(userRoles.userId, row.userId), eq(userRoles.tenantId, row.tenantId))),
+      // permissoes dos papeis TENANT
+      db
+        .select({ permissionKey: rolePermissions.permissionKey })
+        .from(userRoles)
+        .innerJoin(rolePermissions, eq(rolePermissions.roleId, userRoles.roleId))
+        .where(and(eq(userRoles.userId, row.userId), eq(userRoles.tenantId, row.tenantId))),
+      // papeis de escopo UNIT
+      db
+        .select({
+          roleId: roles.id,
+          roleKey: roles.key,
+          roleName: roles.name,
+          unitId: userUnitRoles.unitId,
+        })
+        .from(userUnitRoles)
+        .innerJoin(roles, eq(roles.id, userUnitRoles.roleId))
+        .where(and(eq(userUnitRoles.userId, row.userId), eq(userUnitRoles.tenantId, row.tenantId))),
+      // permissoes dos papeis UNIT, ja agrupadas por unidade
+      db
+        .select({
+          unitId: userUnitRoles.unitId,
+          permissionKey: rolePermissions.permissionKey,
+        })
+        .from(userUnitRoles)
+        .innerJoin(rolePermissions, eq(rolePermissions.roleId, userUnitRoles.roleId))
+        .where(and(eq(userUnitRoles.userId, row.userId), eq(userUnitRoles.tenantId, row.tenantId))),
+      // membership: unidades ativas a que o usuario esta vinculado
+      db
+        .select({ unitId: units.id })
+        .from(userUnits)
+        .innerJoin(units, eq(units.id, userUnits.unitId))
+        .where(
+          and(
+            eq(userUnits.userId, row.userId),
+            eq(userUnits.tenantId, row.tenantId),
+            eq(units.status, 'active'),
+          ),
+        )
+        .orderBy(units.name),
+    ]);
 
   const authorizedUnitIds = unitRows.map((unit) => unit.unitId);
 
+  const unitPermissions = new Map<string, Set<PermissionKey>>();
+  for (const entry of unitPermissionRows) {
+    // Papel de unidade so vale se a membership ainda existir. A FK do banco ja
+    // garante isso; a checagem aqui cobre unidade inativada.
+    if (!authorizedUnitIds.includes(entry.unitId)) continue;
+    const bucket = unitPermissions.get(entry.unitId) ?? new Set<PermissionKey>();
+    bucket.add(entry.permissionKey as PermissionKey);
+    unitPermissions.set(entry.unitId, bucket);
+  }
+
   // A unidade pedida so vale se estiver entre as autorizadas do usuario.
-  const unitId =
+  const activeUnitId =
     requestedUnitId && authorizedUnitIds.includes(requestedUnitId)
       ? requestedUnitId
       : (authorizedUnitIds[0] ?? null);
@@ -114,19 +166,24 @@ export async function loadContextForSession(
     userId: row.userId,
     userName: row.userName,
     userEmail: row.userEmail,
-    unitId,
     authorizedUnitIds,
-    roleKeys: roleRows.map((role) => role.key),
-    permissions: new Set(
-      permissionRows.map((permission) => permission.permissionKey as PermissionKey),
+    activeUnitId,
+    tenantRoles: tenantRoleRows satisfies RoleAssignment[],
+    unitRoles: unitRoleRows.filter((assignment) =>
+      authorizedUnitIds.includes(assignment.unitId),
+    ) satisfies UnitRoleAssignment[],
+    tenantPermissions: new Set(
+      tenantPermissionRows.map((permission) => permission.permissionKey as PermissionKey),
     ),
+    unitPermissions,
     sessionId: session.id,
+    sessionExpiresAt: session.expiresAt ?? new Date(),
   };
 
   enrichContext({
     tenantId: context.tenantId,
     userId: context.userId,
-    unitId: context.unitId ?? undefined,
+    unitId: context.activeUnitId ?? undefined,
   });
 
   return context;

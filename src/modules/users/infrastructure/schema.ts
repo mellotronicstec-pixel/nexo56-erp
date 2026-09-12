@@ -8,7 +8,7 @@ import {
   uniqueIndex,
   varchar,
 } from 'drizzle-orm/mysql-core';
-import { id, idRef, instant, tenantId, timestamps } from '@/core/db/columns';
+import { actorColumns, id, idRef, instant, tenantId, timestamps } from '@/core/db/columns';
 import { tenants, units } from '@/modules/tenancy/infrastructure/schema';
 
 /**
@@ -37,6 +37,7 @@ export const users = mysqlTable(
     passwordHash: varchar('password_hash', { length: 255 }).notNull(),
     status: mysqlEnum('status', USER_STATUS).notNull().default('active'),
     lastLoginAt: instant('last_login_at'),
+    ...actorColumns(),
     ...timestamps(),
   },
   (table) => [
@@ -70,6 +71,8 @@ export const userUnits = mysqlTable(
     userId: idRef('user_id').notNull(),
     unitId: idRef('unit_id').notNull(),
     tenantId: tenantId().notNull(),
+    /** Quem concedeu o vinculo. Nulo = criado pelo sistema (bootstrap). */
+    createdBy: idRef('created_by'),
     createdAt: instant('created_at').notNull(),
   },
   (table) => [

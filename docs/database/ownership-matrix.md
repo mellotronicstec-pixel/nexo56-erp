@@ -8,26 +8,28 @@ Escopo de cada entidade (Prompt 02, itens 6 a 14 e 85).
 
 ## Entidades existentes (implementadas e migradas)
 
-| Entidade               | Escopo     | Tenant         | Unit             | Histórico | Soft delete                  |
-| ---------------------- | ---------- | -------------- | ---------------- | --------- | ---------------------------- |
-| `tenants`              | plataforma | — (é o tenant) | —                | não       | não — `status`               |
-| `units`                | tenant     | obrigatório    | — (é a unidade)  | não       | não — `status`               |
-| `users`                | tenant     | obrigatório    | via `user_units` | não       | não — `status`               |
-| `user_units`           | associação | obrigatório    | obrigatório      | não       | não — hard delete            |
-| `sessions`             | tenant     | obrigatório    | não              | não       | não — `revoked_at`           |
-| `roles`                | tenant     | obrigatório    | não              | não       | não — `is_system` protege    |
-| `permissions`          | **global** | não            | não              | não       | não                          |
-| `role_permissions`     | associação | via `role`     | não              | não       | não — hard delete            |
-| `user_roles`           | associação | obrigatório    | não              | não       | não — hard delete            |
-| `features`             | **global** | não            | não              | não       | não — `status`               |
-| `feature_dependencies` | **global** | não            | não              | não       | não                          |
-| `plans`                | **global** | não            | não              | não       | não                          |
-| `plan_entitlements`    | **global** | não            | não              | não       | não                          |
-| `tenant_features`      | tenant     | obrigatório    | não              | não       | **não — desativar preserva** |
-| `tenant_sequences`     | tenant     | obrigatório    | não              | não       | não                          |
-| `audit_logs`           | tenant     | opcional¹      | opcional         | **sim**   | **nunca**                    |
-| `domain_events`        | tenant     | opcional¹      | não              | **sim**   | **nunca**                    |
-| `jobs`                 | tenant     | opcional²      | não              | não       | não — `status`               |
+| Entidade                | Escopo     | Tenant         | Unit             | Histórico | Soft delete                  |
+| ----------------------- | ---------- | -------------- | ---------------- | --------- | ---------------------------- |
+| `tenants`               | plataforma | — (é o tenant) | —                | não       | não — `status`               |
+| `units`                 | tenant     | obrigatório    | — (é a unidade)  | não       | não — `status`               |
+| `users`                 | tenant     | obrigatório    | via `user_units` | não       | não — `status`               |
+| `user_units`            | associação | obrigatório    | obrigatório      | não       | não — hard delete            |
+| `sessions`              | tenant     | obrigatório    | não              | não       | não — `revoked_at`           |
+| `roles`                 | tenant     | obrigatório    | não              | não       | não — `is_system` protege    |
+| `permissions`           | **global** | não            | não              | não       | não                          |
+| `role_permissions`      | associação | via `role`     | não              | não       | não — hard delete            |
+| `user_roles`            | associação | obrigatório    | não              | não       | não — hard delete            |
+| `user_unit_roles`       | associação | obrigatório    | obrigatório      | não       | não — hard delete            |
+| `password_reset_tokens` | tenant     | obrigatório    | não              | não       | não — `used_at`/`expires_at` |
+| `features`              | **global** | não            | não              | não       | não — `status`               |
+| `feature_dependencies`  | **global** | não            | não              | não       | não                          |
+| `plans`                 | **global** | não            | não              | não       | não                          |
+| `plan_entitlements`     | **global** | não            | não              | não       | não                          |
+| `tenant_features`       | tenant     | obrigatório    | não              | não       | **não — desativar preserva** |
+| `tenant_sequences`      | tenant     | obrigatório    | não              | não       | não                          |
+| `audit_logs`            | tenant     | opcional¹      | opcional         | **sim**   | **nunca**                    |
+| `domain_events`         | tenant     | opcional¹      | não              | **sim**   | **nunca**                    |
+| `jobs`                  | tenant     | opcional²      | não              | não       | não — `status`               |
 
 ¹ Nulo em evento de plataforma anterior ao tenant existir.
 ² Nulo em job técnico global (ex.: limpeza de sessões expiradas).

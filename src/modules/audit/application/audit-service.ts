@@ -30,6 +30,23 @@ export const AUDIT_ACTIONS = {
   FEATURE_DISABLED: 'feature.disabled',
   PLAN_ENTITLEMENT_CHANGED: 'plan.entitlement_changed',
   UNIT_SWITCHED: 'unit.switched',
+
+  // --- Prompt 03: gestao de acesso ----------------------------------------
+  USER_UPDATED: 'user.updated',
+  USER_ACTIVATED: 'user.activated',
+  USER_DEACTIVATED: 'user.deactivated',
+  USER_UNIT_GRANTED: 'user.unit.granted',
+  USER_UNIT_REVOKED: 'user.unit.revoked',
+  ROLE_CREATED: 'role.created',
+  ROLE_UPDATED: 'role.updated',
+  ROLE_DELETED: 'role.deleted',
+  ROLE_REVOKED: 'role.revoked',
+  ROLE_PERMISSIONS_CHANGED: 'role.permissions_changed',
+  PASSWORD_CHANGED: 'password.changed',
+  PASSWORD_RESET_REQUESTED: 'password.reset_requested',
+  PASSWORD_RESET_COMPLETED: 'password.reset_completed',
+  SESSION_REVOKED: 'session.revoked',
+  ALL_SESSIONS_REVOKED: 'session.all_revoked',
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];

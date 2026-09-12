@@ -20,6 +20,8 @@ export async function migrateTestDatabase(): Promise<void> {
  */
 const TABLES_IN_DELETE_ORDER = [
   'audit_logs',
+  'password_reset_tokens',
+  'user_unit_roles',
   'domain_events',
   'jobs',
   'sessions',

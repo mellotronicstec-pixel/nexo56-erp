@@ -5,7 +5,7 @@ import { logger } from '@/core/logging/logger';
 import type { PermissionKey } from '@/modules/access-control/domain/permissions';
 import { checkAccess, type AccessDecision } from '@/modules/features/application/effective-access';
 import { requireContext } from '@/modules/auth/application/current-context';
-import type { TenantContext } from '@/modules/tenancy/domain/tenant-context';
+import { hasPermission, type TenantContext } from '@/modules/tenancy/domain/tenant-context';
 
 /**
  * Guarda de execucao (Prompt 01, itens 26 e 27).
@@ -46,7 +46,7 @@ export async function requireAccess(
 /** Exige apenas permissao RBAC, sem vinculo a uma feature especifica. */
 export async function requirePermission(permission: PermissionKey): Promise<TenantContext> {
   const context = await requireContext();
-  if (!context.permissions.has(permission)) {
+  if (!hasPermission(context, permission)) {
     throw new AuthorizationError('Voce nao tem permissao para executar esta acao.', { permission });
   }
   return context;

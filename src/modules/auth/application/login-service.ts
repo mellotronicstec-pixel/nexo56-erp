@@ -14,7 +14,11 @@ import {
   simulatePasswordVerification,
   verifyPassword,
 } from '@/modules/auth/domain/password';
-import { createSession, type CreatedSession } from '@/modules/auth/application/session-service';
+import {
+  createSession,
+  summarizeUserAgent,
+  type CreatedSession,
+} from '@/modules/auth/application/session-service';
 import { tenants } from '@/modules/tenancy/infrastructure/schema';
 import { users } from '@/modules/users/infrastructure/schema';
 
@@ -33,7 +37,13 @@ import { users } from '@/modules/users/infrastructure/schema';
  */
 
 export const loginSchema = z.object({
-  email: z.email({ message: 'Informe um e-mail valido.' }).max(190).trim().toLowerCase(),
+  // Normaliza antes de validar — ver o mesmo cuidado em user-service.
+  email: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .max(190)
+    .pipe(z.email({ message: 'Informe um e-mail valido.' })),
   password: z.string().min(1, 'Informe a senha.').max(512),
   tenantSlug: z
     .string()
@@ -56,7 +66,10 @@ const GENERIC_FAILURE = 'E-mail ou senha invalidos.';
 const NEEDS_TENANT =
   'Este e-mail esta vinculado a mais de uma empresa. Informe o identificador da empresa.';
 
-export async function login(rawInput: unknown): Promise<LoginResult> {
+export async function login(
+  rawInput: unknown,
+  options: { userAgent?: string | null } = {},
+): Promise<LoginResult> {
   const parsed = loginSchema.safeParse(rawInput);
   if (!parsed.success) {
     throw new ValidationError(parsed.error.issues[0]?.message ?? 'Dados invalidos.');
@@ -129,7 +142,12 @@ export async function login(rawInput: unknown): Promise<LoginResult> {
 
   // 3. Sessao + auditoria + evento na mesma transacao.
   const result = await runInTransaction(async (tx, emit) => {
-    const session = await createSession(candidate.userId, candidate.tenantId, tx);
+    const session = await createSession(
+      candidate.userId,
+      candidate.tenantId,
+      tx,
+      summarizeUserAgent(options.userAgent),
+    );
 
     await tx.update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, candidate.userId));
 

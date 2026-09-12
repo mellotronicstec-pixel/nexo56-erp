@@ -36,10 +36,47 @@ export function safeCompareHash(a: string, b: string): boolean {
 
 type Executor = Pick<ReturnType<typeof getDb>, 'insert'>;
 
+/**
+ * Resumo curto e nao identificante do agente, so para a pessoa reconhecer o
+ * proprio dispositivo na lista de sessoes (Prompt 03, item 39).
+ *
+ * Guarda navegador e sistema, sem versao detalhada — nao e fingerprint.
+ */
+export function summarizeUserAgent(userAgent: string | null | undefined): string | null {
+  if (!userAgent) return null;
+
+  const browser = /Edg\//.test(userAgent)
+    ? 'Edge'
+    : /OPR\//.test(userAgent)
+      ? 'Opera'
+      : /Chrome\//.test(userAgent)
+        ? 'Chrome'
+        : /Firefox\//.test(userAgent)
+          ? 'Firefox'
+          : /Safari\//.test(userAgent)
+            ? 'Safari'
+            : 'Navegador';
+
+  const platform = /Windows/.test(userAgent)
+    ? 'Windows'
+    : /Android/.test(userAgent)
+      ? 'Android'
+      : /iPhone|iPad|iOS/.test(userAgent)
+        ? 'iOS'
+        : /Mac OS X|Macintosh/.test(userAgent)
+          ? 'macOS'
+          : /Linux/.test(userAgent)
+            ? 'Linux'
+            : 'dispositivo desconhecido';
+
+  return `${browser} em ${platform}`.slice(0, 120);
+}
+
 export async function createSession(
   userId: string,
   tenantId: string,
   tx?: Executor,
+  userAgentSummary?: string | null,
 ): Promise<CreatedSession> {
   const executor = tx ?? getDb();
   const token = randomBytes(32).toString('base64url');
@@ -55,6 +92,7 @@ export async function createSession(
     expiresAt,
     revokedAt: null,
     lastUsedAt: now,
+    userAgentSummary: userAgentSummary ?? null,
     createdAt: now,
   });
 
@@ -101,9 +139,16 @@ export async function revokeSession(sessionId: string): Promise<void> {
   await getDb().update(sessions).set({ revokedAt: new Date() }).where(eq(sessions.id, sessionId));
 }
 
-/** Revoga todas as sessoes de um usuario (suspensao, troca de senha). */
-export async function revokeAllUserSessions(userId: string): Promise<void> {
-  await getDb()
+/**
+ * Revoga todas as sessoes de um usuario (suspensao, troca de senha).
+ * Aceita o executor de uma transacao para que a revogacao aconteca junto com
+ * a operacao que a motivou.
+ */
+export async function revokeAllUserSessions(
+  userId: string,
+  tx?: Pick<ReturnType<typeof getDb>, 'update'>,
+): Promise<void> {
+  await (tx ?? getDb())
     .update(sessions)
     .set({ revokedAt: new Date() })
     .where(and(eq(sessions.userId, userId), isNull(sessions.revokedAt)));

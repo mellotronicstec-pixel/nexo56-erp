@@ -23,6 +23,24 @@
 | Segredo de dev em produção | startup falha                                                                                   | verificado                     |
 | Injeção de SQL             | consultas parametrizadas pelo Drizzle                                                           | —                              |
 
+## Implementado e verificado — controle de acesso (Prompt 03)
+
+| Proteção                          | Como                                                             | Verificação                  |
+| --------------------------------- | ---------------------------------------------------------------- | ---------------------------- |
+| Negação por padrão                | pipeline único em `authorization-service.ts`                     | suíte dedicada               |
+| Sem superusuário embutido         | Administrador é papel com permissões, não exceção no código      | teste de integração          |
+| Autoescalonamento                 | `assertNotSelfEscalation()` — ninguém amplia o próprio acesso    | teste de integração          |
+| Delegação além do próprio         | `assertCanGrantPermissions()` — não concede o que não tem        | teste de integração          |
+| Empresa sem administrador         | `assertTenantKeepsAdmin()`, com serialização por linha do tenant | teste, inclusive concorrente |
+| IDOR entre tenants                | recurso fora do contexto responde "não encontrado"               | teste + navegador            |
+| Papel por unidade sem vínculo     | FK composta `(user_id, unit_id) → user_units`                    | teste de integração          |
+| Papel de unidade em outra unidade | permissões resolvidas por escopo, nunca somadas globalmente      | teste de integração          |
+| Unidade forjada no formulário     | ignorada se não estiver em `authorizedUnitIds`                   | teste + navegador            |
+| Política de senha                 | mínimo 10, máximo 512 sem truncar, lista de senhas óbvias        | teste de integração          |
+| Token de redefinição              | só o SHA-256 no banco, uso único, 60 min                         | teste de integração          |
+| Revogação de sessão               | imediata em todos os gatilhos (senha, reset, desativação, admin) | teste de integração          |
+| Segredo na auditoria de acesso    | senha inicial, token e hash nunca aparecem                       | teste de integração          |
+
 ## Limitações conhecidas
 
 ### Rate limit conta por processo
@@ -44,15 +62,26 @@ comportamento do Next 16 sem regressão.
 
 ### Sem 2FA e sem bloqueio de conta
 
-O Prompt 01 pede apenas preparação arquitetural. Não há segundo fator nem
-bloqueio após N tentativas (só rate limit por janela). O modelo comporta ambos
-sem reconstrução.
+**Não há segundo fator de autenticação** e não há bloqueio de conta após N
+tentativas — só rate limit por janela (5 tentativas / 5 min por e-mail). O
+modelo comporta ambos sem reconstrução: o 2FA entraria como mais uma condição
+no pipeline do `authorization-service.ts`, e o bloqueio como colunas em
+`users`. Nenhum dos dois foi implementado.
 
-### Sem escopo de permissão por unidade
+### Sem autoatendimento de redefinição de senha
 
-A permissão vale no tenant. `user_units` já delimita quais unidades o usuário
-acessa, e o `TenantContext` carrega essa lista, mas ainda não há permissão
-específica por unidade.
+**Nenhum serviço de e-mail está configurado no projeto**, então não existe
+"esqueci minha senha" pelo próprio usuário. A redefinição é iniciada por quem
+tem `users.reset_password`, que entrega o código pessoalmente. O token, sua
+validade e o efeito de revogar todas as sessões já funcionam — falta só o canal
+de entrega.
+
+### Rate limit apenas no login
+
+Troca de senha, consumo de token de redefinição e operações administrativas não
+têm rate limit próprio. O risco é baixo: os tokens têm 256 bits, e as operações
+administrativas exigem sessão autenticada com permissão. Ainda assim, é uma
+superfície que um `RateLimitStore` compartilhado deveria cobrir quando existir.
 
 ### Auditoria sem proteção contra adulteração privilegiada
 
@@ -63,7 +92,8 @@ fase.
 
 ## Dados pessoais (LGPD)
 
-- Sessões **não** guardam IP nem user-agent.
+- Sessões **não** guardam IP; do user-agent, só um resumo curto ("Chrome no
+  Windows", 120 caracteres), para a pessoa reconhecer o próprio dispositivo.
 - Logs e auditoria redigem `password`, `token`, `secret`, `cpf` e variantes.
 - O cadastro de usuário tem o mínimo: nome, e-mail, situação e vínculos.
 - O cookie carrega apenas um token opaco — nenhum dado pessoal.

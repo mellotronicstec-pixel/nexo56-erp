@@ -2,7 +2,8 @@ import { redirect } from 'next/navigation';
 import { runWithContext } from '@/core/context/request-context';
 import { getCurrentContext } from '@/modules/auth/application/current-context';
 import { checkManyAccess } from '@/modules/features/application/effective-access';
-import { findUnitById } from '@/modules/tenancy/application/tenancy-queries';
+import { listUnits } from '@/modules/tenancy/application/tenancy-queries';
+import { hasPermission } from '@/modules/tenancy/domain/tenant-context';
 import { NAV_SECTIONS, type NavSection } from './navigation';
 import { Shell } from './shell';
 
@@ -21,17 +22,31 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return runWithContext(
     { origin: 'web', tenantId: context.tenantId, userId: context.userId },
     async () => {
-      const queries = NAV_SECTIONS.flatMap((section) =>
-        section.items.map((item) => ({ featureKey: item.featureKey, permission: item.permission })),
+      /**
+       * O menu reflete o acesso efetivo (item 64): a feature precisa estar
+       * disponivel para a empresa E a permissao precisa valer no contexto atual.
+       *
+       * Um unico snapshot de features para todos os itens, sem N+1. Ainda assim
+       * cada pagina revalida no servidor — o menu e UX, nao barreira.
+       */
+      const featureDecisions = await checkManyAccess(
+        context,
+        NAV_SECTIONS.flatMap((section) =>
+          section.items.map((item) => ({ featureKey: item.featureKey })),
+        ),
       );
-      const decisions = await checkManyAccess(context, queries);
 
       const sections: NavSection[] = NAV_SECTIONS.map((section) => ({
         title: section.title,
-        items: section.items.filter((item) => decisions.get(item.featureKey)?.allowed ?? false),
+        items: section.items.filter((item) => {
+          if (!(featureDecisions.get(item.featureKey)?.allowed ?? false)) return false;
+          return item.permission === null || hasPermission(context, item.permission);
+        }),
       })).filter((section) => section.items.length > 0);
 
-      const unit = context.unitId ? await findUnitById(context, context.unitId) : null;
+      const units = await listUnits(context);
+      const authorizedUnits = units.filter((unit) => context.authorizedUnitIds.includes(unit.id));
+      const activeUnit = authorizedUnits.find((unit) => unit.id === context.activeUnitId) ?? null;
 
       return (
         <Shell
@@ -40,8 +55,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             name: context.userName,
             email: context.userEmail,
             tenantName: context.tenantName,
-            unitName: unit?.name ?? null,
+            unitName: activeUnit?.name ?? null,
           }}
+          units={authorizedUnits.map((unit) => ({ id: unit.id, name: unit.name }))}
+          activeUnitId={context.activeUnitId}
         >
           {children}
         </Shell>

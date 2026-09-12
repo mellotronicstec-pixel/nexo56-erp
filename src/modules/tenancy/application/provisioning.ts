@@ -5,7 +5,10 @@ import { runInTransaction } from '@/core/db/unit-of-work';
 import { newId } from '@/core/ids/id';
 import { logger } from '@/core/logging/logger';
 import { AUDIT_ACTIONS, recordAudit } from '@/modules/audit/application/audit-service';
-import { SYSTEM_ROLE_DEFINITIONS } from '@/modules/access-control/domain/permissions';
+import {
+  STARTER_ROLE_DEFINITIONS,
+  SYSTEM_ROLE_DEFINITIONS,
+} from '@/modules/access-control/domain/permissions';
 import { rolePermissions, roles, userRoles } from '@/modules/access-control/infrastructure/schema';
 import { hashPassword } from '@/modules/auth/domain/password';
 import { EVENT_TYPES } from '@/modules/events/domain/event';
@@ -133,6 +136,24 @@ export async function provisionTenant(input: ProvisionTenantInput): Promise<Prov
       }
 
       await tx.insert(userRoles).values({ userId: adminUserId, roleId, tenantId, createdAt: now });
+    }
+
+    /**
+     * Perfis iniciais oferecidos a empresa (Prompt 03, item 12).
+     * Nascem sem permissoes — as capacidades reais chegam com os modulos de
+     * negocio. Nao sao `is_system`: a empresa pode ajustar ou excluir.
+     */
+    for (const starter of STARTER_ROLE_DEFINITIONS) {
+      await tx.insert(roles).values({
+        id: newId(),
+        tenantId,
+        key: starter.key,
+        name: starter.name,
+        description: starter.description,
+        isSystem: false,
+        createdAt: now,
+        updatedAt: now,
+      });
     }
 
     await recordAudit(

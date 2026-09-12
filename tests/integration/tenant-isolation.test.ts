@@ -138,7 +138,7 @@ describe('4. o tenant vem da sessao, nunca do cliente', () => {
       ),
     );
 
-    expect(context?.unitId).toBe(tenantA.unitId);
+    expect(context?.activeUnitId).toBe(tenantA.unitId);
     expect(context?.authorizedUnitIds).not.toContain(tenantB.unitId);
   });
 });

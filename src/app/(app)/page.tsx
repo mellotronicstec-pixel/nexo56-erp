@@ -1,5 +1,6 @@
 import { Badge, Card, CardBody, CardHeader } from '@/design-system/components';
 import { requireContextForPage } from '@/modules/auth/application/current-context';
+import { effectivePermissions } from '@/modules/tenancy/domain/tenant-context';
 import { listTenantFeatureStates } from '@/modules/features/application/effective-access';
 import { listUnits } from '@/modules/tenancy/application/tenancy-queries';
 
@@ -68,10 +69,10 @@ export default async function HomePage() {
               <div className="flex justify-between gap-4">
                 <dt className="text-ink-500">Perfis</dt>
                 <dd className="flex flex-wrap justify-end gap-1">
-                  {context.roleKeys.length > 0 ? (
-                    context.roleKeys.map((role) => (
-                      <Badge key={role} tone="brand">
-                        {role}
+                  {context.tenantRoles.length > 0 ? (
+                    context.tenantRoles.map((role) => (
+                      <Badge key={role.roleId} tone="brand">
+                        {role.roleName}
                       </Badge>
                     ))
                   ) : (
@@ -81,7 +82,7 @@ export default async function HomePage() {
               </div>
               <div className="flex justify-between gap-4">
                 <dt className="text-ink-500">Permissoes</dt>
-                <dd className="text-right text-ink-700">{context.permissions.size}</dd>
+                <dd className="text-right text-ink-700">{effectivePermissions(context).size}</dd>
               </div>
               <div className="flex justify-between gap-4">
                 <dt className="text-ink-500">Unidades autorizadas</dt>
