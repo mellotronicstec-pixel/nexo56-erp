@@ -45,10 +45,12 @@ Thumbs.db
 tmp/
 .cache/
 
-# arquivos enviados (fotos de equipamento) — nunca versionados
-storage/
-storage-*/
+# arquivos enviados (fotos de equipamento) — nunca versionados.
+# As barras iniciais ancoram na RAIZ do projeto: sem elas o padrao casaria
+# tambem com `src/core/storage/`, que e codigo-fonte.
+/storage/
+/storage-*/
 
 # instrucoes para agentes geradas pelo `next dev`
-AGENTS.md
-CLAUDE.md
+/AGENTS.md
+/CLAUDE.md
