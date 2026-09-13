@@ -1,6 +1,15 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { Badge, Card, CardBody, CardHeader } from '@/design-system/components';
+import {
+  Badge,
+  Card,
+  CardBody,
+  CardHeader,
+  EmptyState,
+  PageHeader,
+  Section,
+} from '@/design-system/components';
+import { IconShield } from '@/design-system/icons';
 import { requireAccessForPage } from '@/modules/access-control/application/guard';
 import { listRolesWithCounts } from '@/modules/access-control/application/role-service';
 import { PERMISSIONS } from '@/modules/access-control/domain/permissions';
@@ -21,7 +30,14 @@ export default async function RolesPage() {
   const canManage = hasPermission(context, PERMISSIONS.ROLES_MANAGE);
 
   return (
-    <div className="mx-auto max-w-5xl space-y-4">
+    <div className="mx-auto max-w-5xl space-y-6">
+      <PageHeader
+        title="Perfis de acesso"
+        description="Um perfil reune permissoes. Ele e atribuido a uma pessoa no tenant inteiro ou apenas em uma unidade."
+        breadcrumbs={[{ label: 'Administracao' }, { label: 'Perfis de acesso' }]}
+        metadata={<span>{roles.length} perfil(is) nesta empresa</span>}
+      />
+
       {canManage ? (
         <Card>
           <CardHeader
@@ -39,6 +55,14 @@ export default async function RolesPage() {
           title="Perfis de acesso"
           description={`${roles.length} perfil(is) nesta empresa`}
         />
+        {roles.length === 0 ? (
+          <EmptyState
+            title="Nenhum perfil"
+            description="Esta empresa ainda nao possui perfis de acesso."
+            icon={<IconShield />}
+          />
+        ) : null}
+
         <CardBody className="space-y-3">
           {roles.map((role) => (
             <div
@@ -57,32 +81,38 @@ export default async function RolesPage() {
                 {role.description ? (
                   <p className="mt-1 text-small text-ink-500">{role.description}</p>
                 ) : null}
-                <p className="mt-1 font-mono text-small text-ink-400">{role.key}</p>
+                <p className="mt-1 font-mono text-small text-ink-500">{role.key}</p>
               </div>
 
               <Link
                 href={`/administracao/perfis/${role.id}`}
-                className="touch-target inline-flex items-center text-ui font-semibold text-brand-600 hover:text-brand-700 md:min-h-0"
+                className="touch-target inline-flex items-center text-ui font-semibold text-brand-600 hover:text-brand-700 hover:underline md:min-h-0"
               >
                 Ver permissoes
+                <span className="sr-only"> do perfil {role.name}</span>
               </Link>
             </div>
           ))}
         </CardBody>
       </Card>
 
-      <Card>
-        <CardHeader title="Seu acesso" description="Permissoes efetivas na unidade ativa" />
-        <CardBody>
-          <ul className="flex flex-wrap gap-2">
-            {[...effectivePermissions(context)].sort().map((permission) => (
-              <li key={permission}>
-                <Badge>{permission}</Badge>
-              </li>
-            ))}
-          </ul>
-        </CardBody>
-      </Card>
+      <Section
+        id="seu-acesso"
+        title="Seu acesso"
+        description="Permissoes efetivas no contexto atual: seus papeis de tenant mais os papeis da unidade ativa."
+      >
+        <Card>
+          <CardBody>
+            <ul className="flex flex-wrap gap-2">
+              {[...effectivePermissions(context)].sort().map((permission) => (
+                <li key={permission}>
+                  <Badge>{permission}</Badge>
+                </li>
+              ))}
+            </ul>
+          </CardBody>
+        </Card>
+      </Section>
     </div>
   );
 }

@@ -1,19 +1,29 @@
 import type { NextConfig } from 'next';
 
 /**
- * Cabecalhos de seguranca aplicados a toda a aplicacao (Prompt 01, item 42).
+ * Cabecalhos de seguranca aplicados a toda a aplicacao (Prompt 01, item 42;
+ * Prompt 04, item 115).
  *
  * A CSP permite 'unsafe-inline' em script-src porque o runtime do Next injeta
  * scripts inline de bootstrap/hidratacao sem nonce no modo `next start`.
  * Evolucao documentada em docs/architecture/security.md.
+ *
+ * 'unsafe-eval' entra APENAS em desenvolvimento: o React em modo dev compila
+ * com eval, e sem essa permissao a hidratacao falha em silencio — a pagina
+ * aparece, mas nenhum botao, menu ou dialogo responde. O sintoma engana
+ * (parece bug de componente) e custa horas. Em producao a diretiva NAO e
+ * emitida, entao o build publicado continua sem eval.
  */
+const isDevelopment = process.env.NODE_ENV !== 'production';
+
 const contentSecurityPolicy = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline'",
+  `script-src 'self' 'unsafe-inline'${isDevelopment ? " 'unsafe-eval'" : ''}`,
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob:",
   "font-src 'self' data:",
-  "connect-src 'self'",
+  // Em desenvolvimento o Next abre um WebSocket para recarga automatica.
+  `connect-src 'self'${isDevelopment ? ' ws: wss:' : ''}`,
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",
@@ -34,7 +44,14 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   serverExternalPackages: ['mysql2'],
   async headers() {
-    return [{ source: '/:path*', headers: securityHeaders }];
+    /**
+     * O canal de recarga automatica do Next (`/_next/hmr`) e um upgrade para
+     * WebSocket. Carimbar cabecalhos de resposta HTTP nesse handshake o faz
+     * falhar, e sem esse canal o runtime de desenvolvimento nao conclui a
+     * hidratacao: a tela aparece, mas nenhum botao responde. O caminho fica
+     * de fora — ele nao existe em producao.
+     */
+    return [{ source: '/((?!_next/hmr).*)', headers: securityHeaders }];
   },
 };
 

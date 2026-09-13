@@ -37,3 +37,14 @@ arquivos como vieram.
 2. Confira os nomes em `src/design-system/brand.ts` (`BRAND_ASSETS`).
 3. Troque `BRAND_ASSETS_AVAILABLE` para `true`.
 4. Rode `npm run build` e confira login e topbar em desktop e mobile.
+
+## Favicon temporário
+
+Enquanto o símbolo oficial não chega, `src/app/icon.svg` traz um **marcador
+mudo**: um quadrado na cor institucional, sem letra, sem número e sem forma que
+imite a marca. Ele não é uma versão da logo — existe só para a aba do navegador
+ter um ícone.
+
+Ao receber o símbolo oficial: substitua `src/app/icon.svg` pelo SVG original,
+copie os mestres para esta pasta, e troque `BRAND_ASSETS_AVAILABLE` para `true`
+em `src/design-system/brand.ts`.

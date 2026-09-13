@@ -95,7 +95,7 @@ export default async function UserAccessPage({ params }: { params: Promise<{ use
                 action={setUserStatusAction}
                 fields={{ userId: user.id, activate: user.status === 'active' ? 'false' : 'true' }}
                 label={user.status === 'active' ? 'Inativar usuario' : 'Reativar usuario'}
-                variant={user.status === 'active' ? 'danger' : 'primary'}
+                variant={user.status === 'active' ? 'destructive' : 'primary'}
                 confirmLabel={
                   user.status === 'active'
                     ? 'Inativar este usuario e encerrar todas as suas sessoes?'
@@ -276,7 +276,7 @@ export default async function UserAccessPage({ params }: { params: Promise<{ use
                   action={revokeUserSessionsAction}
                   fields={{ userId: user.id }}
                   label="Encerrar todas as sessoes"
-                  variant="danger"
+                  variant="destructive"
                   confirmLabel="Encerrar todas as sessoes ativas deste usuario?"
                 />
               </div>

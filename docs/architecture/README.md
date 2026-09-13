@@ -1,7 +1,8 @@
 # Arquitetura do Nexo56 — visão geral
 
 Documentação da fundação técnica (**Prompt 01**), da camada de dados
-(**Prompt 02**) e do controle de acesso (**Prompt 03**).
+(**Prompt 02**), do controle de acesso (**Prompt 03**) e do Design System
+(**Prompt 04**).
 Decisões e alternativas ficam nos [ADRs](../adr/README.md).
 
 ## Índice
@@ -13,6 +14,18 @@ Decisões e alternativas ficam nos [ADRs](../adr/README.md).
 - [Segurança](security.md)
 - [Design System e identidade](design-system.md)
 - [Deploy](../hostinger.md)
+
+### Design System e interface (Prompt 04)
+
+- [Visão geral](../design-system/overview.md)
+- [Tokens](../design-system/tokens.md)
+- [Tipografia](../design-system/typography.md)
+- [Cores](../design-system/colors.md)
+- [Componentes](../design-system/components.md)
+- [Padrões de tela](../design-system/patterns.md)
+- [Responsividade](../design-system/responsive.md)
+- [Acessibilidade](../design-system/accessibility.md)
+- [Navegação e shell](../design-system/navigation.md)
 
 ### Controle de acesso (Prompt 03)
 

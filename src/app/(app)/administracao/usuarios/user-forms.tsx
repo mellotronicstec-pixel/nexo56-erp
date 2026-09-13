@@ -2,7 +2,7 @@
 
 import { useActionState } from 'react';
 import { useFormStatus } from 'react-dom';
-import { Alert, Badge, Button, Field, Input } from '@/design-system/components';
+import { Alert, Badge, Button, Field, Input, type ButtonVariant } from '@/design-system/components';
 import { EMPTY_STATE, type ActionState } from './action-state';
 
 /**
@@ -21,7 +21,7 @@ function SubmitButton({
   confirmLabel,
 }: {
   children: React.ReactNode;
-  variant?: 'primary' | 'secondary' | 'ghost' | 'danger';
+  variant?: ButtonVariant;
   size?: 'sm' | 'md';
   confirmLabel?: string;
 }) {
@@ -117,7 +117,7 @@ export function ActionForm({
   action: Action;
   fields: Record<string, string>;
   label: string;
-  variant?: 'primary' | 'secondary' | 'ghost' | 'danger';
+  variant?: ButtonVariant;
   confirmLabel?: string;
   children?: React.ReactNode;
 }) {

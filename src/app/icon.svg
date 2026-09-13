@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Nexo56">
+  <!--
+    MARCADOR TEMPORARIO — NAO E A LOGO NEXO56.
+
+    Os ativos oficiais (SVG de logo e simbolo) ainda nao foram entregues ao
+    projeto. Conforme a Constituicao (Prompt 00, item 74), a marca nunca e
+    reconstruida: nem desenhada por aproximacao, nem escrita com Sora ou Inter.
+
+    Por isso este arquivo e deliberadamente MUDO: um quadrado na cor
+    institucional, sem letra, sem numero e sem forma que imite o simbolo.
+    Ele existe apenas para a aba do navegador nao ficar sem icone (e para o
+    console nao acusar 404 a cada carregamento).
+
+    Ao receber o simbolo oficial, substitua este arquivo pelo SVG original e
+    registre a troca em public/brand/README.md.
+  -->
+  <rect width="32" height="32" rx="7" fill="#0066FF" />
+</svg>

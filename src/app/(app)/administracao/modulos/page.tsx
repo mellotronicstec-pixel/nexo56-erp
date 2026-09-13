@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { Alert, Badge, Card, CardBody, CardHeader } from '@/design-system/components';
+import { Alert, Badge, Card, CardBody, CardHeader, PageHeader } from '@/design-system/components';
 import { requireAccessForPage } from '@/modules/access-control/application/guard';
 import { hasPermission } from '@/modules/tenancy/domain/tenant-context';
 import { PERMISSIONS } from '@/modules/access-control/domain/permissions';
@@ -22,6 +22,15 @@ const REASON_LABEL: Record<
   PERMISSION_DENIED: { text: 'Sem permissao', tone: 'neutral' },
 };
 
+/** Tipo da feature -> rotulo em portugues (Prompt 04, itens 55 e 83). */
+const TYPE_LABEL: Record<string, { text: string; tone: 'brand' | 'neutral' | 'warning' }> = {
+  CORE: { text: 'estrutural', tone: 'brand' },
+  OPTIONAL: { text: 'opcional', tone: 'neutral' },
+  PREMIUM: { text: 'premium', tone: 'neutral' },
+  BETA: { text: 'beta', tone: 'warning' },
+  INTERNAL: { text: 'interno', tone: 'neutral' },
+};
+
 /**
  * Central de Modulos (Prompt 00, item 15 — versao da fundacao).
  * Mostra o estado real de cada funcionalidade segundo o Effective Access.
@@ -32,7 +41,13 @@ export default async function ModulesPage() {
   const canManage = hasPermission(context, PERMISSIONS.FEATURES_MANAGE);
 
   return (
-    <div className="mx-auto max-w-5xl space-y-4">
+    <div className="mx-auto max-w-5xl space-y-6">
+      <PageHeader
+        title="Modulos e funcionalidades"
+        description="O que esta disponivel para esta empresa, e por que."
+        breadcrumbs={[{ label: 'Administracao' }, { label: 'Modulos e funcionalidades' }]}
+      />
+
       <Alert tone="info" title="Desativar nao apaga dados">
         Ao desativar uma funcionalidade, o historico e preservado. Ao reativar, os dados anteriores
         continuam disponiveis.
@@ -59,13 +74,15 @@ export default async function ModulesPage() {
                     <p className="font-medium text-ink-900">
                       {definition?.name ?? state.featureKey}
                     </p>
-                    <Badge tone={isCore ? 'brand' : 'neutral'}>{state.type}</Badge>
+                    <Badge tone={(TYPE_LABEL[state.type] ?? TYPE_LABEL.OPTIONAL!).tone}>
+                      {(TYPE_LABEL[state.type] ?? TYPE_LABEL.OPTIONAL!).text}
+                    </Badge>
                     <Badge tone={label.tone}>{label.text}</Badge>
                   </div>
                   {definition ? (
                     <p className="mt-1 text-small text-ink-500">{definition.description}</p>
                   ) : null}
-                  <p className="mt-1 font-mono text-small text-ink-400">{state.featureKey}</p>
+                  <p className="mt-1 font-mono text-small text-ink-500">{state.featureKey}</p>
                   {state.decision.missingDependencies?.length ? (
                     <p className="mt-1 text-small text-warning-700">
                       Depende de: {state.decision.missingDependencies.join(', ')}

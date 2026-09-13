@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { Badge, Card, CardBody, CardHeader } from '@/design-system/components';
+import { Badge, Card, CardBody, CardHeader, PageHeader } from '@/design-system/components';
 import { requireContextForPage } from '@/modules/auth/application/current-context';
 import { MIN_PASSWORD_LENGTH } from '@/modules/auth/application/password-service';
 import { listOwnSessions } from '@/modules/auth/application/session-management';
@@ -29,11 +29,12 @@ export default async function MyAccountPage() {
   const unitName = (id: string) => units.find((unit) => unit.id === id)?.name ?? id;
 
   return (
-    <div className="mx-auto max-w-3xl space-y-4">
-      <header>
-        <h1 className="font-heading text-h2 font-bold tracking-tight text-ink-900">Minha conta</h1>
-        <p className="mt-1 text-ui text-ink-500">{context.userEmail}</p>
-      </header>
+    <div className="mx-auto max-w-3xl space-y-6">
+      <PageHeader
+        title="Minha conta"
+        description="Seu acesso, sua senha e seus dispositivos conectados."
+        metadata={<span>{context.userEmail}</span>}
+      />
 
       {/* Resumo do acesso efetivo (item 71) */}
       <Card>
@@ -97,7 +98,8 @@ export default async function MyAccountPage() {
         </CardBody>
       </Card>
 
-      <Card>
+      {/* Ancora usada pelo menu da conta na topbar (Prompt 04, item 38). */}
+      <Card id="seguranca" className="scroll-mt-20">
         <CardHeader title="Alterar senha" />
         <CardBody>
           <ChangePasswordForm action={changePasswordAction} minLength={MIN_PASSWORD_LENGTH} />

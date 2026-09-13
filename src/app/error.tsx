@@ -29,7 +29,7 @@ export default function GlobalError({
           Nao foi possivel concluir esta operacao. Tente novamente em instantes.
         </p>
         {error.digest ? (
-          <p className="mt-3 font-mono text-small text-ink-400">Referencia: {error.digest}</p>
+          <p className="mt-3 font-mono text-small text-ink-500">Referencia: {error.digest}</p>
         ) : null}
         <div className="mt-6">
           <Button onClick={reset}>Tentar novamente</Button>

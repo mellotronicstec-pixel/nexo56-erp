@@ -2,7 +2,7 @@
 
 import { useActionState } from 'react';
 import { useFormStatus } from 'react-dom';
-import { Alert, Button, Field, Input } from '@/design-system/components';
+import { Alert, Button, Field, Input, type ButtonVariant } from '@/design-system/components';
 import { EMPTY_ROLE_STATE, type RoleActionState } from './action-state';
 
 type Action = (state: RoleActionState, formData: FormData) => Promise<RoleActionState>;
@@ -14,7 +14,7 @@ function Submit({
   confirmLabel,
 }: {
   children: React.ReactNode;
-  variant?: 'primary' | 'secondary' | 'ghost' | 'danger';
+  variant?: ButtonVariant;
   size?: 'sm' | 'md';
   confirmLabel?: string;
 }) {
@@ -101,7 +101,7 @@ export function DeleteRoleForm({ action, roleId }: { action: Action; roleId: str
     <form action={formAction} className="space-y-2">
       <Feedback state={state} />
       <input type="hidden" name="roleId" value={roleId} />
-      <Submit size="sm" variant="danger" confirmLabel="Excluir este perfil de acesso?">
+      <Submit size="sm" variant="destructive" confirmLabel="Excluir este perfil de acesso?">
         Excluir perfil
       </Submit>
     </form>
@@ -183,7 +183,7 @@ export function RolePermissionsForm({
                     <span className="mt-0.5 block text-small text-ink-500">
                       {permission.description}
                     </span>
-                    <span className="mt-0.5 block font-mono text-small text-ink-400">
+                    <span className="mt-0.5 block font-mono text-small text-ink-500">
                       {permission.key}
                     </span>
                     {!permission.grantable && !readOnly ? (

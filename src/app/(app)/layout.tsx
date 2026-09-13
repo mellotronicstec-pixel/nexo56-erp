@@ -3,9 +3,28 @@ import { runWithContext } from '@/core/context/request-context';
 import { getCurrentContext } from '@/modules/auth/application/current-context';
 import { checkManyAccess } from '@/modules/features/application/effective-access';
 import { listUnits } from '@/modules/tenancy/application/tenancy-queries';
-import { hasPermission } from '@/modules/tenancy/domain/tenant-context';
+import { hasPermission, type TenantContext } from '@/modules/tenancy/domain/tenant-context';
 import { NAV_SECTIONS, type NavSection } from './navigation';
 import { Shell } from './shell';
+
+/**
+ * Resumo dos papeis para o menu da conta (Prompt 04, item 38).
+ *
+ * Mostra ate dois nomes; acima disso, "e mais N". Nao e decisao de acesso —
+ * e informacao, para a pessoa saber em que condicao esta operando. Papeis de
+ * unidade contam junto, porque eles tambem valem no contexto atual.
+ */
+function summarizeRoles(context: TenantContext): string | null {
+  const names = [
+    ...context.tenantRoles.map((role) => role.roleName),
+    ...context.unitRoles.map((role) => role.roleName),
+  ];
+  const unique = [...new Set(names)];
+
+  if (unique.length === 0) return null;
+  if (unique.length <= 2) return unique.join(', ');
+  return `${unique.slice(0, 2).join(', ')} e mais ${unique.length - 2}`;
+}
 
 /**
  * Layout autenticado.
@@ -56,6 +75,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             email: context.userEmail,
             tenantName: context.tenantName,
             unitName: activeUnit?.name ?? null,
+            roleSummary: summarizeRoles(context),
           }}
           units={authorizedUnits.map((unit) => ({ id: unit.id, name: unit.name }))}
           activeUnitId={context.activeUnitId}

@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { linkButtonClass } from '@/design-system/components';
 
 export const metadata: Metadata = { title: 'Acesso negado' };
 
@@ -19,10 +20,7 @@ export default function AccessDeniedPage() {
           Voce nao tem acesso a esta area. Se acredita que deveria ter, fale com o administrador da
           sua empresa.
         </p>
-        <Link
-          href="/"
-          className="mt-6 inline-flex h-10 items-center justify-center rounded-md border border-ink-300 bg-white px-4 text-ui font-semibold text-ink-700 transition-colors hover:bg-ink-50"
-        >
+        <Link href="/" className={linkButtonClass('secondary', 'md', 'mt-6')}>
           Voltar ao inicio
         </Link>
       </div>

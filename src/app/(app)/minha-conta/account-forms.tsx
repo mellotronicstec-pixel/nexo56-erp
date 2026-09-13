@@ -2,7 +2,7 @@
 
 import { useActionState } from 'react';
 import { useFormStatus } from 'react-dom';
-import { Alert, Button, Field, Input } from '@/design-system/components';
+import { Alert, Button, Field, Input, type ButtonVariant } from '@/design-system/components';
 import { EMPTY_ACCOUNT_STATE, type AccountActionState } from './action-state';
 
 type Action = (state: AccountActionState, formData: FormData) => Promise<AccountActionState>;
@@ -13,7 +13,7 @@ function Submit({
   size = 'md',
 }: {
   children: React.ReactNode;
-  variant?: 'primary' | 'secondary' | 'ghost' | 'danger';
+  variant?: ButtonVariant;
   size?: 'sm' | 'md';
 }) {
   const { pending } = useFormStatus();

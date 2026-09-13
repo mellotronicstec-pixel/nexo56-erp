@@ -2,7 +2,7 @@
 
 import { useActionState } from 'react';
 import { useFormStatus } from 'react-dom';
-import { Alert, Button, Field, Input } from '@/design-system/components';
+import { Alert, Button, Field, Input, PasswordInput } from '@/design-system/components';
 import { loginAction, type LoginFormState } from './actions';
 
 const INITIAL: LoginFormState = {
@@ -45,13 +45,7 @@ export function LoginForm() {
 
       <Field id="password" label="Senha" required>
         {(props) => (
-          <Input
-            {...props}
-            name="password"
-            type="password"
-            autoComplete="current-password"
-            required
-          />
+          <PasswordInput {...props} name="password" autoComplete="current-password" required />
         )}
       </Field>
 

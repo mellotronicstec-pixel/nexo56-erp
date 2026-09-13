@@ -2,10 +2,11 @@
 
 Plataforma ERP/SaaS multiempresa para gestão de assistência técnica e reparo.
 
-**Estado atual: fundação técnica, camada de dados e controle de acesso
-(Prompts 01 a 03).** Autenticação, sessões, usuários, perfis, permissões com
-**escopo por unidade**, multi-tenancy, modularidade, auditoria, eventos, jobs e
-Design System base estão implementados e testados. **Os módulos de negócio ainda
+**Estado atual: fundação técnica, camada de dados, controle de acesso e Design
+System (Prompts 01 a 04).** Autenticação, sessões, usuários, perfis, permissões
+com **escopo por unidade**, multi-tenancy, modularidade, auditoria, eventos,
+jobs, Design System completo e estrutura de interface responsiva estão
+implementados e testados. **Os módulos de negócio ainda
 não existem** — Clientes, Equipamentos, Ordens de Serviço, Orçamentos, Estoque,
 Compras, Financeiro, Garantias e demais serão construídos nos prompts seguintes.
 
@@ -301,6 +302,7 @@ docs/             arquitetura, ADRs, Hostinger
 - **Autenticação e sessões:** [docs/architecture/auth.md](docs/architecture/auth.md)
 - **Papéis, permissões e escopo por unidade:** [docs/architecture/access-control.md](docs/architecture/access-control.md)
 - **Matriz de acesso:** [docs/architecture/access-matrix.md](docs/architecture/access-matrix.md)
+- **Design System:** [docs/design-system/overview.md](docs/design-system/overview.md)
 
 ---
 
@@ -328,11 +330,22 @@ Pontos centrais:
 
 Sora (600/700) em títulos; Inter (400/500/600) em interface. Paleta
 institucional `#0066FF`, `#101828`, `#FFFFFF`, `#F2F4F7`, centralizada em
-tokens.
+tokens. Documentação completa em
+[docs/design-system/](docs/design-system/overview.md).
 
 **Os ativos oficiais de logo e ícones ainda não foram fornecidos.** A logo não
-é reconstruída com fonte; enquanto isso a aplicação exibe um marcador neutro.
-Instruções: [public/brand/README.md](public/brand/README.md).
+é reconstruída com fonte; enquanto isso a aplicação exibe um marcador neutro —
+inclusive o favicon, que é um quadrado mudo na cor institucional, sem letra nem
+símbolo. Instruções: [public/brand/README.md](public/brand/README.md).
+
+### Vitrine do Design System
+
+```bash
+npm run dev   # http://localhost:3000/design-system
+```
+
+Referência viva de todos os componentes e estados. **Responde 404 em
+produção** — não é tela de produto — e não lê nem grava dado algum.
 
 ---
 

@@ -1,4 +1,6 @@
-import { Badge, Card, CardBody, CardHeader } from '@/design-system/components';
+import Link from 'next/link';
+import { Badge, Card, CardBody, CardHeader, PageHeader, Section } from '@/design-system/components';
+import { IconChevronRight } from '@/design-system/icons';
 import { requireContextForPage } from '@/modules/auth/application/current-context';
 import { effectivePermissions } from '@/modules/tenancy/domain/tenant-context';
 import { listTenantFeatureStates } from '@/modules/features/application/effective-access';
@@ -7,9 +9,11 @@ import { listUnits } from '@/modules/tenancy/application/tenancy-queries';
 /**
  * Pagina inicial autenticada (Prompt 01, item 58).
  *
- * Mostra apenas o que EXISTE: empresa, unidade, usuario e estado real da
- * modularidade. Nao ha faturamento, OS, estoque, grafico ou KPI — esses dados
- * ainda nao existem no sistema e inventa-los seria mentira (item 83).
+ * Mostra apenas o que EXISTE: empresa, unidade, usuario, estado real da
+ * modularidade e atalhos para as telas que a pessoa realmente pode abrir. Nao
+ * ha faturamento, OS, estoque, grafico ou KPI — esses dados ainda nao existem
+ * no sistema e inventa-los seria mentira (Prompt 01, item 83; Prompt 04,
+ * itens 48 e 122).
  */
 export default async function HomePage() {
   const context = await requireContextForPage();
@@ -20,16 +24,74 @@ export default async function HomePage() {
 
   const activeFeatures = featureStates.filter((state) => state.decision.allowed);
 
+  /**
+   * Atalhos estruturais (item 48). Cada um so aparece se a pessoa tem a
+   * permissao — o mesmo criterio do menu, pelos mesmos motivos. Nenhum atalho
+   * leva a tela inexistente.
+   */
+  const permissions = effectivePermissions(context);
+  const shortcuts = [
+    {
+      href: '/administracao/usuarios',
+      label: 'Usuarios',
+      description: 'Cadastro, vinculos e perfis das pessoas.',
+      allowed: permissions.has('users.view'),
+    },
+    {
+      href: '/administracao/perfis',
+      label: 'Perfis de acesso',
+      description: 'Quais permissoes cada perfil concede.',
+      allowed: permissions.has('roles.view'),
+    },
+    {
+      href: '/minha-conta',
+      label: 'Minha conta',
+      description: 'Sua senha e suas sessoes ativas.',
+      allowed: true,
+    },
+  ].filter((shortcut) => shortcut.allowed);
+
   return (
     <div className="mx-auto max-w-5xl space-y-6">
-      <header>
-        <h1 className="font-heading text-h2 font-bold tracking-tight text-ink-900">
-          Ola, {context.userName.split(' ')[0]}
-        </h1>
-        <p className="mt-1 text-ui text-ink-500">
-          Fundacao tecnica do Nexo56. Os modulos operacionais serao adicionados nas proximas etapas.
-        </p>
-      </header>
+      <PageHeader
+        title={`Ola, ${context.userName.split(' ')[0]}`}
+        description="Fundacao tecnica do Nexo56. Os modulos operacionais serao adicionados nas proximas etapas."
+        metadata={
+          <>
+            <span>{context.tenantName}</span>
+            {context.activeUnitId ? (
+              <span>
+                {units.find((unit) => unit.id === context.activeUnitId)?.name ?? 'Unidade ativa'}
+              </span>
+            ) : null}
+          </>
+        }
+      />
+
+      <Section id="atalhos" title="Atalhos" description="As telas que voce pode abrir agora.">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {shortcuts.map((shortcut) => (
+            <Card key={shortcut.href} interactive>
+              <CardBody>
+                <Link
+                  href={shortcut.href}
+                  className="flex items-start justify-between gap-3 rounded-md"
+                >
+                  <span className="min-w-0">
+                    <span className="block font-heading text-h5 font-semibold text-ink-900">
+                      {shortcut.label}
+                    </span>
+                    <span className="mt-1 block text-small text-ink-500">
+                      {shortcut.description}
+                    </span>
+                  </span>
+                  <IconChevronRight size={18} className="mt-1 text-ink-400" />
+                </Link>
+              </CardBody>
+            </Card>
+          ))}
+        </div>
+      </Section>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Card>

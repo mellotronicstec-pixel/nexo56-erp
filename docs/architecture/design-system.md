@@ -1,5 +1,10 @@
 # Design System e identidade
 
+> **Prompt 04:** a documentação completa do Design System — tokens, tipografia,
+> cores, componentes, padrões, responsividade, acessibilidade e navegação —
+> passou a viver em [docs/design-system/](../design-system/overview.md). Esta
+> página guarda o registro da fundação visual do Prompt 01.
+
 Decisões: [ADR-011](../adr/ADR-011-design-system.md).
 
 ## Tokens
