@@ -23,15 +23,18 @@ um tenant. Ele oferece os mecanismos; o controlador decide.
 
 ## 2. Finalidade e base legal
 
-| Dado                        | Finalidade                                                | Base legal típica                      |
-| --------------------------- | --------------------------------------------------------- | -------------------------------------- |
-| Cadastro do cliente         | Identificar quem entregou o equipamento e a quem devolver | Execução de contrato                   |
-| Contato                     | Avisar sobre orçamento, conclusão e retirada              | Execução de contrato                   |
-| Endereço                    | Coleta e entrega, quando houver                           | Execução de contrato                   |
-| CPF/CNPJ                    | Identificação inequívoca; exigência fiscal                | Obrigação legal / execução de contrato |
-| Dados da OS                 | Registro do serviço prestado                              | Execução de contrato                   |
-| Dados financeiros           | Cobrança e escrituração                                   | Obrigação legal                        |
-| Dados do usuário do sistema | Autenticar e auditar                                      | Legítimo interesse do controlador      |
+| Dado                                     | Finalidade                                                      | Base legal típica                      |
+| ---------------------------------------- | --------------------------------------------------------------- | -------------------------------------- |
+| Cadastro do cliente                      | Identificar quem entregou o equipamento e a quem devolver       | Execução de contrato                   |
+| Contato                                  | Avisar sobre orçamento, conclusão e retirada                    | Execução de contrato                   |
+| Endereço                                 | Coleta e entrega, quando houver                                 | Execução de contrato                   |
+| CPF/CNPJ                                 | Identificação inequívoca; exigência fiscal                      | Obrigação legal / execução de contrato |
+| Equipamento (tipo, marca, modelo, série) | Identificar o aparelho entregue e devolvê-lo ao dono            | Execução de contrato                   |
+| Recebimento e estado de entrada          | Provar como o aparelho chegou, protegendo cliente e assistência | Execução de contrato                   |
+| Fotos do equipamento                     | Registrar o estado físico na entrada                            | Execução de contrato                   |
+| Dados da OS                              | Registro do serviço prestado                                    | Execução de contrato                   |
+| Dados financeiros                        | Cobrança e escrituração                                         | Obrigação legal                        |
+| Dados do usuário do sistema              | Autenticar e auditar                                            | Legítimo interesse do controlador      |
 
 Comunicação de marketing exigiria **consentimento próprio**, separado do
 cadastro — não previsto nesta fase.
@@ -48,6 +51,10 @@ Aplicada desde a fundação:
   histórico de localização.
 - O cadastro de usuário tem o mínimo: nome, e-mail, situação e vínculos.
 - O cookie carrega apenas um token opaco.
+- **Fotos perdem a geolocalização antes de sair do aparelho**: o preparo no
+  navegador reexporta a imagem, e o EXIF não acompanha (ADR-031). A tela orienta
+  a fotografar só o equipamento e a etiqueta, evitando pessoas, documentos e o
+  ambiente ao redor.
 - Log e auditoria passam por redação automática.
 - Consulta automática de CPF **não** existe e não será presumida (Prompt 00,
   item 28): conhecer o CPF não autoriza obter dados de terceiros.
@@ -56,14 +63,16 @@ Aplicada desde a fundação:
 
 ## 4. Retenção
 
-| Categoria                | Retenção pretendida                                  | Motivo                 |
-| ------------------------ | ---------------------------------------------------- | ---------------------- |
-| Sessões                  | Expiração + limpeza pelo job                         | Não há valor em manter |
-| Códigos de redefinição   | 60 minutos; consumidos ficam marcados                | Janela mínima de uso   |
-| Auditoria                | Longa; definida pelo controlador                     | Prova de conformidade  |
-| OS, garantia, financeiro | Enquanto durar a obrigação legal/fiscal e a garantia | Obrigação legal        |
-| Cadastro de cliente      | Enquanto houver relação; depois, anonimização        | Minimização            |
-| Anexos                   | Junto com a OS que os originou                       | Contexto               |
+| Categoria                | Retenção pretendida                                  | Motivo                     |
+| ------------------------ | ---------------------------------------------------- | -------------------------- |
+| Sessões                  | Expiração + limpeza pelo job                         | Não há valor em manter     |
+| Códigos de redefinição   | 60 minutos; consumidos ficam marcados                | Janela mínima de uso       |
+| Auditoria                | Longa; definida pelo controlador                     | Prova de conformidade      |
+| OS, garantia, financeiro | Enquanto durar a obrigação legal/fiscal e a garantia | Obrigação legal            |
+| Cadastro de cliente      | Enquanto houver relação; depois, anonimização        | Minimização                |
+| Cadastro de equipamento  | Enquanto houver relação com o cliente                | Histórico do aparelho      |
+| Recebimentos e fotos     | Enquanto durar a garantia e a obrigação legal        | Prova do estado de entrada |
+| Anexos                   | Junto com a OS que os originou                       | Contexto                   |
 
 **Exclusão não é automática.** Apagar cliente com OS e nota fiscal associadas
 conflita com obrigação legal — daí a preferência por **anonimização**.
@@ -84,6 +93,12 @@ conflita com obrigação legal — daí a preferência por **anonimização**.
 **Anonimização preferida à exclusão física** (Prompt 00, item 93): a OS
 continua existindo com seu número e seu histórico; o que deixa de existir é o
 vínculo com a pessoa identificada.
+
+Para Equipamentos isso tem uma consequência concreta a resolver na rotina de
+anonimização: apagar o cliente é impedido pelo banco enquanto houver aparelho
+ligado a ele (`ON DELETE RESTRICT`), e a foto do equipamento é um arquivo no
+storage — anonimizar o titular exigirá **remover também a mídia**, não só limpar
+colunas. Está listado nas pendências.
 
 ---
 
@@ -124,6 +139,7 @@ comunicação ao controlador e apoio à comunicação à ANPD quando aplicável.
 | -------------------------------------------- | ------------------------------------------ |
 | Painel de solicitações do titular            | Prompt de Clientes / LGPD                  |
 | Rotina de anonimização                       | Depois de Clientes e OS existirem          |
+| Remoção de mídia do storage na anonimização  | Junto com a rotina de anonimização         |
 | Exportação por titular                       | Idem                                       |
 | Política de retenção configurável por tenant | Prompt de SaaS                             |
 | Registro de operações de tratamento          | Prompt de segurança                        |

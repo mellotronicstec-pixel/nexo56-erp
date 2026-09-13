@@ -18,6 +18,7 @@ Decisões e alternativas ficam nos [ADRs](../adr/README.md).
 ### Módulos de negócio
 
 - [Clientes](../modules/customers/overview.md) — modelo, busca, permissões
+- [Equipamentos e Recebimento](../modules/equipment/overview.md) — modelo, mídia, leitura de etiqueta, permissões
 
 ### Design System e interface (Prompt 04)
 

@@ -17,7 +17,10 @@ export const FEATURES = {
   CORE_FEATURES: 'core.features',
   CORE_AUDIT: 'core.audit',
   CORE_CUSTOMERS: 'core.customers',
+  CORE_EQUIPMENT: 'core.equipment',
+  CORE_EQUIPMENT_INTAKE: 'core.equipment_intake',
   PLATFORM_MULTI_UNIT: 'platform.multi_unit',
+  PLATFORM_LABEL_RECOGNITION: 'platform.label_recognition',
 } as const;
 
 export type FeatureKey = (typeof FEATURES)[keyof typeof FEATURES];
@@ -89,12 +92,47 @@ export const FEATURE_CATALOG: readonly FeatureDefinition[] = [
     dependsOn: [FEATURES.CORE_TENANCY],
   },
   {
+    key: FEATURES.CORE_EQUIPMENT,
+    name: 'Equipamentos',
+    description: 'Cadastro dos aparelhos dos clientes: tipo, marca, modelo, serie e tensao.',
+    /**
+     * CORE e dependente de Clientes (item 74): um equipamento sem dono nao
+     * existe no dominio. Desativar Clientes nao pode apagar equipamento — a
+     * dependencia so impede a ATIVACAO incoerente, e o dado permanece.
+     */
+    type: 'CORE',
+    dependsOn: [FEATURES.CORE_CUSTOMERS],
+  },
+  {
+    key: FEATURES.CORE_EQUIPMENT_INTAKE,
+    name: 'Recebimento de equipamentos',
+    description:
+      'Entrada do aparelho na assistencia: acessorios, inspecao fisica, fotos e responsavel.',
+    /** Recebe-se o que esta cadastrado: depende de Equipamentos. */
+    type: 'CORE',
+    dependsOn: [FEATURES.CORE_EQUIPMENT],
+  },
+  {
     key: FEATURES.PLATFORM_MULTI_UNIT,
     name: 'Multiunidade',
     description:
       'Operacao com mais de uma unidade/filial: administracao de unidades e troca de unidade pelo usuario.',
     type: 'OPTIONAL',
     dependsOn: [FEATURES.CORE_TENANCY],
+  },
+  {
+    key: FEATURES.PLATFORM_LABEL_RECOGNITION,
+    name: 'Leitura automatica de etiqueta',
+    description:
+      'Preenche a identificacao do equipamento a partir da foto da etiqueta. Depende de provider externo.',
+    /**
+     * OPTIONAL de verdade (item 71): depende de um provider de OCR/visao que
+     * e contratado e cobrado a parte. Todo o modulo de Equipamentos funciona
+     * sem ela (item 41) — quando indisponivel, o cadastro e manual e nada
+     * mais muda.
+     */
+    type: 'OPTIONAL',
+    dependsOn: [FEATURES.CORE_EQUIPMENT],
   },
 ];
 

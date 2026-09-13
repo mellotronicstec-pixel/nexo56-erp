@@ -23,6 +23,16 @@ const envSchema = z
     SESSION_SECRET: z.string().min(32, 'SESSION_SECRET precisa de ao menos 32 caracteres'),
     JOB_SECRET: z.string().min(32, 'JOB_SECRET precisa de ao menos 32 caracteres'),
     SESSION_TTL_HOURS: z.coerce.number().int().positive().max(720).default(12),
+
+    /**
+     * Raiz do armazenamento de arquivos (Prompt 06, item 32).
+     *
+     * FORA de `public/` de proposito: arquivo em diretorio publico e acessivel
+     * por quem descobrir a URL, e foto de equipamento pode conter nota fiscal,
+     * etiqueta com dados do cliente ou o interior da casa de alguem. O acesso
+     * passa por rota autenticada.
+     */
+    STORAGE_ROOT: z.string().min(1).default('storage'),
     LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
     ALLOW_SEED: booleanish.optional().default(false),
     /**

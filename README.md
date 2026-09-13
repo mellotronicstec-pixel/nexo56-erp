@@ -2,12 +2,17 @@
 
 Plataforma ERP/SaaS multiempresa para gestão de assistência técnica e reparo.
 
-**Estado atual: fundação completa + primeiro módulo de negócio (Prompts 01 a
-05).** Autenticação, sessões, usuários, perfis, permissões com **escopo por
-unidade**, multi-tenancy, modularidade, auditoria, eventos, jobs, Design System,
-interface responsiva e o módulo **Clientes** estão implementados e testados.
-Equipamentos, Ordens de Serviço, Orçamentos, Estoque, Compras, Financeiro,
-Garantias e demais serão construídos nos prompts seguintes.
+**Estado atual: fundação completa + módulos de negócio Clientes e Equipamentos
+(Prompts 01 a 06).** Autenticação, sessões, usuários, perfis, permissões com
+**escopo por unidade**, multi-tenancy, modularidade, auditoria, eventos, jobs,
+Design System, interface responsiva, o módulo **Clientes** e o módulo
+**Equipamentos e Recebimento** (com fotos em storage privado) estão
+implementados e testados. Ordens de Serviço, Orçamentos, Estoque, Compras,
+Financeiro, Garantias e demais serão construídos nos prompts seguintes.
+
+A **leitura automática de etiqueta** tem contrato, fluxo e testes, mas **não
+está operacional**: nenhum provider de OCR foi contratado ou configurado, e o
+sistema declara isso na própria interface (ADR-032).
 
 ---
 
@@ -59,18 +64,19 @@ cp .env.example .env.local   # preencha os valores
 Copie `.env.example` para `.env.local` (desenvolvimento) e preencha.
 **Nunca versione o `.env` real.**
 
-| Variável                 | Obrigatória | Descrição                                                                                          |
-| ------------------------ | ----------- | -------------------------------------------------------------------------------------------------- |
-| `APP_URL`                | sim         | URL pública da aplicação. Em produção precisa ser `https://`                                       |
-| `DATABASE_URL`           | sim         | `mysql://usuario:senha@host:porta/banco`                                                           |
-| `TEST_DATABASE_URL`      | para testes | Banco **dedicado** a testes; os testes truncam tabelas                                             |
-| `SESSION_SECRET`         | sim         | Mínimo 32 caracteres. `openssl rand -base64 48`                                                    |
-| `JOB_SECRET`             | sim         | Mínimo 32 caracteres. `openssl rand -base64 48`                                                    |
-| `SESSION_TTL_HOURS`      | não         | Duração da sessão. Padrão 12                                                                       |
-| `LOG_LEVEL`              | não         | `debug` \| `info` \| `warn` \| `error`. Padrão `info`                                              |
-| `DB_POOL_SIZE`           | não         | Conexões do pool. Padrão 5                                                                         |
-| `ALLOW_SEED`             | não         | `true` libera o seed. **Nunca em produção**                                                        |
-| `ALLOW_INSECURE_APP_URL` | não         | Permite `APP_URL` http em build de produção, para verificação local/staging. **Nunca em produção** |
+| Variável                 | Obrigatória | Descrição                                                                                                        |
+| ------------------------ | ----------- | ---------------------------------------------------------------------------------------------------------------- |
+| `APP_URL`                | sim         | URL pública da aplicação. Em produção precisa ser `https://`                                                     |
+| `DATABASE_URL`           | sim         | `mysql://usuario:senha@host:porta/banco`                                                                         |
+| `TEST_DATABASE_URL`      | para testes | Banco **dedicado** a testes; os testes truncam tabelas                                                           |
+| `SESSION_SECRET`         | sim         | Mínimo 32 caracteres. `openssl rand -base64 48`                                                                  |
+| `JOB_SECRET`             | sim         | Mínimo 32 caracteres. `openssl rand -base64 48`                                                                  |
+| `SESSION_TTL_HOURS`      | não         | Duração da sessão. Padrão 12                                                                                     |
+| `LOG_LEVEL`              | não         | `debug` \| `info` \| `warn` \| `error`. Padrão `info`                                                            |
+| `DB_POOL_SIZE`           | não         | Conexões do pool. Padrão 5                                                                                       |
+| `STORAGE_ROOT`           | não         | Raiz das fotos de equipamento. Padrão `storage`. **Sempre fora de `public/`**; entre no backup junto com o banco |
+| `ALLOW_SEED`             | não         | `true` libera o seed. **Nunca em produção**                                                                      |
+| `ALLOW_INSECURE_APP_URL` | não         | Permite `APP_URL` http em build de produção, para verificação local/staging. **Nunca em produção**               |
 
 Não defina `NODE_ENV`: o Next cuida disso, e um valor fixo no `.env` quebra o
 build.
@@ -303,6 +309,7 @@ docs/             arquitetura, ADRs, Hostinger
 - **Matriz de acesso:** [docs/architecture/access-matrix.md](docs/architecture/access-matrix.md)
 - **Design System:** [docs/design-system/overview.md](docs/design-system/overview.md)
 - **Clientes:** [docs/modules/customers/overview.md](docs/modules/customers/overview.md)
+- **Equipamentos e Recebimento:** [docs/modules/equipment/overview.md](docs/modules/equipment/overview.md)
 
 ---
 
@@ -322,6 +329,11 @@ Pontos centrais:
 - Ninguém concede permissão que não tem, nem amplia o próprio acesso.
 - A empresa nunca fica sem administrador.
 - Segredos nunca em log nem em auditoria.
+- Mídia fora de `public/`, com chave opaca gerada pelo servidor e entrega por
+  rota autenticada; mídia de outro tenant responde 404.
+- Imagem validada por **magic bytes**, não por extensão nem `Content-Type`.
+- Foto reexportada no navegador antes do upload: o EXIF (inclusive GPS) não
+  acompanha.
 - O frontend **nunca** é barreira de segurança.
 
 ---
@@ -351,14 +363,20 @@ produção** — não é tela de produto — e não lê nem grava dado algum.
 
 ## 14. Dívida técnica conhecida
 
-| Item                                      | Detalhe                                                                                                               | Caminho                                    |
-| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
-| ESLint na linha 9.x                       | O `eslint-plugin-react` do `eslint-config-next@16` ainda não roda em ESLint 10                                        | atualizar quando o preset suportar         |
-| 4 vulnerabilidades moderadas de dev       | Cadeia `drizzle-kit → @esbuild-kit → esbuild`; afetam apenas o servidor de desenvolvimento, não o runtime de produção | aguardar atualização do drizzle-kit        |
-| CSP com `'unsafe-inline'` em `script-src` | O runtime do Next injeta scripts inline sem nonce em `next start`                                                     | CSP por nonce via middleware               |
-| Rate limit por processo                   | Store em memória; conta por instância                                                                                 | implementar `RateLimitStore` com Redis     |
-| Sem worker de outbox                      | Eventos são despachados em processo; a tabela já tem formato de outbox                                                | worker lendo `published_at IS NULL`        |
-| Build depende de rede para as fontes      | `next/font/google` baixa Sora e Inter no build                                                                        | versionar WOFF2 se houver build offline    |
-| Sem 2FA                                   | Não há segundo fator; o pipeline de autorização comporta a condição adicional sem reconstrução                        | prompt futuro de segurança                 |
-| Sem autoatendimento de redefinição        | Nenhum serviço de e-mail configurado; o código é gerado por um administrador e entregue pessoalmente                  | configurar canal de e-mail                 |
-| Rate limit só no login                    | Troca de senha e ações administrativas não têm limite próprio                                                         | estender quando houver store compartilhado |
+| Item                                      | Detalhe                                                                                                                             | Caminho                                                                                     |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| ESLint na linha 9.x                       | O `eslint-plugin-react` do `eslint-config-next@16` ainda não roda em ESLint 10                                                      | atualizar quando o preset suportar                                                          |
+| 4 vulnerabilidades moderadas de dev       | Cadeia `drizzle-kit → @esbuild-kit → esbuild`; afetam apenas o servidor de desenvolvimento, não o runtime de produção               | aguardar atualização do drizzle-kit                                                         |
+| CSP com `'unsafe-inline'` em `script-src` | O runtime do Next injeta scripts inline sem nonce em `next start`                                                                   | CSP por nonce via middleware                                                                |
+| Rate limit por processo                   | Store em memória; conta por instância                                                                                               | implementar `RateLimitStore` com Redis                                                      |
+| Sem worker de outbox                      | Eventos são despachados em processo; a tabela já tem formato de outbox                                                              | worker lendo `published_at IS NULL`                                                         |
+| Build depende de rede para as fontes      | `next/font/google` baixa Sora e Inter no build                                                                                      | versionar WOFF2 se houver build offline                                                     |
+| Sem 2FA                                   | Não há segundo fator; o pipeline de autorização comporta a condição adicional sem reconstrução                                      | prompt futuro de segurança                                                                  |
+| Sem autoatendimento de redefinição        | Nenhum serviço de e-mail configurado; o código é gerado por um administrador e entregue pessoalmente                                | configurar canal de e-mail                                                                  |
+| Rate limit só no login                    | Troca de senha e ações administrativas não têm limite próprio                                                                       | estender quando houver store compartilhado                                                  |
+| Leitura de etiqueta sem provider          | Contrato, normalização e fluxo prontos; nenhum fornecedor de OCR contratado ou configurado — a interface declara isso               | implementar um `EquipmentLabelRecognitionProvider` e habilitar `platform.label_recognition` |
+| Código de barras não decodificado         | O campo existe no contrato; não há decoder embarcado                                                                                | avaliar decoder no navegador ou no provider                                                 |
+| HEIC depende do navegador                 | O servidor recusa HEIC com explicação; a conversão depende de o navegador decodificar o arquivo. Não validado com arquivo HEIC real | testar em iOS/Safari com aparelho                                                           |
+| Câmera física não exercitada em teste     | O navegador dos testes não tem câmera; só o caminho de arquivo é executado, com o mesmo código de preparo                           | validação manual em aparelho                                                                |
+| Backup em duas partes                     | Banco e `STORAGE_ROOT` precisam ser copiados juntos, ou as fotos ficam órfãs                                                        | rotina única de backup                                                                      |
+| Anonimização não remove mídia             | A rotina de anonimização (ainda inexistente) terá de apagar arquivos do storage, não só limpar colunas                              | prompt de LGPD                                                                              |

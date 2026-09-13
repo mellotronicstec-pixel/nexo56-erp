@@ -137,6 +137,97 @@ Colunas triviais aparecem de forma condensada.
 | `locked_by` / `locked_at`   | —                 | Processo que reivindicou; base da recuperação de job travado     |
 | `last_error`                | `VARCHAR(1000)`   | Mensagem do último erro, truncada                                |
 
+## `customers` (Prompt 05)
+
+| Coluna                                 | Tipo           | Obrig.   | Significado                                                                                                                     |
+| -------------------------------------- | -------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `kind`                                 | `ENUM`         | NN       | `individual` \| `company`                                                                                                       |
+| `name` 🔒                              | `VARCHAR(200)` | NN       | Nome da pessoa ou razão social                                                                                                  |
+| `name_normalized`                      | `VARCHAR(200)` | NN       | Sem acento e em minúsculas — só para busca                                                                                      |
+| `trade_name` / `trade_name_normalized` | `VARCHAR(200)` | opcional | Nome fantasia (pessoa jurídica)                                                                                                 |
+| `document_type`                        | `ENUM`         | opcional | `cpf` \| `cnpj`                                                                                                                 |
+| `document_digits` 🔒                   | `VARCHAR(14)`  | opcional | Só dígitos. Único por tenant quando presente; **cada `NULL` é distinto no MySQL**, então vários clientes sem documento convivem |
+| `state_registration`                   | `VARCHAR(32)`  | opcional | Inscrição estadual                                                                                                              |
+| `birth_date` 🔒                        | `VARCHAR(10)`  | opcional | Data civil ISO, sem fuso                                                                                                        |
+| `notes`                                | `TEXT`         | opcional | Observações do cadastro                                                                                                         |
+| `status`                               | `ENUM`         | NN       | `active` \| `inactive` — nunca exclusão física                                                                                  |
+| `origin_unit_id`                       | `CHAR(36)`     | opcional | Unidade onde o cadastro nasceu. **Procedência, nunca filtro**                                                                   |
+
+## `customer_contacts` / `customer_addresses` (Prompt 05)
+
+| Coluna                                                                                  | Tipo           | Obrig.   | Significado                                                                                                                             |
+| --------------------------------------------------------------------------------------- | -------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `type` (contato)                                                                        | `ENUM`         | NN       | `phone` \| `email`                                                                                                                      |
+| `value` 🔒                                                                              | `VARCHAR(190)` | NN       | Como foi digitado                                                                                                                       |
+| `value_normalized` 🔒                                                                   | `VARCHAR(190)` | NN       | Só dígitos (telefone) ou minúsculas (e-mail) — para busca                                                                               |
+| `is_whatsapp`                                                                           | `BOOLEAN`      | NN       | Marca o telefone com WhatsApp                                                                                                           |
+| `is_primary`                                                                            | `BOOLEAN`      | NN       | Contato/endereço principal                                                                                                              |
+| `primary_marker`                                                                        | `TINYINT`      | opcional | `1` no principal, **`NULL` nos demais**. Com UNIQUE `(customer_id, primary_marker)`, o banco garante **um único principal** sem trigger |
+| `zip_code`, `street`, `number`, `complement`, `district`, `city`, `state`, `country` 🔒 | `VARCHAR`      | opcional | Endereço; `country` padrão `BR`                                                                                                         |
+
+## `equipment` (Prompt 06)
+
+| Coluna                         | Tipo           | Obrig.       | Significado                                                                                                          |
+| ------------------------------ | -------------- | ------------ | -------------------------------------------------------------------------------------------------------------------- |
+| `customer_id`                  | `CHAR(36)`     | NN, FK       | Dono do aparelho. FK **composta** `(customer_id, tenant_id)`                                                         |
+| `kind` / `kind_normalized`     | `VARCHAR(80)`  | NN           | Tipo (TV, amplificador…). Texto livre com sugestões, não taxonomia fechada                                           |
+| `brand` / `brand_normalized`   | `VARCHAR(120)` | opcional     | Marca                                                                                                                |
+| `model` / `model_normalized`   | `VARCHAR(160)` | opcional     | Modelo. O exibido **não** sofre normalização destrutiva: `RX-V385` ≠ `RXV385` para quem procura peça                 |
+| `serial` / `serial_normalized` | `VARCHAR(120)` | **opcional** | Número de série. **Não é chave e não tem unicidade** — etiqueta ilegível é rotina; fabricantes reaproveitam formatos |
+| `voltage`                      | `ENUM`         | NN           | `v110` \| `v127` \| `v220` \| `bivolt` \| `not_applicable` \| `unknown`. Padrão `unknown`                            |
+| `notes`                        | `TEXT`         | opcional     | Observações de **identificação** — nunca diagnóstico                                                                 |
+| `status`                       | `ENUM`         | NN           | `active` \| `inactive`                                                                                               |
+| `origin_unit_id`               | `CHAR(36)`     | opcional     | Unidade onde o cadastro nasceu. **Procedência, nunca filtro**                                                        |
+
+## `equipment_intakes` (Prompt 06)
+
+| Coluna             | Tipo          | Obrig.     | Significado                                                                                                               |
+| ------------------ | ------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `unit_id`          | `CHAR(36)`    | **NN**, FK | Unidade onde o aparelho foi recebido. Vem de `context.activeUnitId`, **nunca do formulário**. FK composta com `tenant_id` |
+| `equipment_id`     | `CHAR(36)`    | NN, FK     | Aparelho recebido. FK composta com `tenant_id`                                                                            |
+| `received_at`      | `DATETIME(3)` | NN         | Instante da entrada, **UTC**                                                                                              |
+| `received_by`      | `CHAR(36)`    | opcional   | Quem atendeu. Complementa a auditoria, não a substitui                                                                    |
+| `power_cable`      | `ENUM`        | NN         | `yes` \| `no` \| `not_applicable`                                                                                         |
+| `inspection_notes` | `TEXT`        | opcional   | Relato livre do estado físico de entrada                                                                                  |
+| `notes`            | `TEXT`        | opcional   | Observações do atendimento                                                                                                |
+
+## `equipment_intake_accessories` / `equipment_intake_conditions` (Prompt 06)
+
+| Coluna              | Tipo           | Obrig.   | Significado                                                                                                                                                                |
+| ------------------- | -------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `label` (acessório) | `VARCHAR(120)` | NN       | Item entregue junto. Texto livre; a lista sugerida acelera, não limita                                                                                                     |
+| `quantity`          | `INT`          | NN       | Quantidade **inteira** — acessório se conta por unidade, nunca em fração                                                                                                   |
+| `condition_key`     | `VARCHAR(40)`  | NN       | Chave do catálogo (`scratches`, `dents`, `cracks`, `broken_parts`, `missing_screws`, `disassembled`, `loose_parts`, `oxidation`, `liquid`, `dirt`). UNIQUE com `intake_id` |
+| `note` (condição)   | `VARCHAR(300)` | opcional | Detalhe: "risco de 3 cm na tampa"                                                                                                                                          |
+
+## `equipment_media` (Prompt 06)
+
+| Coluna             | Tipo           | Obrig.   | Significado                                                                                 |
+| ------------------ | -------------- | -------- | ------------------------------------------------------------------------------------------- |
+| `equipment_id`     | `CHAR(36)`     | NN, FK   | Aparelho fotografado                                                                        |
+| `intake_id`        | `CHAR(36)`     | opcional | **Nulo = foto do cadastro**; preenchido = foto daquele atendimento                          |
+| `kind`             | `ENUM`         | NN       | `general` \| `front` \| `back` \| `damage` \| `label` \| `serial` \| `accessory` \| `other` |
+| `storage_key`      | `VARCHAR(255)` | NN       | Chave opaca no storage, gerada pelo servidor. **Nunca caminho absoluto nem nome enviado**   |
+| `mime_type`        | `VARCHAR(40)`  | NN       | Confirmado por magic bytes, não pelo cabeçalho da requisição                                |
+| `byte_size`        | `INT`          | NN       | Tamanho em bytes (limite 8 MB)                                                              |
+| `width` / `height` | `INT`          | opcional | Lidos do cabeçalho da imagem                                                                |
+| `checksum`         | `VARCHAR(64)`  | NN       | SHA-256 do conteúdo — integridade e detecção de reenvio                                     |
+| `caption` 🔒       | `VARCHAR(200)` | opcional | Descrição curta digitada pelo atendente                                                     |
+
+**Os bytes não ficam no banco.** Eles vivem no storage, fora de `public/`, e são
+servidos por rota autenticada (ADR-030).
+
+## `equipment_label_readings` (Prompt 06)
+
+| Coluna                          | Tipo          | Obrig.   | Significado                                                         |
+| ------------------------------- | ------------- | -------- | ------------------------------------------------------------------- |
+| `provider`                      | `VARCHAR(60)` | NN       | Nome do provider. **`none` quando indisponível — o padrão hoje**    |
+| `status`                        | `ENUM`        | NN       | `succeeded` \| `partial` \| `failed` \| `unavailable`               |
+| `fields`                        | `JSON`        | opcional | Campos sugeridos, com confiança. **Nunca sobrescreve o confirmado** |
+| `confirmed_at` / `confirmed_by` | —             | opcional | Quando e por quem a sugestão foi confirmada por um humano           |
+
+---
+
 ---
 
 ## Tipos monetários e de quantidade (ainda sem uso físico)

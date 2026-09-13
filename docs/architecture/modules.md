@@ -1,7 +1,10 @@
-# Módulos da fundação
+# Módulos
 
-Somente módulos **estruturais**. Não há módulo de negócio, nem placeholder de
-módulo futuro (Prompt 01, itens 8 e 82).
+A fundação (Prompts 01–04) contém somente módulos **estruturais**. Os módulos de
+negócio entram um por prompt, cada um com feature, permissões, ownership e
+testes próprios — nunca como placeholder (Prompt 01, itens 8 e 82).
+
+## Estruturais
 
 | Módulo                 | Responsabilidade                                                 | Tabelas                                                                             |
 | ---------------------- | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
@@ -14,6 +17,17 @@ módulo futuro (Prompt 01, itens 8 e 82).
 | `events`               | eventos de domínio e despacho                                    | `domain_events`                                                                     |
 | `jobs`                 | fila, executor e handlers técnicos                               | `jobs`                                                                              |
 | `core` (compartilhado) | env, banco, erros, log, IDs, contexto, rate limit                | —                                                                                   |
+
+## De negócio
+
+| Módulo      | Prompt | Responsabilidade                                                          | Tabelas                                                                                                                                        |
+| ----------- | ------ | ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `customers` | 05     | pessoas e empresas atendidas, contatos e endereços                        | `customers`, `customer_contacts`, `customer_addresses`                                                                                         |
+| `equipment` | 06     | aparelhos, recebimento, acessórios, inspeção, fotos e leitura de etiqueta | `equipment`, `equipment_intakes`, `equipment_intake_accessories`, `equipment_intake_conditions`, `equipment_media`, `equipment_label_readings` |
+
+O `equipment` usa também a abstração de armazenamento de arquivos
+(`core/storage`), introduzida no Prompt 06: os bytes das fotos ficam fora do
+banco e fora de `public/` (ADR-030).
 
 ## Dependências entre módulos
 
@@ -28,7 +42,14 @@ features ──→ tenancy, audit, events
 audit   ──→ core
 events  ──→ core
 jobs    ──→ auth (handler de limpeza de sessão), core
+
+customers ──→ tenancy, access-control, features, audit, events
+equipment ──→ customers, tenancy, access-control, features, audit, events, core/storage
 ```
+
+`customers` não conhece `equipment`: a seção "Equipamentos" da ficha do cliente
+vive na camada de páginas, não no módulo de Clientes. A dependência é de mão
+única, e é o que permitirá a Ordem de Serviço depender dos dois sem criar ciclo.
 
 Sem ciclo na camada de aplicação. Entre os arquivos de `schema.ts` existe um
 ciclo **de tipo** deliberado (`tenants.plan_id → plans` e
@@ -43,6 +64,9 @@ migration — não na carga do módulo.
    forem entidades de negócio, e exportá-las em `src/core/db/schema.ts`.
 3. Declarar a feature em `FEATURE_CATALOG` e as permissões em
    `PERMISSION_CATALOG` — nunca criar chave solta em runtime.
-4. Responder às 12 perguntas do item 102 da Constituição.
+4. Responder às 12 perguntas de modularidade (classificação; pode desativar;
+   dependências; dependentes; dados ao desativar; frontend; backend/API;
+   automações; permissões; plano; reativação; histórico). Exemplo respondido:
+   [Equipamentos](../modules/equipment/modularity.md).
 5. Acrescentar testes de travessia entre tenants para as novas consultas.
 6. Gerar migration (`npm run db:generate`) e revisar o SQL antes de aplicar.

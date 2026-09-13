@@ -236,3 +236,24 @@ export const IconCustomers = (props: IconProps) => (
     <path d="M3.2 9.5h1.6M19.2 9.5h1.6" />
   </Icon>
 );
+
+export const IconEquipment = (props: IconProps) => (
+  <Icon {...props}>
+    <rect x="3" y="5" width="18" height="12" rx="1.8" />
+    <path d="M8 20h8M12 17v3" />
+  </Icon>
+);
+
+export const IconIntake = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="M4 13v6.2a.8.8 0 00.8.8h14.4a.8.8 0 00.8-.8V13" />
+    <path d="M12 3.5v10M8.3 9.8l3.7 3.7 3.7-3.7" />
+  </Icon>
+);
+
+export const IconCamera = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="M3.5 8.5h3l1.4-2.2h7.2l1.4 2.2h3V19h-16z" />
+    <circle cx="12" cy="13.5" r="3.2" />
+  </Icon>
+);

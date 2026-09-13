@@ -44,3 +44,11 @@ Thumbs.db
 # temporarios
 tmp/
 .cache/
+
+# arquivos enviados (fotos de equipamento) — nunca versionados
+storage/
+storage-*/
+
+# instrucoes para agentes geradas pelo `next dev`
+AGENTS.md
+CLAUDE.md

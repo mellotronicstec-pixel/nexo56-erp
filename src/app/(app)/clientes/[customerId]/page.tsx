@@ -7,10 +7,12 @@ import {
   Card,
   CardBody,
   CardHeader,
+  EmptyState,
   linkButtonClass,
   PageHeader,
   Section,
 } from '@/design-system/components';
+import { IconEquipment, IconPlus } from '@/design-system/icons';
 import { requireAccessForPage } from '@/modules/access-control/application/guard';
 import { PERMISSIONS } from '@/modules/access-control/domain/permissions';
 import { listRecentAuditForEntity } from '@/modules/audit/application/audit-queries';
@@ -23,6 +25,9 @@ import {
   displayName,
 } from '@/modules/customers/domain/customer';
 import { formatPhone } from '@/modules/customers/domain/phone';
+import { listEquipmentByCustomer } from '@/modules/equipment/application/equipment-queries';
+import { equipmentTitle, VOLTAGE_LABEL } from '@/modules/equipment/domain/equipment';
+import { checkAccess } from '@/modules/features/application/effective-access';
 import { FEATURES } from '@/modules/features/domain/catalog';
 import { hasPermission } from '@/modules/tenancy/domain/tenant-context';
 import { CustomerStatusActions } from './status-actions';
@@ -62,6 +67,23 @@ export default async function CustomerDetailPage({
   const address = addresses[0];
 
   const history = await listRecentAuditForEntity(context, 'customer', customer.id, 10);
+
+  /**
+   * Equipamentos do cliente (Prompt 06, item 79).
+   *
+   * A secao so aparece quando o modulo esta REALMENTE disponivel para esta
+   * empresa e esta pessoa — Effective Access, nao "existe no codigo".
+   */
+  const equipmentAccess = await checkAccess(context, {
+    featureKey: FEATURES.CORE_EQUIPMENT,
+    permission: PERMISSIONS.EQUIPMENT_VIEW,
+  });
+
+  const equipmentList = equipmentAccess.allowed
+    ? await listEquipmentByCustomer(context, customer.id)
+    : [];
+
+  const canManageEquipment = hasPermission(context, PERMISSIONS.EQUIPMENT_MANAGE);
 
   const formatter = new Intl.DateTimeFormat('pt-BR', {
     dateStyle: 'short',
@@ -235,6 +257,62 @@ export default async function CustomerDetailPage({
             <CardBody>
               <p className="whitespace-pre-wrap text-ui text-ink-800">{customer.notes}</p>
             </CardBody>
+          </Card>
+        </Section>
+      ) : null}
+
+      {equipmentAccess.allowed ? (
+        <Section
+          id="equipamentos"
+          title="Equipamentos"
+          description="Aparelhos deste cliente. O cadastro vale para todas as unidades."
+          actions={
+            canManageEquipment ? (
+              <Link
+                href={`/equipamentos/novo?cliente=${customer.id}`}
+                className={linkButtonClass('secondary', 'sm')}
+              >
+                <IconPlus size={16} />
+                Novo equipamento
+              </Link>
+            ) : null
+          }
+        >
+          <Card>
+            {equipmentList.length === 0 ? (
+              <EmptyState
+                icon={<IconEquipment />}
+                title="Nenhum equipamento"
+                description="Este cliente ainda nao tem aparelhos cadastrados."
+              />
+            ) : (
+              <CardBody>
+                <ul className="divide-y divide-ink-200">
+                  {equipmentList.map((item) => (
+                    <li
+                      key={item.id}
+                      className="flex flex-col gap-1 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <div className="min-w-0">
+                        <p className="font-medium text-ink-900">{equipmentTitle(item)}</p>
+                        <p className="text-small text-ink-500">
+                          {item.kind}
+                          {item.serial ? ` · Serie ${item.serial}` : ''} ·{' '}
+                          {VOLTAGE_LABEL[item.voltage]}
+                        </p>
+                      </div>
+                      <Link
+                        href={`/equipamentos/${item.id}`}
+                        className="touch-target inline-flex items-center text-ui font-semibold text-brand-600 hover:underline md:min-h-0"
+                      >
+                        Abrir
+                        <span className="sr-only"> a ficha de {equipmentTitle(item)}</span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </CardBody>
+            )}
           </Card>
         </Section>
       ) : null}

@@ -29,6 +29,13 @@
       "when": 1789272741598,
       "tag": "0003_customers",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1789305755691,
+      "tag": "0004_equipment_and_intake",
+      "breakpoints": true
     }
   ]
 }

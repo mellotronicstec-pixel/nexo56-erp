@@ -41,6 +41,24 @@
 | Revogação de sessão               | imediata em todos os gatilhos (senha, reset, desativação, admin) | teste de integração          |
 | Segredo na auditoria de acesso    | senha inicial, token e hash nunca aparecem                       | teste de integração          |
 
+## Implementado e verificado — mídia e arquivos (Prompt 06)
+
+| Proteção                                     | Como                                                                      | Verificação                         |
+| -------------------------------------------- | ------------------------------------------------------------------------- | ----------------------------------- |
+| Mídia fora de diretório público              | `STORAGE_ROOT` sempre fora de `public/`                                   | teste de integração                 |
+| Chave de arquivo não derivada do envio       | gerada pelo servidor: `<escopo>/<16 bytes hex>.<ext>`                     | teste com nome malicioso            |
+| Path traversal                               | caminho resolvido e conferido contra a raiz                               | teste de integração                 |
+| Arquivo executável disfarçado de foto        | validação por **magic bytes**, não por extensão nem `Content-Type`        | teste de integração                 |
+| Imagem grande demais                         | limite de 8 MB antes de gravar                                            | teste de integração                 |
+| Mídia sem sessão                             | rota autenticada responde `401` sem corpo                                 | navegador                           |
+| Mídia de outro tenant                        | responde `404`, nunca `403` — 403 confirmaria a existência                | teste + navegador                   |
+| Cache de imagem em proxy                     | `Cache-Control: private, max-age=300, must-revalidate`                    | navegador                           |
+| Geolocalização na foto                       | a imagem é reexportada no navegador: o arquivo enviado é novo, sem EXIF   | teste de componente                 |
+| Binário na auditoria                         | a auditoria de foto guarda metadado, nunca o conteúdo                     | teste de integração                 |
+| Imagem em log                                | o log da leitura de etiqueta registra provider, status, duração e tamanho | revisão de código                   |
+| Unidade forjada no recebimento               | serviço usa `context.activeUnitId`; sem unidade ativa, recusa             | teste de integração                 |
+| Equipamento ligado a cliente de outro tenant | FK composta `(customer_id, tenant_id)`                                    | teste com SQL direto (`ERROR 1452`) |
+
 ## Limitações conhecidas
 
 ### Rate limit conta por processo
@@ -97,3 +115,8 @@ fase.
 - Logs e auditoria redigem `password`, `token`, `secret`, `cpf` e variantes.
 - O cadastro de usuário tem o mínimo: nome, e-mail, situação e vínculos.
 - O cookie carrega apenas um token opaco — nenhum dado pessoal.
+- Fotos de equipamento perdem o EXIF (inclusive GPS) no preparo feito pelo
+  navegador, e ficam acessíveis apenas por rota autenticada.
+- A tela de fotos orienta a fotografar só o equipamento e a etiqueta, evitando
+  pessoas, documentos e o ambiente ao redor. O sistema não consegue impedir uma
+  foto indevida — pode pedir a foto certa e proteger o arquivo, e é o que faz.

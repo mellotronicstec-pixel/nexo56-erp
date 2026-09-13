@@ -228,10 +228,32 @@ duplicada — não uma verificação na aplicação.
 
 ---
 
+## Módulos de negócio
+
+As tabelas de Clientes (`customers`, `customer_contacts`,
+`customer_addresses` — Prompt 05) e de Equipamentos (`equipment`,
+`equipment_intakes`, `equipment_intake_accessories`,
+`equipment_intake_conditions`, `equipment_media`, `equipment_label_readings` —
+Prompt 06) estão detalhadas na documentação dos respectivos módulos:
+
+- [docs/modules/customers/model.md](../modules/customers/model.md)
+- [docs/modules/equipment/model.md](../modules/equipment/model.md)
+
+Duas decisões estruturais valem registro aqui, porque atravessam o schema:
+
+- **`customers` e `equipment` são do tenant; `equipment_intakes` é da unidade**
+  (ADR-026, ADR-029). `origin_unit_id` nas duas primeiras é procedência
+  auditável, nunca cláusula de filtro.
+- **`equipment_media` não guarda bytes.** Só `storage_key`, `mime_type`,
+  `byte_size`, dimensões e `checksum`; o arquivo vive num storage privado, fora
+  de `public/` (ADR-030). O backup precisa levar os dois juntos.
+
+---
+
 ## Proteção cross-tenant no banco (Prompt 02, item 34)
 
-Nove FKs compostas, verificadas por teste automatizado — cinco do Prompt 02 e
-quatro acrescentadas pelo Prompt 03:
+FKs compostas, verificadas por teste automatizado — cinco do Prompt 02, quatro
+do Prompt 03, e as dos módulos de negócio acrescentadas depois:
 
 | Constraint                       | Impede                                            |
 | -------------------------------- | ------------------------------------------------- |
@@ -247,6 +269,21 @@ quatro acrescentadas pelo Prompt 03:
 
 E `fk_password_reset_user_tenant` impede código de redefinição carimbado com
 tenant diferente do usuário.
+
+Acrescentadas pelos módulos de negócio:
+
+| Constraint                              | Impede                                             |
+| --------------------------------------- | -------------------------------------------------- |
+| `fk_customer_contacts_customer_tenant`  | contato num cliente de outro tenant                |
+| `fk_customer_addresses_customer_tenant` | endereço num cliente de outro tenant               |
+| `fk_equipment_customer_tenant`          | equipamento ligado a cliente de outro tenant       |
+| `fk_intake_equipment_tenant`            | recebimento de equipamento de outro tenant         |
+| `fk_intake_unit_tenant`                 | recebimento em unidade de outro tenant             |
+| `fk_intake_accessories_intake_tenant`   | acessório em recebimento de outro tenant           |
+| `fk_intake_conditions_intake_tenant`    | condição em recebimento de outro tenant            |
+| `fk_media_equipment_tenant`             | foto em equipamento de outro tenant                |
+| `fk_media_intake_tenant`                | foto em recebimento de outro tenant                |
+| `fk_label_reading_equipment_tenant`     | leitura de etiqueta de equipamento de outro tenant |
 
 Antes do Prompt 02 essas associações eram aceitas pelo banco (bloqueadas apenas
 pela aplicação). Testes em `tests/integration/cross-tenant-constraints.test.ts`.

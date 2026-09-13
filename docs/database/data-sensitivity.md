@@ -20,22 +20,32 @@ Classificação que orienta log, auditoria, exportação, retenção e acesso
 
 ## Classificação — dados existentes
 
-| Dado                                           | Tabela                             | Nível                                     | Tratamento atual                        |
-| ---------------------------------------------- | ---------------------------------- | ----------------------------------------- | --------------------------------------- |
-| Nome da empresa, slug                          | `tenants`                          | Interno                                   | —                                       |
-| Nome da unidade                                | `units`                            | Interno                                   | —                                       |
-| Nome do usuário                                | `users.name`                       | **Pessoal**                               | Não vai para log                        |
-| E-mail do usuário                              | `users.email`                      | **Pessoal**                               | Não vai para log; normalizado           |
-| Hash de senha                                  | `users.password_hash`              | **Credencial**                            | scrypt; redigido em log e auditoria     |
-| Hash do token de sessão                        | `sessions.token_hash`              | **Credencial**                            | SHA-256; o token nunca é gravado        |
-| Hash do código de redefinição                  | `password_reset_tokens.token_hash` | **Credencial**                            | SHA-256; o código nunca é gravado       |
-| Resumo do dispositivo                          | `sessions.user_agent_summary`      | **Pessoal** (baixo)                       | 120 caracteres, sem versão nem IP       |
-| IP, user-agent completo                        | —                                  | **Pessoal**                               | **Não coletados** (minimização)         |
-| Papéis e permissões                            | `roles`, `permissions`             | Interno                                   | —                                       |
-| Trilha de auditoria                            | `audit_logs`                       | Interno + **Pessoal** em `before`/`after` | Redação automática antes de gravar      |
-| Payload de evento                              | `domain_events`                    | Interno                                   | Não carrega credencial                  |
-| Payload de job                                 | `jobs`                             | Interno                                   | Não carrega credencial                  |
-| `SESSION_SECRET`, `JOB_SECRET`, `DATABASE_URL` | ambiente                           | **Credencial**                            | Nunca versionados; validados no startup |
+| Dado                                           | Tabela                             | Nível                                     | Tratamento atual                                                                                                  |
+| ---------------------------------------------- | ---------------------------------- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Nome da empresa, slug                          | `tenants`                          | Interno                                   | —                                                                                                                 |
+| Nome da unidade                                | `units`                            | Interno                                   | —                                                                                                                 |
+| Nome do usuário                                | `users.name`                       | **Pessoal**                               | Não vai para log                                                                                                  |
+| E-mail do usuário                              | `users.email`                      | **Pessoal**                               | Não vai para log; normalizado                                                                                     |
+| Hash de senha                                  | `users.password_hash`              | **Credencial**                            | scrypt; redigido em log e auditoria                                                                               |
+| Hash do token de sessão                        | `sessions.token_hash`              | **Credencial**                            | SHA-256; o token nunca é gravado                                                                                  |
+| Hash do código de redefinição                  | `password_reset_tokens.token_hash` | **Credencial**                            | SHA-256; o código nunca é gravado                                                                                 |
+| Resumo do dispositivo                          | `sessions.user_agent_summary`      | **Pessoal** (baixo)                       | 120 caracteres, sem versão nem IP                                                                                 |
+| IP, user-agent completo                        | —                                  | **Pessoal**                               | **Não coletados** (minimização)                                                                                   |
+| Papéis e permissões                            | `roles`, `permissions`             | Interno                                   | —                                                                                                                 |
+| Trilha de auditoria                            | `audit_logs`                       | Interno + **Pessoal** em `before`/`after` | Redação automática antes de gravar                                                                                |
+| Payload de evento                              | `domain_events`                    | Interno                                   | Não carrega credencial                                                                                            |
+| Payload de job                                 | `jobs`                             | Interno                                   | Não carrega credencial                                                                                            |
+| `SESSION_SECRET`, `JOB_SECRET`, `DATABASE_URL` | ambiente                           | **Credencial**                            | Nunca versionados; validados no startup                                                                           |
+| Nome / razão social do cliente                 | `customers.name`                   | **Pessoal**                               | Não vai para log; coluna normalizada só para busca                                                                |
+| CPF / CNPJ                                     | `customers.document_digits`        | **Pessoal (sensível por uso)**            | Só dígitos; nunca PK; único por tenant; redigido em log e auditoria                                               |
+| Data de nascimento                             | `customers.birth_date`             | **Pessoal**                               | Data civil, sem fuso                                                                                              |
+| Telefone / e-mail do cliente                   | `customer_contacts.value`          | **Pessoal**                               | Não vai para log                                                                                                  |
+| Endereço do cliente                            | `customer_addresses`               | **Pessoal**                               | Só quando houver finalidade                                                                                       |
+| Número de série do equipamento                 | `equipment.serial`                 | Interno                                   | Pode identificar indiretamente — tratado como dado do cliente                                                     |
+| **Fotos do equipamento**                       | `equipment_media` + storage        | **Pessoal** (podem conter terceiros)      | Fora de `public/`; chave opaca gerada pelo servidor; rota autenticada; EXIF (inclusive GPS) descartado no preparo |
+| Legenda da foto                                | `equipment_media.caption`          | **Pessoal** (baixo)                       | Texto livre do atendente                                                                                          |
+| Estado físico de entrada                       | `equipment_intake_conditions`      | Interno                                   | Estado de entrada, **não** diagnóstico                                                                            |
+| Sugestão de leitura de etiqueta                | `equipment_label_readings.fields`  | Interno                                   | Não contém imagem; a imagem nunca vai para log                                                                    |
 
 ### Redação automática
 
@@ -49,18 +59,12 @@ e listas. Coberto por teste.
 
 ## Classificação — dados futuros
 
-| Dado                           | Entidade futura      | Nível                                | Exigência antecipada                                                                 |
-| ------------------------------ | -------------------- | ------------------------------------ | ------------------------------------------------------------------------------------ |
-| Nome do cliente                | `clients`            | **Pessoal**                          | Minimização; base legal de execução de contrato                                      |
-| CPF / CNPJ                     | `clients`            | **Pessoal (sensível por uso)**       | Armazenar **normalizado** (só dígitos); nunca PK; unicidade por tenant; nunca em log |
-| Telefone, e-mail do cliente    | `client_contacts`    | **Pessoal**                          | Preferência de comunicação respeitada                                                |
-| Endereço                       | `addresses`          | **Pessoal**                          | Só quando houver finalidade (coleta/entrega)                                         |
-| Número de série do equipamento | `equipments`         | Interno                              | Pode identificar indiretamente — tratar com cuidado                                  |
-| Fotos do equipamento           | `attachments`        | **Pessoal** (podem conter terceiros) | Acesso autenticado; storage com chave opaca                                          |
-| Defeito, diagnóstico, laudo    | `service_orders`     | **Técnico**                          | Parte vai ao cliente; linguagem revisada                                             |
-| Preço, custo, margem           | `quotes`, `payments` | **Financeiro**                       | Custo exige permissão distinta de preço                                              |
-| Forma de pagamento             | `payments`           | **Financeiro**                       | **Nunca** armazenar dado completo de cartão                                          |
-| Token público do QR            | (futuro)             | **Credencial**                       | Opaco, não enumerável, escopo limitado, revogável                                    |
+| Dado                        | Entidade futura      | Nível          | Exigência antecipada                              |
+| --------------------------- | -------------------- | -------------- | ------------------------------------------------- |
+| Defeito, diagnóstico, laudo | `service_orders`     | **Técnico**    | Parte vai ao cliente; linguagem revisada          |
+| Preço, custo, margem        | `quotes`, `payments` | **Financeiro** | Custo exige permissão distinta de preço           |
+| Forma de pagamento          | `payments`           | **Financeiro** | **Nunca** armazenar dado completo de cartão       |
+| Token público do QR         | (futuro)             | **Credencial** | Opaco, não enumerável, escopo limitado, revogável |
 
 ### Regras firmadas agora
 
@@ -71,3 +75,13 @@ e listas. Coberto por teste.
 3. **Nada de criptografia caseira** (item 43). Se houver necessidade de cifrar
    em repouso, usa-se recurso do banco ou biblioteca estabelecida, com ADR.
 4. **Token público não carrega PII** e não substitui autorização no servidor.
+5. **Mídia nunca fica em diretório público** (ADR-030). Arquivo em `public/` é
+   acessível a quem descobrir a URL, e foto de equipamento pode conter a
+   etiqueta com dados do cliente, uma nota fiscal sobre a bancada ou o interior
+   da casa de alguém. O acesso passa por sessão, permissão e tenant, e mídia de
+   outra empresa responde **404** — um 403 confirmaria que ela existe.
+6. **Metadado de imagem é descartado, não filtrado** (ADR-031). O preparo no
+   navegador reexporta a foto como JPEG: o arquivo que sobe é novo, com os
+   pixels e mais nada — a geolocalização do EXIF não tem como sobreviver.
+7. **A imagem nunca vai para o log.** O log da leitura de etiqueta registra
+   provider, status, duração e tamanho — nada do conteúdo.

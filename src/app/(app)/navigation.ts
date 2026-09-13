@@ -25,7 +25,15 @@ import { FEATURES } from '@/modules/features/domain/catalog';
  * nao atravessa. Entao o servidor manda o nome e o shell resolve o desenho.
  */
 export type NavIconKey =
-  'user' | 'users' | 'shield' | 'building' | 'modules' | 'history' | 'customers';
+  | 'user'
+  | 'users'
+  | 'shield'
+  | 'building'
+  | 'modules'
+  | 'history'
+  | 'customers'
+  | 'equipment'
+  | 'intake';
 
 export interface NavItem {
   href: string;
@@ -51,6 +59,20 @@ export const NAV_SECTIONS: readonly NavSection[] = [
         featureKey: FEATURES.CORE_CUSTOMERS,
         permission: PERMISSIONS.CUSTOMERS_VIEW,
         icon: 'customers',
+      },
+      {
+        href: '/equipamentos',
+        label: 'Equipamentos',
+        featureKey: FEATURES.CORE_EQUIPMENT,
+        permission: PERMISSIONS.EQUIPMENT_VIEW,
+        icon: 'equipment',
+      },
+      {
+        href: '/recebimentos',
+        label: 'Recebimentos',
+        featureKey: FEATURES.CORE_EQUIPMENT_INTAKE,
+        permission: PERMISSIONS.EQUIPMENT_INTAKE_VIEW,
+        icon: 'intake',
       },
     ],
   },
@@ -118,6 +140,8 @@ export const NAV_SECTIONS: readonly NavSection[] = [
  */
 export const BREADCRUMB_LABELS: Readonly<Record<string, string>> = {
   clientes: 'Clientes',
+  equipamentos: 'Equipamentos',
+  recebimentos: 'Recebimentos',
   administracao: 'Administracao',
   usuarios: 'Usuarios',
   perfis: 'Perfis de acesso',

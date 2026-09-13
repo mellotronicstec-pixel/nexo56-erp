@@ -54,6 +54,14 @@ export const AUDIT_ACTIONS = {
   CUSTOMER_DOCUMENT_CHANGED: 'customer.document_changed',
   CUSTOMER_ACTIVATED: 'customer.activated',
   CUSTOMER_DEACTIVATED: 'customer.deactivated',
+
+  // --- Prompt 06: equipamentos e recebimento -------------------------------
+  EQUIPMENT_CREATED: 'equipment.created',
+  EQUIPMENT_UPDATED: 'equipment.updated',
+  EQUIPMENT_INTAKE_CREATED: 'equipment_intake.created',
+  EQUIPMENT_MEDIA_ADDED: 'equipment_media.added',
+  EQUIPMENT_MEDIA_REMOVED: 'equipment_media.removed',
+  EQUIPMENT_LABEL_CONFIRMED: 'equipment_label.confirmed',
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];

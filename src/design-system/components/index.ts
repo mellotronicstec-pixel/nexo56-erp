@@ -58,6 +58,15 @@ export { Drawer } from './drawer';
 export { Tooltip } from './tooltip';
 export { ToastProvider, useToast, type ToastTone } from './toast';
 
+// --- Captura de imagem -----------------------------------------------------
+export {
+  prepareImage,
+  ImagePreparationError,
+  MAX_DIMENSION,
+  JPEG_QUALITY,
+  type PreparedImage,
+} from './image-capture';
+
 // --- Estado ----------------------------------------------------------------
 export { EmptyState } from './empty-state';
 export { ErrorState } from './error-state';

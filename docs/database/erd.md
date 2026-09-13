@@ -40,6 +40,18 @@ erDiagram
     PERMISSIONS ||--o{ ROLE_PERMISSIONS : concedida
     USERS ||--o{ PASSWORD_RESET_TOKENS : redefine
 
+    TENANTS ||--o{ CUSTOMERS : possui
+    CUSTOMERS ||--o{ CUSTOMER_CONTACTS : tem
+    CUSTOMERS ||--o{ CUSTOMER_ADDRESSES : tem
+    CUSTOMERS ||--o{ EQUIPMENT : "possui (tenant, nao unidade)"
+    EQUIPMENT ||--o{ EQUIPMENT_INTAKES : "recebido em"
+    UNITS ||--o{ EQUIPMENT_INTAKES : "aconteceu na unidade"
+    EQUIPMENT_INTAKES ||--o{ EQUIPMENT_INTAKE_ACCESSORIES : acompanha
+    EQUIPMENT_INTAKES ||--o{ EQUIPMENT_INTAKE_CONDITIONS : inspeciona
+    EQUIPMENT ||--o{ EQUIPMENT_MEDIA : fotografado
+    EQUIPMENT_INTAKES ||--o{ EQUIPMENT_MEDIA : "foto do atendimento"
+    EQUIPMENT ||--o{ EQUIPMENT_LABEL_READINGS : "etiqueta lida"
+
     TENANTS {
         char36 id PK
         varchar slug UK
@@ -170,6 +182,86 @@ erDiagram
         enum status
         int attempts
     }
+    CUSTOMERS {
+        char36 id PK
+        char36 tenant_id FK
+        enum kind "individual company"
+        varchar name
+        varchar name_normalized "busca"
+        varchar document_digits UK "unico por tenant quando presente"
+        enum status
+        char36 origin_unit_id "procedencia, NUNCA filtro"
+        composite uq_customers_id_tenant UK "alvo de FK composta"
+    }
+    CUSTOMER_CONTACTS {
+        char36 id PK
+        char36 customer_id FK "FK composta com tenant_id"
+        char36 tenant_id FK
+        enum type "phone email"
+        varchar value_normalized "busca"
+        tinyint primary_marker UK "1 no principal, NULL nos demais"
+    }
+    CUSTOMER_ADDRESSES {
+        char36 id PK
+        char36 customer_id FK "FK composta com tenant_id"
+        char36 tenant_id FK
+        tinyint primary_marker UK "um unico principal"
+    }
+    EQUIPMENT {
+        char36 id PK
+        char36 tenant_id FK
+        char36 customer_id FK "FK composta com tenant_id"
+        varchar kind "texto livre com sugestoes"
+        varchar brand
+        varchar model "sem normalizacao destrutiva"
+        varchar serial "OPCIONAL, sem unicidade"
+        enum voltage "v110 v127 v220 bivolt not_applicable unknown"
+        enum status
+        char36 origin_unit_id "procedencia, NUNCA filtro"
+        composite uq_equipment_id_tenant UK "alvo de FK composta"
+    }
+    EQUIPMENT_INTAKES {
+        char36 id PK
+        char36 tenant_id FK
+        char36 unit_id FK "OBRIGATORIO, da sessao - FK composta"
+        char36 equipment_id FK "FK composta com tenant_id"
+        datetime received_at
+        char36 received_by
+        enum power_cable "yes no not_applicable"
+        text inspection_notes "estado de entrada, NAO diagnostico"
+        composite uq_intake_id_tenant UK "alvo de FK composta"
+    }
+    EQUIPMENT_INTAKE_ACCESSORIES {
+        char36 id PK
+        char36 intake_id FK "FK composta com tenant_id"
+        varchar label "texto livre"
+        int quantity "INTEIRA"
+    }
+    EQUIPMENT_INTAKE_CONDITIONS {
+        char36 id PK
+        char36 intake_id FK "FK composta com tenant_id"
+        varchar condition_key UK "unico por recebimento"
+        varchar note
+    }
+    EQUIPMENT_MEDIA {
+        char36 id PK
+        char36 tenant_id FK
+        char36 equipment_id FK "FK composta com tenant_id"
+        char36 intake_id FK "nulo = foto do cadastro"
+        enum kind "label serial damage front back..."
+        varchar storage_key "chave opaca; bytes FORA do banco"
+        varchar checksum "SHA-256"
+        composite uq_media_id_tenant UK "alvo de FK composta"
+    }
+    EQUIPMENT_LABEL_READINGS {
+        char36 id PK
+        char36 tenant_id FK
+        char36 equipment_id FK "FK composta com tenant_id"
+        varchar provider "none = indisponivel (padrao hoje)"
+        enum status "succeeded partial failed unavailable"
+        json fields "sugestao; NUNCA sobrescreve o confirmado"
+        datetime confirmed_at "confirmacao HUMANA"
+    }
 ```
 
 ### Destaques do diagrama
@@ -184,6 +276,15 @@ erDiagram
   escopo pertence à **atribuição**, não ao perfil (ADR-019).
 - A relação `USER_UNITS → USER_UNIT_ROLES` é a FK que torna o vínculo de
   unidade **pré-requisito no banco** para o papel de unidade (ADR-020).
+- `CUSTOMERS` e `EQUIPMENT` são do **tenant**; `EQUIPMENT_INTAKES` é da
+  **unidade**. Essa é a divisão que permite o mesmo aparelho ser atendido em
+  lojas diferentes sem recadastro, e ainda assim cada loja ver só a própria
+  fila (ADR-026, ADR-029).
+- `EQUIPMENT_MEDIA` guarda `storage_key` e metadados; **os bytes ficam fora do
+  banco**, num storage privado servido por rota autenticada (ADR-030).
+- `EQUIPMENT_LABEL_READINGS` fica separada de `EQUIPMENT` de propósito: o
+  cadastro guarda o que o humano confirmou, a leitura guarda o que foi
+  sugerido (ADR-032).
 
 ---
 
@@ -191,13 +292,14 @@ erDiagram
 
 > Nenhuma das entidades abaixo foi criada. Este diagrama existe para detectar
 > conflito estrutural antes dos prompts funcionais (Prompt 02, item 48).
+>
+> `CLIENT` e `EQUIPMENT` aparecem abaixo apenas como **pontos de ligação**: eles
+> já existem no banco (seção 1), como `customers` e `equipment`. O mesmo vale
+> para `CLIENT_CONTACT` e `ADDRESS`, hoje `customer_contacts` e
+> `customer_addresses`.
 
 ```mermaid
 erDiagram
-    TENANT ||--o{ CLIENT : "possui (tenant, nao unidade)"
-    CLIENT ||--o{ CLIENT_CONTACT : tem
-    CLIENT ||--o{ ADDRESS : tem
-    CLIENT ||--o{ EQUIPMENT : "possui (nao duplica por unidade)"
 
     TENANT ||--o{ UNIT_C : possui
     UNIT_C ||--o{ SERVICE_ORDER : "opera (unit_id OBRIGATORIO)"

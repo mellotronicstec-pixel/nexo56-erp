@@ -20,6 +20,12 @@ export async function migrateTestDatabase(): Promise<void> {
  */
 const TABLES_IN_DELETE_ORDER = [
   'audit_logs',
+  'equipment_label_readings',
+  'equipment_media',
+  'equipment_intake_accessories',
+  'equipment_intake_conditions',
+  'equipment_intakes',
+  'equipment',
   'customer_contacts',
   'customer_addresses',
   'customers',

@@ -19,6 +19,8 @@ import {
   IconBuilding,
   IconChevronDown,
   IconCustomers,
+  IconEquipment,
+  IconIntake,
   IconHistory,
   IconKey,
   IconLogout,
@@ -47,6 +49,8 @@ const NAV_ICONS: Record<NavIconKey, ComponentType<IconProps>> = {
   modules: IconModules,
   history: IconHistory,
   customers: IconCustomers,
+  equipment: IconEquipment,
+  intake: IconIntake,
 };
 
 /**

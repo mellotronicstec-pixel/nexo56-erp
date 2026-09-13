@@ -34,6 +34,14 @@ export const PERMISSIONS = {
   CUSTOMERS_MANAGE: 'customers.manage',
   /** Ativar e inativar — separada porque muda a operacao, nao o cadastro. */
   CUSTOMERS_CHANGE_STATUS: 'customers.change_status',
+
+  // --- Prompt 06: equipamentos e recebimento -------------------------------
+  EQUIPMENT_VIEW: 'equipment.view',
+  EQUIPMENT_MANAGE: 'equipment.manage',
+  EQUIPMENT_INTAKE_VIEW: 'equipment_intake.view',
+  EQUIPMENT_INTAKE_CREATE: 'equipment_intake.create',
+  /** Anexar e remover fotos. Separada porque mexe em evidencia operacional. */
+  EQUIPMENT_INTAKE_MANAGE_MEDIA: 'equipment_intake.manage_media',
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -148,6 +156,36 @@ export const PERMISSION_CATALOG: readonly PermissionDefinition[] = [
     name: 'Ativar e inativar clientes',
     description: 'Altera a situacao do cliente sem apagar o cadastro.',
     featureKey: 'core.customers',
+  },
+  {
+    key: PERMISSIONS.EQUIPMENT_VIEW,
+    name: 'Visualizar equipamentos',
+    description: 'Consulta a lista e a ficha dos equipamentos dos clientes.',
+    featureKey: 'core.equipment',
+  },
+  {
+    key: PERMISSIONS.EQUIPMENT_MANAGE,
+    name: 'Administrar equipamentos',
+    description: 'Cadastra e corrige a identificacao dos equipamentos.',
+    featureKey: 'core.equipment',
+  },
+  {
+    key: PERMISSIONS.EQUIPMENT_INTAKE_VIEW,
+    name: 'Visualizar recebimentos',
+    description: 'Consulta as entradas de equipamentos da unidade.',
+    featureKey: 'core.equipment_intake',
+  },
+  {
+    key: PERMISSIONS.EQUIPMENT_INTAKE_CREATE,
+    name: 'Receber equipamentos',
+    description: 'Registra a entrada de um equipamento na unidade.',
+    featureKey: 'core.equipment_intake',
+  },
+  {
+    key: PERMISSIONS.EQUIPMENT_INTAKE_MANAGE_MEDIA,
+    name: 'Gerenciar fotos do recebimento',
+    description: 'Anexa e remove fotos do equipamento e do recebimento.',
+    featureKey: 'core.equipment_intake',
   },
 ];
 
@@ -273,6 +311,18 @@ export const PERMISSION_GROUPS = [
       PERMISSIONS.CUSTOMERS_VIEW,
       PERMISSIONS.CUSTOMERS_MANAGE,
       PERMISSIONS.CUSTOMERS_CHANGE_STATUS,
+    ],
+  },
+  {
+    key: 'equipamentos',
+    name: 'Equipamentos e recebimento',
+    description: 'Aparelhos dos clientes e sua entrada na assistencia.',
+    permissions: [
+      PERMISSIONS.EQUIPMENT_VIEW,
+      PERMISSIONS.EQUIPMENT_MANAGE,
+      PERMISSIONS.EQUIPMENT_INTAKE_VIEW,
+      PERMISSIONS.EQUIPMENT_INTAKE_CREATE,
+      PERMISSIONS.EQUIPMENT_INTAKE_MANAGE_MEDIA,
     ],
   },
   {

@@ -15,3 +15,4 @@ export * from '@/modules/audit/infrastructure/schema';
 export * from '@/modules/events/infrastructure/schema';
 export * from '@/modules/jobs/infrastructure/schema';
 export * from '@/modules/customers/infrastructure/schema';
+export * from '@/modules/equipment/infrastructure/schema';
