@@ -30,6 +30,7 @@ import {
   IconUser,
   IconUsers,
   type IconProps,
+  IconServiceOrder,
 } from '@/design-system/icons';
 import { cn } from '@/design-system/cn';
 import type { NavIconKey, NavSection } from './navigation';
@@ -51,6 +52,7 @@ const NAV_ICONS: Record<NavIconKey, ComponentType<IconProps>> = {
   customers: IconCustomers,
   equipment: IconEquipment,
   intake: IconIntake,
+  'service-order': IconServiceOrder,
 };
 
 /**

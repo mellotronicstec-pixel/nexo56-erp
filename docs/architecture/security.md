@@ -59,6 +59,24 @@
 | Unidade forjada no recebimento               | serviço usa `context.activeUnitId`; sem unidade ativa, recusa             | teste de integração                 |
 | Equipamento ligado a cliente de outro tenant | FK composta `(customer_id, tenant_id)`                                    | teste com SQL direto (`ERROR 1452`) |
 
+## Implementado e verificado — Ordem de Serviço (Prompt 07)
+
+| Proteção                                         | Como                                                          | Verificação                             |
+| ------------------------------------------------ | ------------------------------------------------------------- | --------------------------------------- |
+| OS ligada a cliente/equipamento de outra empresa | FKs compostas com `tenant_id`                                 | teste com SQL direto (`ERROR 1452`)     |
+| OS carimbada em unidade de outra empresa         | FK composta `(unit_id, tenant_id)`                            | teste com SQL direto                    |
+| Recebimento da unidade A virando OS na unidade B | FK composta `(intake_id, unit_id)`                            | teste de integração + SQL direto        |
+| Unidade forjada no formulário                    | serviço usa `context.activeUnitId`; sem unidade ativa, recusa | teste de integração                     |
+| Cliente forjado no formulário                    | cliente derivado do equipamento                               | teste de integração                     |
+| Acesso a OS de outra unidade pelo UUID           | consulta escopada; responde "não encontrada"                  | teste de integração                     |
+| Autor de outra empresa                           | FK composta `(created_by, tenant_id)`                         | teste com SQL direto                    |
+| Duas ordens pelo mesmo comando                   | `uq_service_order_idempotency` + reencontro no serviço        | teste com 5 envios simultâneos          |
+| Duas ordens para o mesmo recebimento             | `uq_service_order_intake`                                     | teste de integração + SQL direto        |
+| Número repetido na empresa                       | `uq_service_order_tenant_number`                              | teste com SQL direto (`ERROR 1062`)     |
+| Colisão de número sob concorrência               | alocação atômica em `tenant_sequences`                        | 20 aberturas simultâneas                |
+| Relato do cliente em log ou evento               | auditoria guarda o tamanho; log registra só a operação        | teste de integração                     |
+| Exclusão de OS                                   | não existe caminho de `DELETE` na aplicação                   | revisão de código + teste de componente |
+
 ## Limitações conhecidas
 
 ### Rate limit conta por processo
@@ -120,3 +138,8 @@ fase.
 - A tela de fotos orienta a fotografar só o equipamento e a etiqueta, evitando
   pessoas, documentos e o ambiente ao redor. O sistema não consegue impedir uma
   foto indevida — pode pedir a foto certa e proteger o arquivo, e é o que faz.
+- O **relato do cliente** é texto livre e pode conter dado pessoal incidental.
+  Ele nunca vai para log nem para o payload do evento; a auditoria da abertura
+  guarda apenas o tamanho. Quando o relato é corrigido, o texto anterior vai por
+  inteiro para a trilha — exceção consciente, porque sem ele "relato alterado"
+  não permitiria reconstruir o que o cliente disse.

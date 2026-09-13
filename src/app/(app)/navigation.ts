@@ -33,7 +33,8 @@ export type NavIconKey =
   | 'history'
   | 'customers'
   | 'equipment'
-  | 'intake';
+  | 'intake'
+  | 'service-order';
 
 export interface NavItem {
   href: string;
@@ -73,6 +74,13 @@ export const NAV_SECTIONS: readonly NavSection[] = [
         featureKey: FEATURES.CORE_EQUIPMENT_INTAKE,
         permission: PERMISSIONS.EQUIPMENT_INTAKE_VIEW,
         icon: 'intake',
+      },
+      {
+        href: '/ordens-de-servico',
+        label: 'Ordens de Servico',
+        featureKey: FEATURES.CORE_SERVICE_ORDERS,
+        permission: PERMISSIONS.SERVICE_ORDERS_VIEW,
+        icon: 'service-order',
       },
     ],
   },
@@ -142,6 +150,7 @@ export const BREADCRUMB_LABELS: Readonly<Record<string, string>> = {
   clientes: 'Clientes',
   equipamentos: 'Equipamentos',
   recebimentos: 'Recebimentos',
+  'ordens-de-servico': 'Ordens de Servico',
   administracao: 'Administracao',
   usuarios: 'Usuarios',
   perfis: 'Perfis de acesso',

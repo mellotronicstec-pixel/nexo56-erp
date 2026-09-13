@@ -19,6 +19,7 @@ export const FEATURES = {
   CORE_CUSTOMERS: 'core.customers',
   CORE_EQUIPMENT: 'core.equipment',
   CORE_EQUIPMENT_INTAKE: 'core.equipment_intake',
+  CORE_SERVICE_ORDERS: 'core.service_orders',
   PLATFORM_MULTI_UNIT: 'platform.multi_unit',
   PLATFORM_LABEL_RECOGNITION: 'platform.label_recognition',
 } as const;
@@ -111,6 +112,25 @@ export const FEATURE_CATALOG: readonly FeatureDefinition[] = [
     /** Recebe-se o que esta cadastrado: depende de Equipamentos. */
     type: 'CORE',
     dependsOn: [FEATURES.CORE_EQUIPMENT],
+  },
+  {
+    key: FEATURES.CORE_SERVICE_ORDERS,
+    name: 'Ordens de Servico',
+    description:
+      'Abertura, numeracao, vinculos, ficha e historico das Ordens de Servico da unidade.',
+    /**
+     * CORE (item 67): a Ordem de Servico e a espinha dorsal de uma assistencia
+     * tecnica. Uma empresa que desativasse isto nao estaria usando um Nexo56
+     * com menos modulos — estaria usando outro produto.
+     *
+     * Depende de Clientes e Equipamentos (item 68), declarados os dois
+     * explicitamente mesmo com a dependencia sendo transitiva: a OS referencia
+     * ambos diretamente, e o grafo deve dizer isso sem que ninguem precise
+     * deduzir. A unidade nao entra como feature porque nao e opcional — todo
+     * tenant tem ao menos uma, e o contexto de unidade e infraestrutura.
+     */
+    type: 'CORE',
+    dependsOn: [FEATURES.CORE_CUSTOMERS, FEATURES.CORE_EQUIPMENT],
   },
   {
     key: FEATURES.PLATFORM_MULTI_UNIT,

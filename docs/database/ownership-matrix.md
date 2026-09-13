@@ -39,6 +39,8 @@ Escopo de cada entidade (Prompt 02, itens 6 a 14 e 85).
 | `equipment_intake_conditions`  | via recebimento      | obrigatório    | herdado                | não       | cascata do recebimento       |
 | `equipment_media`              | tenant               | obrigatório    | herdado do recebimento | **sim**⁶  | remoção explícita            |
 | `equipment_label_readings`     | tenant               | obrigatório    | não                    | **sim**   | cascata do equipamento       |
+| `service_orders`               | **tenant + unidade** | obrigatório    | **obrigatório**        | **sim**⁷  | **nunca**                    |
+| `service_order_timeline`       | via ordem            | obrigatório    | herdado                | **sim**   | **nunca**                    |
 
 ¹ Nulo em evento de plataforma anterior ao tenant existir.
 ² Nulo em job técnico global (ex.: limpeza de sessões expiradas).
@@ -50,6 +52,9 @@ porque passou por outra unidade; quem registra a unidade é o recebimento.
 entrada posterior nunca sobrescreve a anterior.
 ⁶ A foto é prova de como o aparelho estava naquele dia. Corrigir o cadastro do
 equipamento depois **não** altera a mídia.
+⁷ A Ordem de Serviço é registro histórico operacional: não se exclui, e cliente,
+equipamento e unidade não mudam depois da abertura (ADR-033). Cancelamento será
+estado do workflow (Prompt 08), nunca `DELETE`.
 
 ### Justificativa das tabelas globais (item 7)
 
@@ -67,7 +72,6 @@ Decisões de ownership já fixadas, para evitar retrabalho estrutural:
 
 | Entidade                 | Escopo           | Tenant      | Unit              | Histórico | Soft delete |
 | ------------------------ | ---------------- | ----------- | ----------------- | --------- | ----------- |
-| `service_orders`         | tenant + unidade | obrigatório | **obrigatório**   | não⁵      | **não**     |
 | `service_order_timeline` | tenant + unidade | obrigatório | herdado           | **sim**   | **nunca**   |
 | `quotes`                 | tenant + unidade | obrigatório | herdado da OS     | não⁵      | **não**     |
 | `quote_items`            | tenant           | obrigatório | herdado           | não       | não         |
@@ -84,10 +88,10 @@ Decisões de ownership já fixadas, para evitar retrabalho estrutural:
 | `communications`         | tenant           | obrigatório | opcional          | **sim**   | **nunca**   |
 | `attachments`            | tenant           | obrigatório | opcional          | não       | sim         |
 
-> `clients`, `client_contacts`, `addresses` e `equipments` saíram desta lista:
-> foram implementados como `customers`, `customer_contacts`,
-> `customer_addresses` (Prompt 05) e `equipment` (Prompt 06), com o ownership
-> que estava previsto aqui.
+> `clients`, `client_contacts`, `addresses`, `equipments` e `service_orders`
+> saíram desta lista: foram implementados como `customers`, `customer_contacts`,
+> `customer_addresses` (Prompt 05), `equipment` (Prompt 06) e `service_orders`
+> (Prompt 07), com o ownership que estava previsto aqui.
 
 ⁵ O documento em si não é histórico, mas suas mudanças de estado alimentam uma
 timeline própria.
@@ -101,8 +105,8 @@ timeline própria.
 
 Entidade cuja operação pertence necessariamente a uma unidade:
 
-- Ordem de Serviço e **recebimento de equipamento** (`equipment_intakes`,
-  implementado no Prompt 06)
+- **Ordem de Serviço** (`service_orders`, Prompt 07) e **recebimento de
+  equipamento** (`equipment_intakes`, Prompt 06) — ambos implementados
 - Estoque físico e movimentação de estoque
 - Caixa e movimentação operacional por unidade
 - Compra e recebimento vinculados a unidade

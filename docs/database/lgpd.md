@@ -32,6 +32,7 @@ um tenant. Ele oferece os mecanismos; o controlador decide.
 | Equipamento (tipo, marca, modelo, série) | Identificar o aparelho entregue e devolvê-lo ao dono            | Execução de contrato                   |
 | Recebimento e estado de entrada          | Provar como o aparelho chegou, protegendo cliente e assistência | Execução de contrato                   |
 | Fotos do equipamento                     | Registrar o estado físico na entrada                            | Execução de contrato                   |
+| Relato do cliente na OS                  | Registrar o problema informado, para executar o serviço         | Execução de contrato                   |
 | Dados da OS                              | Registro do serviço prestado                                    | Execução de contrato                   |
 | Dados financeiros                        | Cobrança e escrituração                                         | Obrigação legal                        |
 | Dados do usuário do sistema              | Autenticar e auditar                                            | Legítimo interesse do controlador      |
@@ -71,6 +72,7 @@ Aplicada desde a fundação:
 | OS, garantia, financeiro | Enquanto durar a obrigação legal/fiscal e a garantia | Obrigação legal            |
 | Cadastro de cliente      | Enquanto houver relação; depois, anonimização        | Minimização                |
 | Cadastro de equipamento  | Enquanto houver relação com o cliente                | Histórico do aparelho      |
+| Ordens de Serviço        | Enquanto durar a obrigação legal/fiscal e a garantia | Prova do serviço prestado  |
 | Recebimentos e fotos     | Enquanto durar a garantia e a obrigação legal        | Prova do estado de entrada |
 | Anexos                   | Junto com a OS que os originou                       | Contexto                   |
 
@@ -99,6 +101,14 @@ anonimização: apagar o cliente é impedido pelo banco enquanto houver aparelho
 ligado a ele (`ON DELETE RESTRICT`), e a foto do equipamento é um arquivo no
 storage — anonimizar o titular exigirá **remover também a mídia**, não só limpar
 colunas. Está listado nas pendências.
+
+Com a Ordem de Serviço o quadro fica mais exigente: a OS é registro histórico
+operacional e **não se exclui** — o número precisa continuar existindo, porque
+aparece em garantia, nota fiscal e comunicação com o cliente. A anonimização terá
+de preservar a ordem e o seu número, substituindo as referências identificadoras.
+O **relato do cliente** merece atenção própria: é texto livre que pode conter
+dado pessoal incidental, e aparece em dois lugares — na coluna atual e no valor
+anterior guardado na auditoria quando houve correção.
 
 ---
 
@@ -135,12 +145,13 @@ comunicação ao controlador e apoio à comunicação à ANPD quando aplicável.
 
 ## 9. Pendências assumidas
 
-| Pendência                                    | Quando                                     |
-| -------------------------------------------- | ------------------------------------------ |
-| Painel de solicitações do titular            | Prompt de Clientes / LGPD                  |
-| Rotina de anonimização                       | Depois de Clientes e OS existirem          |
-| Remoção de mídia do storage na anonimização  | Junto com a rotina de anonimização         |
-| Exportação por titular                       | Idem                                       |
-| Política de retenção configurável por tenant | Prompt de SaaS                             |
-| Registro de operações de tratamento          | Prompt de segurança                        |
-| Cifragem em repouso de campo específico      | Só com ADR; **nunca** criptografia caseira |
+| Pendência                                       | Quando                                     |
+| ----------------------------------------------- | ------------------------------------------ |
+| Painel de solicitações do titular               | Prompt de Clientes / LGPD                  |
+| Rotina de anonimização                          | Depois de Clientes e OS existirem          |
+| Remoção de mídia do storage na anonimização     | Junto com a rotina de anonimização         |
+| Tratamento do relato do cliente na anonimização | Junto com a rotina de anonimização         |
+| Exportação por titular                          | Idem                                       |
+| Política de retenção configurável por tenant    | Prompt de SaaS                             |
+| Registro de operações de tratamento             | Prompt de segurança                        |
+| Cifragem em repouso de campo específico         | Só com ADR; **nunca** criptografia caseira |

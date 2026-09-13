@@ -20,10 +20,11 @@ testes próprios — nunca como placeholder (Prompt 01, itens 8 e 82).
 
 ## De negócio
 
-| Módulo      | Prompt | Responsabilidade                                                          | Tabelas                                                                                                                                        |
-| ----------- | ------ | ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `customers` | 05     | pessoas e empresas atendidas, contatos e endereços                        | `customers`, `customer_contacts`, `customer_addresses`                                                                                         |
-| `equipment` | 06     | aparelhos, recebimento, acessórios, inspeção, fotos e leitura de etiqueta | `equipment`, `equipment_intakes`, `equipment_intake_accessories`, `equipment_intake_conditions`, `equipment_media`, `equipment_label_readings` |
+| Módulo           | Prompt | Responsabilidade                                                          | Tabelas                                                                                                                                        |
+| ---------------- | ------ | ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `customers`      | 05     | pessoas e empresas atendidas, contatos e endereços                        | `customers`, `customer_contacts`, `customer_addresses`                                                                                         |
+| `equipment`      | 06     | aparelhos, recebimento, acessórios, inspeção, fotos e leitura de etiqueta | `equipment`, `equipment_intakes`, `equipment_intake_accessories`, `equipment_intake_conditions`, `equipment_media`, `equipment_label_readings` |
+| `service-orders` | 07     | abertura, numeração, vínculos, ficha e histórico da Ordem de Serviço      | `service_orders`, `service_order_timeline`                                                                                                     |
 
 O `equipment` usa também a abstração de armazenamento de arquivos
 (`core/storage`), introduzida no Prompt 06: os bytes das fotos ficam fora do
@@ -43,13 +44,18 @@ audit   ──→ core
 events  ──→ core
 jobs    ──→ auth (handler de limpeza de sessão), core
 
-customers ──→ tenancy, access-control, features, audit, events
-equipment ──→ customers, tenancy, access-control, features, audit, events, core/storage
+customers      ──→ tenancy, access-control, features, audit, events
+equipment      ──→ customers, tenancy, access-control, features, audit, events, core/storage
+service-orders ──→ customers, equipment, tenancy (sequencias), access-control, features, audit, events
 ```
 
-`customers` não conhece `equipment`: a seção "Equipamentos" da ficha do cliente
-vive na camada de páginas, não no módulo de Clientes. A dependência é de mão
-única, e é o que permitirá a Ordem de Serviço depender dos dois sem criar ciclo.
+`customers` não conhece `equipment`, e nenhum dos dois conhece `service-orders`:
+as seções que cruzam módulos (Equipamentos na ficha do cliente, Ordem de Serviço
+na ficha do recebimento) vivem na camada de páginas. As dependências são de mão
+única, e foi o que permitiu à Ordem de Serviço depender dos dois sem criar ciclo.
+
+`service-orders` reusa `tenancy` para a numeração (`tenant_sequences`, ADR-034)
+em vez de criar um segundo mecanismo de sequência.
 
 Sem ciclo na camada de aplicação. Entre os arquivos de `schema.ts` existe um
 ciclo **de tipo** deliberado (`tenants.plan_id → plans` e
@@ -66,7 +72,8 @@ migration — não na carga do módulo.
    `PERMISSION_CATALOG` — nunca criar chave solta em runtime.
 4. Responder às 12 perguntas de modularidade (classificação; pode desativar;
    dependências; dependentes; dados ao desativar; frontend; backend/API;
-   automações; permissões; plano; reativação; histórico). Exemplo respondido:
-   [Equipamentos](../modules/equipment/modularity.md).
+   automações; permissões; plano; reativação; histórico). Exemplos respondidos:
+   [Equipamentos](../modules/equipment/modularity.md) e
+   [Ordens de Serviço](../modules/service-orders/modularity.md).
 5. Acrescentar testes de travessia entre tenants para as novas consultas.
 6. Gerar migration (`npm run db:generate`) e revisar o SQL antes de aplicar.

@@ -228,6 +228,37 @@ servidos por rota autenticada (ADR-030).
 
 ---
 
+## `service_orders` (Prompt 07)
+
+| Coluna               | Tipo           | Obrig.     | Significado                                                                                                                |
+| -------------------- | -------------- | ---------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `unit_id`            | `CHAR(36)`     | **NN**, FK | Unidade que assumiu o serviço. Vem de `context.activeUnitId`, **nunca do formulário**. Não muda depois da abertura         |
+| `number`             | `INT UNSIGNED` | NN         | Número humano, **único por tenant**. Guarda só o valor; prefixo e zeros à esquerda vivem em `tenant_sequences`             |
+| `customer_id`        | `CHAR(36)`     | NN, FK     | Dono do aparelho. Derivado do equipamento, não aceito da entrada                                                           |
+| `equipment_id`       | `CHAR(36)`     | NN, FK     | Aparelho atendido                                                                                                          |
+| `intake_id`          | `CHAR(36)`     | opcional   | Recebimento de origem. **Nulo = OS aberta direto do cadastro**. Único por tenant quando presente                           |
+| `status`             | `VARCHAR(40)`  | NN         | Um único valor hoje: `awaiting_technical_opinion`. `VARCHAR` e não `ENUM` para o Prompt 08 acrescentar estados sem `ALTER` |
+| `customer_report` 🔒 | `TEXT`         | NN         | O que o **cliente** relatou. Não é diagnóstico. Pode conter dado pessoal incidental                                        |
+| `internal_notes`     | `TEXT`         | opcional   | Recado da equipe. Não é apresentado ao cliente                                                                             |
+| `opened_at`          | `DATETIME(3)`  | NN         | Instante da abertura, **UTC**                                                                                              |
+| `idempotency_key`    | `VARCHAR(80)`  | opcional   | Chave do comando de criação. Única por tenant; **cada `NULL` é distinto**                                                  |
+
+## `service_order_timeline` (Prompt 07)
+
+| Coluna             | Tipo           | Obrig.   | Significado                                                                                         |
+| ------------------ | -------------- | -------- | --------------------------------------------------------------------------------------------------- |
+| `service_order_id` | `CHAR(36)`     | NN, FK   | Ordem a que o fato pertence. FK composta com `tenant_id`                                            |
+| `kind`             | `VARCHAR(40)`  | NN       | `created`, `customer_report_updated`, `details_updated`. Texto para o Prompt 08 acrescentar os seus |
+| `summary`          | `VARCHAR(300)` | opcional | Resumo legível. **Nunca carrega o relato do cliente**                                               |
+| `metadata`         | `JSON`         | opcional | Detalhe estruturado do fato. Também sem PII                                                         |
+| `actor_id`         | `CHAR(36)`     | opcional | Quem provocou o fato. Nulo = sistema                                                                |
+| `occurred_at`      | `DATETIME(3)`  | NN       | Quando aconteceu, **UTC**                                                                           |
+
+Tabela **append-only**: é a narrativa de negócio da ordem, distinta da trilha de
+segurança em `audit_logs`.
+
+---
+
 ---
 
 ## Tipos monetários e de quantidade (ainda sem uso físico)

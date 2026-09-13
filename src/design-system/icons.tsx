@@ -257,3 +257,17 @@ export const IconCamera = (props: IconProps) => (
     <circle cx="12" cy="13.5" r="3.2" />
   </Icon>
 );
+
+/**
+ * Ordem de Servico: uma folha com linhas e um canto dobrado.
+ *
+ * O desenho evita a metafora de "ticket" ou "chamado" — a OS do Nexo56 e um
+ * documento operacional da assistencia, e o icone diz isso antes do rotulo.
+ */
+export const IconServiceOrder = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="M14 3.5H6.8a.8.8 0 00-.8.8v15.4a.8.8 0 00.8.8h10.4a.8.8 0 00.8-.8V7.5z" />
+    <path d="M14 3.5V7a.5.5 0 00.5.5H18" />
+    <path d="M9 12.5h6M9 16h4" />
+  </Icon>
+);

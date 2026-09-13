@@ -22,6 +22,9 @@ import { PERMISSIONS } from '@/modules/access-control/domain/permissions';
 import { listIntakes } from '@/modules/equipment/application/equipment-queries';
 import { equipmentTitle } from '@/modules/equipment/domain/equipment';
 import { FEATURES } from '@/modules/features/domain/catalog';
+import { checkAccess } from '@/modules/features/application/effective-access';
+import { mapServiceOrdersByIntake } from '@/modules/service-orders/application/service-order-queries';
+import { formatServiceOrderNumber } from '@/modules/service-orders/domain/service-order';
 
 export const metadata: Metadata = { title: 'Recebimentos' };
 
@@ -47,6 +50,23 @@ export default async function IntakesPage({
   const result = await listIntakes(context, {
     page: Number.isInteger(pageParam) && pageParam > 0 ? pageParam : 1,
   });
+
+  /**
+   * Atalho para a Ordem de Servico (Prompt 07, item 31).
+   *
+   * UMA consulta cobre a pagina inteira: cada linha ja sabe se a ordem existe,
+   * sem consultar o banco por recebimento.
+   */
+  const [serviceOrderAccess, ordersByIntake] = await Promise.all([
+    checkAccess(context, {
+      featureKey: FEATURES.CORE_SERVICE_ORDERS,
+      permission: PERMISSIONS.SERVICE_ORDERS_CREATE,
+    }),
+    mapServiceOrdersByIntake(
+      context,
+      result.items.map((item) => item.id),
+    ),
+  ]);
 
   const formatter = new Intl.DateTimeFormat('pt-BR', {
     dateStyle: 'short',
@@ -104,13 +124,29 @@ export default async function IntakesPage({
                       </TD>
                       <TD>{item.customerName}</TD>
                       <TD>{item.unitName ?? '—'}</TD>
-                      <TD align="right">
-                        <Link
-                          href={`/equipamentos/${item.equipmentId}`}
-                          className="text-ui font-semibold text-brand-600 hover:text-brand-700 hover:underline"
-                        >
-                          Ver equipamento
-                        </Link>
+                      <TD align="right" className="whitespace-nowrap">
+                        {ordersByIntake.has(item.id) ? (
+                          <Link
+                            href={`/ordens-de-servico/${ordersByIntake.get(item.id)!.id}`}
+                            className="text-ui font-semibold text-brand-600 hover:text-brand-700 hover:underline"
+                          >
+                            {formatServiceOrderNumber(ordersByIntake.get(item.id)!.number)}
+                          </Link>
+                        ) : serviceOrderAccess.allowed ? (
+                          <Link
+                            href={`/ordens-de-servico/nova?equipamento=${item.equipmentId}&recebimento=${item.id}`}
+                            className="text-ui font-semibold text-brand-600 hover:text-brand-700 hover:underline"
+                          >
+                            Criar Ordem de Servico
+                          </Link>
+                        ) : (
+                          <Link
+                            href={`/equipamentos/${item.equipmentId}`}
+                            className="text-ui font-semibold text-brand-600 hover:text-brand-700 hover:underline"
+                          >
+                            Ver equipamento
+                          </Link>
+                        )}
                       </TD>
                     </TR>
                   ))}
@@ -131,12 +167,29 @@ export default async function IntakesPage({
                   <p className="text-small text-ink-500">
                     {item.customerName} · {formatter.format(item.receivedAt)}
                   </p>
-                  <Link
-                    href={`/equipamentos/${item.equipmentId}`}
-                    className="touch-target mt-2 inline-flex items-center text-ui font-semibold text-brand-600"
-                  >
-                    Ver equipamento
-                  </Link>
+                  <div className="mt-2 flex flex-wrap items-center gap-x-4">
+                    <Link
+                      href={`/equipamentos/${item.equipmentId}`}
+                      className="touch-target inline-flex items-center text-ui font-semibold text-brand-600"
+                    >
+                      Ver equipamento
+                    </Link>
+                    {ordersByIntake.has(item.id) ? (
+                      <Link
+                        href={`/ordens-de-servico/${ordersByIntake.get(item.id)!.id}`}
+                        className="touch-target inline-flex items-center text-ui font-semibold text-brand-600"
+                      >
+                        {formatServiceOrderNumber(ordersByIntake.get(item.id)!.number)}
+                      </Link>
+                    ) : serviceOrderAccess.allowed ? (
+                      <Link
+                        href={`/ordens-de-servico/nova?equipamento=${item.equipmentId}&recebimento=${item.id}`}
+                        className="touch-target inline-flex items-center text-ui font-semibold text-brand-600"
+                      >
+                        Criar Ordem de Servico
+                      </Link>
+                    ) : null}
+                  </div>
                 </CardListItem>
               ))}
             </CardList>

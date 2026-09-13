@@ -42,6 +42,18 @@ export const PERMISSIONS = {
   EQUIPMENT_INTAKE_CREATE: 'equipment_intake.create',
   /** Anexar e remover fotos. Separada porque mexe em evidencia operacional. */
   EQUIPMENT_INTAKE_MANAGE_MEDIA: 'equipment_intake.manage_media',
+
+  // --- Prompt 07: ordem de servico -----------------------------------------
+  /**
+   * Tres capacidades de NEGOCIO, nao uma por botao (item 62): consultar a
+   * ordem, abrir uma nova e corrigir os dados de abertura. As acoes de
+   * workflow — orcar, encomendar peca, concluir — chegam com o Prompt 08, e
+   * criar permissoes para elas agora seria declarar poder sobre o que ainda
+   * nao existe.
+   */
+  SERVICE_ORDERS_VIEW: 'service_orders.view',
+  SERVICE_ORDERS_CREATE: 'service_orders.create',
+  SERVICE_ORDERS_UPDATE: 'service_orders.update',
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -187,6 +199,24 @@ export const PERMISSION_CATALOG: readonly PermissionDefinition[] = [
     description: 'Anexa e remove fotos do equipamento e do recebimento.',
     featureKey: 'core.equipment_intake',
   },
+  {
+    key: PERMISSIONS.SERVICE_ORDERS_VIEW,
+    name: 'Visualizar Ordens de Servico',
+    description: 'Consulta a lista e a ficha das Ordens de Servico da unidade.',
+    featureKey: 'core.service_orders',
+  },
+  {
+    key: PERMISSIONS.SERVICE_ORDERS_CREATE,
+    name: 'Abrir Ordens de Servico',
+    description: 'Abre uma Ordem de Servico para um equipamento na unidade.',
+    featureKey: 'core.service_orders',
+  },
+  {
+    key: PERMISSIONS.SERVICE_ORDERS_UPDATE,
+    name: 'Corrigir dados de abertura',
+    description: 'Corrige o relato do cliente e as observacoes internas da abertura.',
+    featureKey: 'core.service_orders',
+  },
 ];
 
 /** Papeis estruturais criados no bootstrap de cada tenant. */
@@ -323,6 +353,16 @@ export const PERMISSION_GROUPS = [
       PERMISSIONS.EQUIPMENT_INTAKE_VIEW,
       PERMISSIONS.EQUIPMENT_INTAKE_CREATE,
       PERMISSIONS.EQUIPMENT_INTAKE_MANAGE_MEDIA,
+    ],
+  },
+  {
+    key: 'ordens-de-servico',
+    name: 'Ordens de Servico',
+    description: 'Abertura e consulta das Ordens de Servico da unidade.',
+    permissions: [
+      PERMISSIONS.SERVICE_ORDERS_VIEW,
+      PERMISSIONS.SERVICE_ORDERS_CREATE,
+      PERMISSIONS.SERVICE_ORDERS_UPDATE,
     ],
   },
   {

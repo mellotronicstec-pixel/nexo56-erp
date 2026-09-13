@@ -25,6 +25,8 @@ import {
 } from '@/modules/equipment/domain/equipment';
 import { FEATURES } from '@/modules/features/domain/catalog';
 import { checkAccess } from '@/modules/features/application/effective-access';
+import { mapServiceOrdersByIntake } from '@/modules/service-orders/application/service-order-queries';
+import { formatServiceOrderNumber } from '@/modules/service-orders/domain/service-order';
 import { hasPermission } from '@/modules/tenancy/domain/tenant-context';
 import { MediaManager } from './media-manager';
 import { removeMediaAction, uploadMediaAction } from '../actions';
@@ -65,6 +67,23 @@ export default async function EquipmentDetailPage({
     featureKey: FEATURES.CORE_EQUIPMENT_INTAKE,
     permission: PERMISSIONS.EQUIPMENT_INTAKE_CREATE,
   });
+
+  /**
+   * Ordem de Servico (Prompt 07, item 31).
+   *
+   * O atalho so existe quando o modulo esta REALMENTE disponivel para esta
+   * empresa e esta pessoa. E o mapa de ordens ja abertas vem em UMA consulta
+   * para todos os recebimentos da ficha, nao uma por bloco.
+   */
+  const serviceOrderAccess = await checkAccess(context, {
+    featureKey: FEATURES.CORE_SERVICE_ORDERS,
+    permission: PERMISSIONS.SERVICE_ORDERS_CREATE,
+  });
+
+  const ordersByIntake = await mapServiceOrdersByIntake(
+    context,
+    intakes.map(({ intake }) => intake.id),
+  );
 
   const formatter = new Intl.DateTimeFormat('pt-BR', {
     dateStyle: 'short',
@@ -273,6 +292,28 @@ export default async function EquipmentDetailPage({
                     <p className="mt-3 whitespace-pre-wrap text-ui text-ink-700">
                       {intake.inspectionNotes}
                     </p>
+                  ) : null}
+
+                  {/*
+                    CRIAR ORDEM DE SERVICO (Prompt 07, item 31).
+                    Quando ja existe uma ordem para este recebimento, o atalho
+                    leva ate ela em vez de oferecer abrir outra — um recebimento
+                    origina uma OS principal (item 33).
+                  */}
+                  {ordersByIntake.has(intake.id) ? (
+                    <Link
+                      href={`/ordens-de-servico/${ordersByIntake.get(intake.id)!.id}`}
+                      className="touch-target mt-3 inline-flex items-center text-ui font-semibold text-brand-600 hover:underline md:min-h-0"
+                    >
+                      Abrir a {formatServiceOrderNumber(ordersByIntake.get(intake.id)!.number)}
+                    </Link>
+                  ) : serviceOrderAccess.allowed ? (
+                    <Link
+                      href={`/ordens-de-servico/nova?equipamento=${item.id}&recebimento=${intake.id}`}
+                      className={`${linkButtonClass('secondary', 'sm')} mt-3`}
+                    >
+                      Criar Ordem de Servico
+                    </Link>
                   ) : null}
                 </div>
               ))}

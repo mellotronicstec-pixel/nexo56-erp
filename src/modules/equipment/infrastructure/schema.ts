@@ -172,6 +172,16 @@ export const equipmentIntakes = mysqlTable(
 
     unique('uq_intake_id_tenant').on(table.id, table.tenantId),
 
+    /**
+     * Alvo da FK composta `(intake_id, unit_id)` da Ordem de Servico
+     * (Prompt 07, item 11).
+     *
+     * Acrescentado pela migration 0005, de forma puramente aditiva: e o que
+     * permite ao BANCO recusar uma OS carimbada numa unidade diferente da do
+     * recebimento que a originou.
+     */
+    unique('uq_intake_id_unit').on(table.id, table.unitId),
+
     index('ix_intake_tenant_unit_received').on(table.tenantId, table.unitId, table.receivedAt),
     index('ix_intake_equipment').on(table.equipmentId),
   ],

@@ -52,6 +52,12 @@ erDiagram
     EQUIPMENT_INTAKES ||--o{ EQUIPMENT_MEDIA : "foto do atendimento"
     EQUIPMENT ||--o{ EQUIPMENT_LABEL_READINGS : "etiqueta lida"
 
+    CUSTOMERS ||--o{ SERVICE_ORDERS : solicita
+    EQUIPMENT ||--o{ SERVICE_ORDERS : atendido_em
+    UNITS ||--o{ SERVICE_ORDERS : "executa (unit_id OBRIGATORIO)"
+    EQUIPMENT_INTAKES ||--o| SERVICE_ORDERS : "origina (1:1)"
+    SERVICE_ORDERS ||--o{ SERVICE_ORDER_TIMELINE : "historico (append-only)"
+
     TENANTS {
         char36 id PK
         varchar slug UK
@@ -262,6 +268,31 @@ erDiagram
         json fields "sugestao; NUNCA sobrescreve o confirmado"
         datetime confirmed_at "confirmacao HUMANA"
     }
+    SERVICE_ORDERS {
+        char36 id PK
+        char36 tenant_id FK
+        char36 unit_id FK "OBRIGATORIO, da sessao - FK composta"
+        int number UK "numero humano, unico por TENANT"
+        char36 customer_id FK "FK composta com tenant_id"
+        char36 equipment_id FK "FK composta com tenant_id"
+        char36 intake_id UK "nulo = sem recebimento; FK composta com tenant_id E com unit_id"
+        varchar status "um unico estado hoje; varchar para o Prompt 08"
+        text customer_report "o que o CLIENTE disse - nao e diagnostico"
+        text internal_notes "recado da equipe, nao vai ao cliente"
+        datetime opened_at
+        varchar idempotency_key UK "mesmo comando, mesma OS"
+        composite uq_service_order_id_tenant UK "alvo de FK composta"
+    }
+    SERVICE_ORDER_TIMELINE {
+        char36 id PK
+        char36 tenant_id FK
+        char36 service_order_id FK "FK composta com tenant_id"
+        varchar kind "created customer_report_updated details_updated"
+        varchar summary "sem PII"
+        json metadata "sem PII"
+        char36 actor_id
+        datetime occurred_at
+    }
 ```
 
 ### Destaques do diagrama
@@ -285,6 +316,13 @@ erDiagram
 - `EQUIPMENT_LABEL_READINGS` fica separada de `EQUIPMENT` de propósito: o
   cadastro guarda o que o humano confirmou, a leitura guarda o que foi
   sugerido (ADR-032).
+- `SERVICE_ORDERS` é a primeira entidade **tenant + unidade** do sistema: o
+  aparelho atravessa as lojas, o trabalho não (ADR-033). A FK composta
+  `(intake_id, unit_id)` é o que impede, no banco, uma ordem carimbada em
+  unidade diferente da do recebimento que a originou.
+- `SERVICE_ORDER_TIMELINE` existe ao lado de `AUDIT_LOGS`, não no lugar dela:
+  uma responde "o que aconteceu com este aparelho", a outra "quem alterou o
+  quê".
 
 ---
 
@@ -293,19 +331,15 @@ erDiagram
 > Nenhuma das entidades abaixo foi criada. Este diagrama existe para detectar
 > conflito estrutural antes dos prompts funcionais (Prompt 02, item 48).
 >
-> `CLIENT` e `EQUIPMENT` aparecem abaixo apenas como **pontos de ligação**: eles
-> já existem no banco (seção 1), como `customers` e `equipment`. O mesmo vale
-> para `CLIENT_CONTACT` e `ADDRESS`, hoje `customer_contacts` e
-> `customer_addresses`.
+> `CLIENT`, `EQUIPMENT` e `SERVICE_ORDER` aparecem abaixo apenas como **pontos
+> de ligação**: os três já existem no banco (seção 1), como `customers`,
+> `equipment` e `service_orders`. O mesmo vale para `CLIENT_CONTACT` e
+> `ADDRESS`, hoje `customer_contacts` e `customer_addresses`.
 
 ```mermaid
 erDiagram
 
     TENANT ||--o{ UNIT_C : possui
-    UNIT_C ||--o{ SERVICE_ORDER : "opera (unit_id OBRIGATORIO)"
-    CLIENT ||--o{ SERVICE_ORDER : solicita
-    EQUIPMENT ||--o{ SERVICE_ORDER : atendido_em
-
     SERVICE_ORDER ||--o{ SERVICE_ORDER_TIMELINE : "historico (imutavel)"
     SERVICE_ORDER ||--o{ QUOTE : possui
     QUOTE ||--o{ QUOTE_ITEM : contem

@@ -7,7 +7,9 @@ Cada ADR informa **contexto**, **decisão**, **motivo**, **alternativas** e
 Os ADRs 001–012 vêm do Prompt 01 (fundação técnica); 013–018 do Prompt 02
 (camada de dados); 019–022 do Prompt 03 (acesso, papéis e sessões); 023–025 do
 Prompt 04 (Design System e interface); 026–028 do Prompt 05 (Clientes);
-029–032 do Prompt 06 (Equipamentos, recebimento, mídia e leitura de etiqueta).
+029–032 do Prompt 06 (Equipamentos, recebimento, mídia e leitura de etiqueta);
+033–036 do Prompt 07 (Ordem de Serviço: ownership, numeração, cardinalidade e
+fronteira com o workflow).
 
 Um ADR não é reescrito quando a decisão muda: cria-se um novo ADR que o
 substitui, e o antigo passa a `Substituído por ADR-XXX`.
@@ -46,3 +48,7 @@ substitui, e o antigo passa a `Substituído por ADR-XXX`.
 | [030](ADR-030-armazenamento-de-arquivos.md)              | Armazenamento de arquivos fora de `public/`      | Aceito |
 | [031](ADR-031-processamento-de-imagem-no-navegador.md)   | Preparo de imagem no navegador                   | Aceito |
 | [032](ADR-032-provider-de-leitura-de-etiqueta.md)        | Provider de leitura de etiqueta                  | Aceito |
+| [033](ADR-033-ordem-de-servico-pertence-a-unidade.md)    | Ordem de Serviço pertence à unidade              | Aceito |
+| [034](ADR-034-numeracao-da-ordem-de-servico.md)          | Numeração da OS sobre `tenant_sequences`         | Aceito |
+| [035](ADR-035-cardinalidade-recebimento-ordem.md)        | Um recebimento origina uma OS                    | Aceito |
+| [036](ADR-036-fronteira-entidade-workflow.md)            | Fronteira entre entidade e workflow              | Aceito |

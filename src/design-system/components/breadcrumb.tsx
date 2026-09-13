@@ -8,6 +8,12 @@ import { cn } from '@/design-system/cn';
  * `<nav aria-label>` com lista ordenada: a ordem importa e o leitor de tela
  * anuncia "1 de 3". O ultimo item nao e link e carrega `aria-current="page"`.
  * Os separadores sao `aria-hidden`, senao viram ruido a cada nivel.
+ *
+ * ALVO DE TOQUE (Prompt 07, item 78): o texto da trilha e pequeno de proposito
+ * — ela e orientacao, nao acao principal. Mas o LINK precisa ser tocavel: o
+ * `py-1` leva a area clicavel a 26px, acima do minimo de 24px da WCAG 2.2 AA
+ * para alvo de ponteiro. Sem isso, no celular a trilha vira decoracao que
+ * ninguem consegue usar para voltar.
  */
 export interface Crumb {
   label: string;
@@ -26,7 +32,9 @@ export function Breadcrumb({ items, className }: { items: readonly Crumb[]; clas
               {item.href && !last ? (
                 <Link
                   href={item.href}
-                  className={cn('rounded-xs hover:text-ink-800 hover:underline')}
+                  className={cn(
+                    'inline-flex items-center rounded-xs py-1 hover:text-ink-800 hover:underline',
+                  )}
                 >
                   {item.label}
                 </Link>

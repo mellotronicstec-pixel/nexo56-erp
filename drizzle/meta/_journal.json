@@ -36,6 +36,13 @@
       "when": 1789305755691,
       "tag": "0004_equipment_and_intake",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1789313664534,
+      "tag": "0005_service_orders",
+      "breakpoints": true
     }
   ]
 }

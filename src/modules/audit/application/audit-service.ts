@@ -62,6 +62,11 @@ export const AUDIT_ACTIONS = {
   EQUIPMENT_MEDIA_ADDED: 'equipment_media.added',
   EQUIPMENT_MEDIA_REMOVED: 'equipment_media.removed',
   EQUIPMENT_LABEL_CONFIRMED: 'equipment_label.confirmed',
+
+  // --- Prompt 07: ordem de servico -----------------------------------------
+  SERVICE_ORDER_CREATED: 'service_order.created',
+  SERVICE_ORDER_UPDATED: 'service_order.updated',
+  SERVICE_ORDER_CUSTOMER_REPORT_UPDATED: 'service_order.customer_report_updated',
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];

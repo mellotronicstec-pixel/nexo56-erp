@@ -450,6 +450,133 @@ describe('upgrade incremental entre prompts', () => {
     }
   });
 
+  it('leva um banco do Prompt 06, com dados, ate o Prompt 07 sem perda', async () => {
+    const stepDb = 'nexo56_migration_step07_test';
+    await adminConnection.query(`DROP DATABASE IF EXISTS \`${stepDb}\``);
+    await adminConnection.query(
+      `CREATE DATABASE \`${stepDb}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`,
+    );
+
+    const folder = buildFolderUpTo('0004');
+    const connection = await mysql.createConnection({
+      uri: urlForDatabase(stepDb),
+      timezone: 'Z',
+      multipleStatements: true,
+    });
+
+    try {
+      // --- banco no estado do Prompt 06 --------------------------------------
+      await migrate(drizzle(connection), { migrationsFolder: folder });
+
+      const [beforeTables] = await connection.query<mysql.RowDataPacket[]>('SHOW TABLES');
+      const beforeNames = beforeTables.map((row) => Object.values(row)[0] as string);
+      expect(beforeNames).toContain('equipment_intakes');
+      expect(beforeNames).not.toContain('service_orders');
+
+      await connection.query(`
+        INSERT INTO plans (id, \`key\`, name, description, is_internal, created_at, updated_at)
+        VALUES ('plan-p6', 'internal', 'Plano interno', '', 1, NOW(3), NOW(3));
+
+        INSERT INTO tenants (id, slug, name, status, timezone, plan_id, created_at, updated_at)
+        VALUES ('tenant-p6', 'empresa-p6', 'Empresa P6', 'active', 'America/Sao_Paulo', 'plan-p6', NOW(3), NOW(3));
+
+        INSERT INTO units (id, tenant_id, name, status, created_at, updated_at)
+        VALUES ('unit-p6', 'tenant-p6', 'Unidade P6', 'active', NOW(3), NOW(3)),
+               ('unit-p6b', 'tenant-p6', 'Unidade P6 Norte', 'active', NOW(3), NOW(3));
+
+        INSERT INTO users (id, tenant_id, email, name, password_hash, status, created_at, updated_at)
+        VALUES ('user-p6', 'tenant-p6', 'p6@empresa.invalid', 'Usuario P6', 'scrypt$65536$8$2$c2FsdA==$aGFzaA==', 'active', NOW(3), NOW(3));
+
+        INSERT INTO customers
+          (id, tenant_id, kind, name, name_normalized, status, created_at, updated_at, created_by)
+        VALUES ('cli-p6', 'tenant-p6', 'individual', 'Joana Lima', 'joana lima', 'active', NOW(3), NOW(3), 'user-p6');
+
+        INSERT INTO equipment
+          (id, tenant_id, customer_id, kind, kind_normalized, brand, brand_normalized,
+           model, model_normalized, serial, serial_normalized, voltage, status,
+           created_at, updated_at, created_by)
+        VALUES ('eq-p6', 'tenant-p6', 'cli-p6', 'Televisor', 'televisor', 'Marca', 'marca',
+                'Modelo', 'modelo', 'SN-P6', 'SNP6', 'bivolt', 'active', NOW(3), NOW(3), 'user-p6');
+
+        INSERT INTO equipment_intakes
+          (id, tenant_id, unit_id, equipment_id, received_at, received_by, power_cable,
+           created_at, updated_at, created_by)
+        VALUES ('int-p6', 'tenant-p6', 'unit-p6', 'eq-p6', NOW(3), 'user-p6', 'yes',
+                NOW(3), NOW(3), 'user-p6');
+
+        INSERT INTO tenant_sequences (tenant_id, sequence_type, current_value, prefix, padding, updated_at)
+        VALUES ('tenant-p6', 'service_order', 7, 'OS', 6, NOW(3));
+      `);
+
+      // --- aplica o Prompt 07 -------------------------------------------------
+      await migrate(drizzle(connection), { migrationsFolder: './drizzle' });
+
+      const [rows] = await connection.query<mysql.RowDataPacket[]>(`
+        SELECT
+          (SELECT COUNT(*) FROM customers)          AS customers,
+          (SELECT COUNT(*) FROM equipment)          AS equipment,
+          (SELECT COUNT(*) FROM equipment_intakes)  AS intakes,
+          (SELECT COUNT(*) FROM service_orders)     AS service_orders,
+          (SELECT name FROM customers WHERE id='cli-p6')  AS nome,
+          (SELECT serial FROM equipment WHERE id='eq-p6') AS serial,
+          (SELECT current_value FROM tenant_sequences
+            WHERE tenant_id='tenant-p6' AND sequence_type='service_order') AS sequencia
+      `);
+
+      // Nada perdido, nada reescrito — inclusive a sequencia ja em uso.
+      expect(rows[0]).toMatchObject({
+        customers: 1,
+        equipment: 1,
+        intakes: 1,
+        service_orders: 0,
+        nome: 'Joana Lima',
+        serial: 'SN-P6',
+        sequencia: 7,
+      });
+
+      const [afterTables] = await connection.query<mysql.RowDataPacket[]>('SHOW TABLES');
+      const afterNames = afterTables.map((row) => Object.values(row)[0] as string);
+      expect(afterNames).toEqual(
+        expect.arrayContaining(['service_orders', 'service_order_timeline']),
+      );
+
+      // A OS nasce presa ao recebimento E a unidade dele.
+      await connection.query(`
+        INSERT INTO service_orders
+          (id, tenant_id, unit_id, number, customer_id, equipment_id, intake_id,
+           status, customer_report, opened_at, created_by, created_at, updated_at)
+        VALUES ('so-p6', 'tenant-p6', 'unit-p6', 8, 'cli-p6', 'eq-p6', 'int-p6',
+                'awaiting_technical_opinion', 'Nao liga.', NOW(3), 'user-p6', NOW(3), NOW(3))
+      `);
+
+      // Recebimento da unidade A nao gera OS na unidade B (item 11).
+      await expect(
+        connection.query(`
+          INSERT INTO service_orders
+            (id, tenant_id, unit_id, number, customer_id, equipment_id, intake_id,
+             status, customer_report, opened_at, created_at, updated_at)
+          VALUES ('so-p6-x', 'tenant-p6', 'unit-p6b', 9, 'cli-p6', 'eq-p6', 'int-p6',
+                  'awaiting_technical_opinion', 'x', NOW(3), NOW(3), NOW(3))
+        `),
+      ).rejects.toThrow();
+
+      // Numero repetido na mesma empresa e recusado (item 106).
+      await expect(
+        connection.query(`
+          INSERT INTO service_orders
+            (id, tenant_id, unit_id, number, customer_id, equipment_id,
+             status, customer_report, opened_at, created_at, updated_at)
+          VALUES ('so-p6-y', 'tenant-p6', 'unit-p6', 8, 'cli-p6', 'eq-p6',
+                  'awaiting_technical_opinion', 'x', NOW(3), NOW(3), NOW(3))
+        `),
+      ).rejects.toThrow();
+    } finally {
+      await connection.end();
+      rmSync(folder, { recursive: true, force: true });
+      await adminConnection.query(`DROP DATABASE IF EXISTS \`${stepDb}\``);
+    }
+  });
+
   it('cria um banco vazio do zero com todas as migrations', async () => {
     const freshDb = 'nexo56_migration_fresh_test';
     await adminConnection.query(`DROP DATABASE IF EXISTS \`${freshDb}\``);
@@ -505,6 +632,9 @@ describe('upgrade incremental entre prompts', () => {
           'equipment_intake_conditions',
           'equipment_media',
           'equipment_label_readings',
+          // Prompt 07
+          'service_orders',
+          'service_order_timeline',
         ]),
       );
     } finally {
