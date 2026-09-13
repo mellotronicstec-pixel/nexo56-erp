@@ -43,6 +43,13 @@
       "when": 1789313664534,
       "tag": "0005_service_orders",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1789327538219,
+      "tag": "0006_service_order_workflow",
+      "breakpoints": true
     }
   ]
 }

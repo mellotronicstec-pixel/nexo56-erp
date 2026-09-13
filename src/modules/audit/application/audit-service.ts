@@ -67,6 +67,15 @@ export const AUDIT_ACTIONS = {
   SERVICE_ORDER_CREATED: 'service_order.created',
   SERVICE_ORDER_UPDATED: 'service_order.updated',
   SERVICE_ORDER_CUSTOMER_REPORT_UPDATED: 'service_order.customer_report_updated',
+
+  // --- Prompt 08: workflow --------------------------------------------------
+  SERVICE_ORDER_STATUS_CHANGED: 'service_order.status_changed',
+  SERVICE_ORDER_TECHNICIAN_ASSIGNED: 'service_order.technician_assigned',
+  SERVICE_ORDER_FOLLOW_UP_RESCHEDULED: 'service_order.follow_up_rescheduled',
+  SERVICE_ORDER_TASK_CREATED: 'service_order_task.created',
+  SERVICE_ORDER_TASK_COMPLETED: 'service_order_task.completed',
+  SERVICE_ORDER_TASK_CANCELLED: 'service_order_task.cancelled',
+  SERVICE_ORDER_CUSTOMER_NOTIFIED: 'service_order.customer_notification_requested',
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];

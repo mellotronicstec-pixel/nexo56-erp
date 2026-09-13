@@ -28,6 +28,37 @@ não existe como token, a decisão é acrescentá-lo aqui — não escrevê-lo s
 | Animação                | `--duration-instant` 80ms · `fast` 140ms · `base` 200ms · `slow` 320ms                                                             |                                                                |
 | Estados                 | `--state-hover-overlay`, `--state-focus-ring`, `--state-focus-ring-width`, `--state-focus-ring-offset`, `--state-disabled-opacity` |                                                                |
 
+## Armadilha: `max-w-<nome>` NÃO é largura de container
+
+A escala de espaçamento usa nomes de camiseta (`--spacing-sm`, `--spacing-lg`…).
+No Tailwind 4, o utilitário `max-w-<nome>` resolve **essa mesma escala antes** da
+escala de container. Resultado: `max-w-lg` não é 32rem — é `var(--spacing-lg)`,
+ou seja **24px**.
+
+```css
+/* o que o build gera neste projeto */
+.sm\:max-w-lg {
+  max-width: var(--spacing-lg);
+} /* 1.5rem */
+.max-w-md {
+  max-width: var(--spacing-md);
+} /* 1rem   */
+.max-w-3xl {
+  max-width: var(--container-3xl);
+} /* 48rem — sem colisao */
+```
+
+Vale para `xs`, `sm`, `md`, `lg`, `xl` e `2xl`. De `3xl` para cima não há
+`--spacing-*` correspondente, então o comportamento é o esperado.
+
+**Regra:** para largura de leitura ou de diálogo, use medida explícita —
+`max-w-[32rem]` — e nunca o nome de camiseta.
+
+Encontrado em navegador real: o diálogo de confirmação de transição da Ordem de
+Serviço aparecia com **24px de largura** no desktop, com o scrim por cima dos
+botões. O erro não quebra o build, não quebra o typecheck e não aparece em teste
+de componente (happy-dom não aplica CSS) — só num navegador de verdade.
+
 ## Por que a escala mobile vive numa media query
 
 As utilitárias do Tailwind 4 referenciam a variável (`font-size: var(--text-h1)`),

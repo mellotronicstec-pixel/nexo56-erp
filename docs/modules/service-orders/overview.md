@@ -7,7 +7,10 @@ peças, garantia e financeiro serão construídos.
 Decisões: [ADR-033](../../adr/ADR-033-ordem-de-servico-pertence-a-unidade.md),
 [ADR-034](../../adr/ADR-034-numeracao-da-ordem-de-servico.md),
 [ADR-035](../../adr/ADR-035-cardinalidade-recebimento-ordem.md),
-[ADR-036](../../adr/ADR-036-fronteira-entidade-workflow.md).
+[ADR-036](../../adr/ADR-036-fronteira-entidade-workflow.md),
+[ADR-037](../../adr/ADR-037-maquina-de-estados-centralizada.md),
+[ADR-038](../../adr/ADR-038-concorrencia-otimista.md),
+[ADR-039](../../adr/ADR-039-follow-up-como-data-civil.md).
 
 ## Índice
 
@@ -18,8 +21,12 @@ Decisões: [ADR-033](../../adr/ADR-033-ordem-de-servico-pertence-a-unidade.md),
 - [Histórico estrutural](history.md)
 - [Permissões, auditoria e eventos](access.md)
 - [Etiqueta física e QR — o que existe e o que falta](label.md)
+- **[Workflow: estados, transições e ações](workflow.md)**
+- **[Tarefas do fluxo](tasks.md)**
+- **[Follow-ups e pendências](follow-ups.md)**
 - [12 perguntas de modularidade](modularity.md)
-- [Fronteira com o Prompt 08](workflow-boundary.md)
+- [Fronteira entre entidade e workflow](workflow-boundary.md)
+- [Fronteira com o Prompt 09 — Orçamentos](quote-boundary.md)
 
 ## A decisão que define o módulo
 

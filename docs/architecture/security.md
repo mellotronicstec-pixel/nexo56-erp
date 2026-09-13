@@ -77,6 +77,38 @@
 | Relato do cliente em log ou evento               | auditoria guarda o tamanho; log registra só a operação        | teste de integração                     |
 | Exclusão de OS                                   | não existe caminho de `DELETE` na aplicação                   | revisão de código + teste de componente |
 
+## Implementado e verificado — Workflow da Ordem de Serviço (Prompt 08)
+
+| Proteção                                             | Como                                                                            | Verificação                         |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------- | ----------------------------------- |
+| `status` escrito fora do workflow                    | uma porta só: `transitionServiceOrder`                                          | revisão de código + teste           |
+| Transição não prevista na matriz                     | `findTransition` recusa e `explainRefusal` explica                              | teste de integração                 |
+| Transição a partir de estado terminal                | `transitionsFrom` devolve vazio para `completed`/`cancelled`                    | teste de integração                 |
+| Aguardando Cliente Retirar alcançada pelo seletor    | transição `actionOnly`, recusada sem `via`                                      | teste de integração                 |
+| Cliente avisado antes da preparação concluída        | condição verificada na ação, não só na tela                                     | teste de integração                 |
+| Mover ordem de outra unidade com a unidade A ativa   | `authorize(…, { unitId: order.unitId })` — unidade **da ordem**                 | teste de integração                 |
+| Ordem de outra empresa/unidade movida pelo UUID      | `loadOrderForWorkflow` escopado; responde "não encontrada"                      | teste de integração                 |
+| Finalizar sem permissão própria                      | `service_orders.complete` na regra da transição                                 | teste de integração                 |
+| Cancelar sem permissão própria ou sem motivo         | `service_orders.cancel` + `requiresReason`                                      | teste de integração                 |
+| Gravação concorrente sobrescrevendo a anterior       | `version` + compare-and-swap; zero linhas ⇒ transação inteira volta atrás       | **duas transições simultâneas**     |
+| Duplo clique concluindo a mesma tarefa duas vezes    | `WHERE status = 'open'` no próprio `UPDATE`                                     | teste de integração                 |
+| Duas tarefas abertas do mesmo tipo na mesma ordem    | UNIQUE `(service_order_id, kind, open_marker)`                                  | teste com SQL direto (`ERROR 1062`) |
+| Técnico de outra empresa, inativo ou sem vínculo     | consulta de vínculo na hora + FK composta `(assigned_technician_id, tenant_id)` | teste de integração + SQL direto    |
+| Tarefa de outra unidade concluída pelo UUID          | escopo + "não encontrada"                                                       | teste de integração                 |
+| Evento de follow-up vencido emitido mais de uma vez  | `follow_up_alerted_for` no `WHERE` do `UPDATE`                                  | duas varreduras simultâneas         |
+| Relato do cliente em evento de workflow              | payload só com chaves técnicas                                                  | teste com frase reconhecível        |
+| Leitura errada de "linhas afetadas" anulando a trava | `affectedRows()` centralizado, com teste próprio                                | teste unitário                      |
+
+### O que NÃO está protegido porque não existe
+
+Não há envio de WhatsApp, e-mail ou qualquer comunicação externa (Prompt 16).
+A ação "Informar Ordem Disponível" registra a **intenção** — o evento carrega
+`delivered: false` e a interface diz isso em texto. Não há, portanto, superfície
+de envio para proteger; quando ela existir, terá seu próprio quadro aqui.
+
+Nenhum evento do outbox é consumido: não há handler, não há automação, não há
+Rule Engine (Prompt 19).
+
 ## Limitações conhecidas
 
 ### Rate limit conta por processo

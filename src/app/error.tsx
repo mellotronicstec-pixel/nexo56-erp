@@ -23,7 +23,7 @@ export default function GlobalError({
 
   return (
     <main className="flex min-h-dvh items-center justify-center px-4">
-      <div className="max-w-md text-center">
+      <div className="max-w-[28rem] text-center">
         <h1 className="font-heading text-h3 font-semibold text-ink-900">Algo deu errado</h1>
         <p className="mt-2 text-ui text-ink-500">
           Nao foi possivel concluir esta operacao. Tente novamente em instantes.

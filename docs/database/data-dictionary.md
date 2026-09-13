@@ -230,32 +230,57 @@ servidos por rota autenticada (ADR-030).
 
 ## `service_orders` (Prompt 07)
 
-| Coluna               | Tipo           | Obrig.     | Significado                                                                                                                |
-| -------------------- | -------------- | ---------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `unit_id`            | `CHAR(36)`     | **NN**, FK | Unidade que assumiu o serviço. Vem de `context.activeUnitId`, **nunca do formulário**. Não muda depois da abertura         |
-| `number`             | `INT UNSIGNED` | NN         | Número humano, **único por tenant**. Guarda só o valor; prefixo e zeros à esquerda vivem em `tenant_sequences`             |
-| `customer_id`        | `CHAR(36)`     | NN, FK     | Dono do aparelho. Derivado do equipamento, não aceito da entrada                                                           |
-| `equipment_id`       | `CHAR(36)`     | NN, FK     | Aparelho atendido                                                                                                          |
-| `intake_id`          | `CHAR(36)`     | opcional   | Recebimento de origem. **Nulo = OS aberta direto do cadastro**. Único por tenant quando presente                           |
-| `status`             | `VARCHAR(40)`  | NN         | Um único valor hoje: `awaiting_technical_opinion`. `VARCHAR` e não `ENUM` para o Prompt 08 acrescentar estados sem `ALTER` |
-| `customer_report` 🔒 | `TEXT`         | NN         | O que o **cliente** relatou. Não é diagnóstico. Pode conter dado pessoal incidental                                        |
-| `internal_notes`     | `TEXT`         | opcional   | Recado da equipe. Não é apresentado ao cliente                                                                             |
-| `opened_at`          | `DATETIME(3)`  | NN         | Instante da abertura, **UTC**                                                                                              |
-| `idempotency_key`    | `VARCHAR(80)`  | opcional   | Chave do comando de criação. Única por tenant; **cada `NULL` é distinto**                                                  |
+| Coluna                   | Tipo           | Obrig.       | Significado                                                                                                                     |
+| ------------------------ | -------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| `unit_id`                | `CHAR(36)`     | **NN**, FK   | Unidade que assumiu o serviço. Vem de `context.activeUnitId`, **nunca do formulário**. Não muda depois da abertura              |
+| `number`                 | `INT UNSIGNED` | NN           | Número humano, **único por tenant**. Guarda só o valor; prefixo e zeros à esquerda vivem em `tenant_sequences`                  |
+| `customer_id`            | `CHAR(36)`     | NN, FK       | Dono do aparelho. Derivado do equipamento, não aceito da entrada                                                                |
+| `equipment_id`           | `CHAR(36)`     | NN, FK       | Aparelho atendido                                                                                                               |
+| `intake_id`              | `CHAR(36)`     | opcional     | Recebimento de origem. **Nulo = OS aberta direto do cadastro**. Único por tenant quando presente                                |
+| `status`                 | `VARCHAR(40)`  | NN           | Um dos nove estados do workflow. `VARCHAR` e não `ENUM`: o Prompt 08 acrescentou oito estados **sem um único `ALTER … MODIFY`** |
+| `customer_report` 🔒     | `TEXT`         | NN           | O que o **cliente** relatou. Não é diagnóstico. Pode conter dado pessoal incidental                                             |
+| `internal_notes`         | `TEXT`         | opcional     | Recado da equipe. Não é apresentado ao cliente                                                                                  |
+| `opened_at`              | `DATETIME(3)`  | NN           | Instante da abertura, **UTC**                                                                                                   |
+| `idempotency_key`        | `VARCHAR(80)`  | opcional     | Chave do comando de criação. Única por tenant; **cada `NULL` é distinto**                                                       |
+| `status_changed_at`      | `DATETIME(3)`  | opcional     | **P08** — instante da última transição, **UTC**. Nulo nas ordens anteriores à migração                                          |
+| `version`                | `INT UNSIGNED` | NN (=1)      | **P08** — concorrência otimista. Sobe a cada transição; o `UPDATE` compara com a versão que a pessoa leu                        |
+| `assigned_technician_id` | `CHAR(36)`     | opcional, FK | **P08** — responsável. FK composta com `tenant_id`; vínculo com a unidade é verificado na hora de atribuir                      |
+| `follow_up_at`           | `VARCHAR(10)`  | opcional     | **P08** — **data civil** ISO no fuso da empresa, não instante (ADR-039). Nulo = fora do radar de pendências                     |
+| `follow_up_alerted_for`  | `VARCHAR(10)`  | opcional     | **P08** — prazo para o qual o evento de vencimento já saiu. Idempotência do job sem tabela de alertas                           |
 
 ## `service_order_timeline` (Prompt 07)
 
-| Coluna             | Tipo           | Obrig.   | Significado                                                                                         |
-| ------------------ | -------------- | -------- | --------------------------------------------------------------------------------------------------- |
-| `service_order_id` | `CHAR(36)`     | NN, FK   | Ordem a que o fato pertence. FK composta com `tenant_id`                                            |
-| `kind`             | `VARCHAR(40)`  | NN       | `created`, `customer_report_updated`, `details_updated`. Texto para o Prompt 08 acrescentar os seus |
-| `summary`          | `VARCHAR(300)` | opcional | Resumo legível. **Nunca carrega o relato do cliente**                                               |
-| `metadata`         | `JSON`         | opcional | Detalhe estruturado do fato. Também sem PII                                                         |
-| `actor_id`         | `CHAR(36)`     | opcional | Quem provocou o fato. Nulo = sistema                                                                |
-| `occurred_at`      | `DATETIME(3)`  | NN       | Quando aconteceu, **UTC**                                                                           |
+| Coluna             | Tipo           | Obrig.   | Significado                                                                                                      |
+| ------------------ | -------------- | -------- | ---------------------------------------------------------------------------------------------------------------- |
+| `service_order_id` | `CHAR(36)`     | NN, FK   | Ordem a que o fato pertence. FK composta com `tenant_id`                                                         |
+| `kind`             | `VARCHAR(40)`  | NN       | Nove tipos hoje; texto, e foi por isso que o Prompt 08 acrescentou seis **sem migration**                        |
+| `summary`          | `VARCHAR(300)` | opcional | Resumo legível. **Nunca carrega o relato do cliente**                                                            |
+| `metadata`         | `JSON`         | opcional | Detalhe estruturado do fato — só chaves técnicas (`{ from, to, via }`). Também sem PII                           |
+| `reason`           | `VARCHAR(300)` | opcional | **P08** — justificativa escrita de uma transição (obrigatória no cancelamento). Texto humano, fora do `metadata` |
+| `actor_id`         | `CHAR(36)`     | opcional | Quem provocou o fato. Nulo = sistema                                                                             |
+| `occurred_at`      | `DATETIME(3)`  | NN       | Quando aconteceu, **UTC**                                                                                        |
 
 Tabela **append-only**: é a narrativa de negócio da ordem, distinta da trilha de
 segurança em `audit_logs`.
+
+## `service_order_tasks` (Prompt 08)
+
+| Coluna                          | Tipo           | Obrig.       | Significado                                                                                           |
+| ------------------------------- | -------------- | ------------ | ----------------------------------------------------------------------------------------------------- |
+| `unit_id`                       | `CHAR(36)`     | **NN**, FK   | Unidade da ordem. FK composta com `tenant_id`                                                         |
+| `service_order_id`              | `CHAR(36)`     | NN, FK       | Ordem a que a tarefa pertence. FK composta; `ON DELETE CASCADE`                                       |
+| `kind`                          | `VARCHAR(40)`  | NN           | `delivery_preparation` ou `part_pickup`. **Não é situação da OS** — é trabalho prático                |
+| `title`                         | `VARCHAR(160)` | NN           | Texto oficial da tarefa, lido na bancada                                                              |
+| `description`                   | `VARCHAR(500)` | opcional     | Detalhe. Em `part_pickup`, texto livre: qual peça e onde buscar (catálogo é dos Prompts 10 e 11)      |
+| `assignee_id`                   | `CHAR(36)`     | opcional, FK | Responsável. **Nulo quando quem abriu a OS perdeu acesso** — melhor sem dono do que com dono sorteado |
+| `due_date`                      | `VARCHAR(10)`  | opcional     | **Data civil** ISO no fuso da empresa                                                                 |
+| `status`                        | `VARCHAR(20)`  | NN (=`open`) | `open` \| `done` \| `cancelled`                                                                       |
+| `open_marker`                   | `TINYINT`      | opcional     | `1` enquanto aberta, `NULL` depois. Com a UNIQUE, garante **uma tarefa aberta por tipo, por ordem**   |
+| `completed_at` / `completed_by` | —              | opcional     | Quando e por quem foi concluída                                                                       |
+
+`UNIQUE (service_order_id, kind, open_marker)`: como o MySQL trata cada `NULL`
+como distinto, duas tarefas **abertas** do mesmo tipo são impossíveis e as
+encerradas se acumulam à vontade. Mesmo padrão do contato principal do cliente.
 
 ---
 

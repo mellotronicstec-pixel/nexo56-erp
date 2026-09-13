@@ -577,6 +577,181 @@ describe('upgrade incremental entre prompts', () => {
     }
   });
 
+  it('leva um banco do Prompt 07, com Ordens de Servico abertas, ate o Prompt 08 sem perda', async () => {
+    const stepDb = 'nexo56_migration_step08_test';
+    await adminConnection.query(`DROP DATABASE IF EXISTS \`${stepDb}\``);
+    await adminConnection.query(
+      `CREATE DATABASE \`${stepDb}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`,
+    );
+
+    const folder = buildFolderUpTo('0005');
+    const connection = await mysql.createConnection({
+      uri: urlForDatabase(stepDb),
+      timezone: 'Z',
+      multipleStatements: true,
+    });
+
+    try {
+      // --- banco no estado do Prompt 07 --------------------------------------
+      await migrate(drizzle(connection), { migrationsFolder: folder });
+
+      const [beforeTables] = await connection.query<mysql.RowDataPacket[]>('SHOW TABLES');
+      const beforeNames = beforeTables.map((row) => Object.values(row)[0] as string);
+      expect(beforeNames).toContain('service_orders');
+      expect(beforeNames).not.toContain('service_order_tasks');
+
+      await connection.query(`
+        INSERT INTO plans (id, \`key\`, name, description, is_internal, created_at, updated_at)
+        VALUES ('plan-p7', 'internal', 'Plano interno', '', 1, NOW(3), NOW(3));
+
+        INSERT INTO tenants (id, slug, name, status, timezone, plan_id, created_at, updated_at)
+        VALUES ('tenant-p7', 'empresa-p7', 'Empresa P7', 'active', 'America/Sao_Paulo', 'plan-p7', NOW(3), NOW(3));
+
+        INSERT INTO units (id, tenant_id, name, status, created_at, updated_at)
+        VALUES ('unit-p7', 'tenant-p7', 'Unidade P7', 'active', NOW(3), NOW(3)),
+               ('unit-p7b', 'tenant-p7', 'Unidade P7 Norte', 'active', NOW(3), NOW(3));
+
+        INSERT INTO users (id, tenant_id, email, name, password_hash, status, created_at, updated_at)
+        VALUES ('user-p7', 'tenant-p7', 'p7@empresa.invalid', 'Usuario P7', 'scrypt$65536$8$2$c2FsdA==$aGFzaA==', 'active', NOW(3), NOW(3));
+
+        INSERT INTO user_units (user_id, unit_id, tenant_id, created_at)
+        VALUES ('user-p7', 'unit-p7', 'tenant-p7', NOW(3));
+
+        INSERT INTO customers
+          (id, tenant_id, kind, name, name_normalized, status, created_at, updated_at, created_by)
+        VALUES ('cli-p7', 'tenant-p7', 'individual', 'Pedro Alves', 'pedro alves', 'active', NOW(3), NOW(3), 'user-p7');
+
+        INSERT INTO equipment
+          (id, tenant_id, customer_id, kind, kind_normalized, voltage, status,
+           created_at, updated_at, created_by)
+        VALUES ('eq-p7', 'tenant-p7', 'cli-p7', 'Televisor', 'televisor', 'bivolt', 'active',
+                NOW(3), NOW(3), 'user-p7');
+
+        INSERT INTO service_orders
+          (id, tenant_id, unit_id, number, customer_id, equipment_id,
+           status, customer_report, internal_notes, opened_at, created_by, created_at, updated_at)
+        VALUES
+          ('so-p7-a', 'tenant-p7', 'unit-p7', 1, 'cli-p7', 'eq-p7',
+           'awaiting_technical_opinion', 'Nao liga desde a queda de energia.', 'Cliente apressado.',
+           NOW(3), 'user-p7', NOW(3), NOW(3)),
+          ('so-p7-b', 'tenant-p7', 'unit-p7', 2, 'cli-p7', 'eq-p7',
+           'awaiting_technical_opinion', 'Imagem tremendo.', NULL,
+           NOW(3), 'user-p7', NOW(3), NOW(3));
+
+        INSERT INTO service_order_timeline
+          (id, tenant_id, service_order_id, kind, summary, actor_id, occurred_at)
+        VALUES ('tl-p7-a', 'tenant-p7', 'so-p7-a', 'created', 'Ordem de Servico aberta',
+                'user-p7', NOW(3));
+      `);
+
+      // --- aplica o Prompt 08 -------------------------------------------------
+      await migrate(drizzle(connection), { migrationsFolder: './drizzle' });
+
+      const [rows] = await connection.query<mysql.RowDataPacket[]>(`
+        SELECT
+          (SELECT COUNT(*) FROM service_orders)         AS ordens,
+          (SELECT COUNT(*) FROM service_order_timeline) AS linha,
+          (SELECT COUNT(*) FROM service_order_tasks)    AS tarefas,
+          (SELECT customer_report FROM service_orders WHERE id='so-p7-a') AS relato,
+          (SELECT internal_notes  FROM service_orders WHERE id='so-p7-a') AS observacao,
+          (SELECT status  FROM service_orders WHERE id='so-p7-a')         AS situacao,
+          (SELECT number  FROM service_orders WHERE id='so-p7-b')         AS numero_b
+      `);
+
+      // Nada perdido, nada reescrito.
+      expect(rows[0]).toMatchObject({
+        ordens: 2,
+        linha: 1,
+        tarefas: 0,
+        relato: 'Nao liga desde a queda de energia.',
+        observacao: 'Cliente apressado.',
+        situacao: 'awaiting_technical_opinion',
+        numero_b: 2,
+      });
+
+      /**
+       * AS ORDENS ANTIGAS ENTRAM NO WORKFLOW NA VERSAO 1 (itens 97 e 99).
+       *
+       * A migration e ADITIVA: nao reescreve estado nem inventa follow-up
+       * retroativo. Uma OS parada ha meses nao deve aparecer "vencida" no dia
+       * do deploy so porque a coluna passou a existir.
+       */
+      const [ordens] = await connection.query<mysql.RowDataPacket[]>(
+        'SELECT id, version, follow_up_at, follow_up_alerted_for, status_changed_at, assigned_technician_id FROM service_orders ORDER BY number',
+      );
+      for (const ordem of ordens) {
+        expect(ordem.version).toBe(1);
+        expect(ordem.follow_up_at).toBeNull();
+        expect(ordem.follow_up_alerted_for).toBeNull();
+        expect(ordem.status_changed_at).toBeNull();
+        expect(ordem.assigned_technician_id).toBeNull();
+      }
+
+      const [afterTables] = await connection.query<mysql.RowDataPacket[]>('SHOW TABLES');
+      expect(afterTables.map((row) => Object.values(row)[0] as string)).toContain(
+        'service_order_tasks',
+      );
+
+      // A tarefa nasce presa a ordem E a unidade dela, pelo PAR (id, tenant).
+      await connection.query(`
+        INSERT INTO service_order_tasks
+          (id, tenant_id, unit_id, service_order_id, kind, title, status, open_marker,
+           created_at, updated_at)
+        VALUES ('task-p7-a', 'tenant-p7', 'unit-p7', 'so-p7-a', 'delivery_preparation',
+                'Preparar equipamento para entrega', 'open', 1, NOW(3), NOW(3))
+      `);
+
+      // DUAS tarefas abertas do mesmo tipo na mesma ordem: recusado pelo BANCO.
+      await expect(
+        connection.query(`
+          INSERT INTO service_order_tasks
+            (id, tenant_id, unit_id, service_order_id, kind, title, status, open_marker,
+             created_at, updated_at)
+          VALUES ('task-p7-b', 'tenant-p7', 'unit-p7', 'so-p7-a', 'delivery_preparation',
+                  'Preparar equipamento para entrega', 'open', 1, NOW(3), NOW(3))
+        `),
+      ).rejects.toThrow();
+
+      // Encerrada, ela libera espaco para a proxima: `open_marker` vira NULL e
+      // cada NULL e distinto no UNIQUE do MySQL.
+      await connection.query(
+        "UPDATE service_order_tasks SET status='done', open_marker=NULL WHERE id='task-p7-a'",
+      );
+      await connection.query(`
+        INSERT INTO service_order_tasks
+          (id, tenant_id, unit_id, service_order_id, kind, title, status, open_marker,
+           created_at, updated_at)
+        VALUES ('task-p7-c', 'tenant-p7', 'unit-p7', 'so-p7-a', 'delivery_preparation',
+                'Preparar equipamento para entrega', 'open', 1, NOW(3), NOW(3))
+      `);
+
+      // Tecnico de OUTRA empresa e recusado pelo banco, nao so pela aplicacao.
+      await connection.query(`
+        INSERT INTO tenants (id, slug, name, status, timezone, plan_id, created_at, updated_at)
+        VALUES ('tenant-p7b', 'empresa-p7b', 'Empresa P7B', 'active', 'UTC', 'plan-p7', NOW(3), NOW(3));
+
+        INSERT INTO users (id, tenant_id, email, name, password_hash, status, created_at, updated_at)
+        VALUES ('user-p7b', 'tenant-p7b', 'p7b@empresa.invalid', 'De Outra Empresa', 'scrypt$65536$8$2$c2FsdA==$aGFzaA==', 'active', NOW(3), NOW(3));
+      `);
+      await expect(
+        connection.query(
+          "UPDATE service_orders SET assigned_technician_id='user-p7b' WHERE id='so-p7-a'",
+        ),
+      ).rejects.toThrow();
+
+      // E a ordem apagada leva suas tarefas junto (ON DELETE CASCADE).
+      await connection.query("DELETE FROM service_orders WHERE id = 'so-p7-a'");
+      const [restantes] = await connection.query<mysql.RowDataPacket[]>(
+        'SELECT COUNT(*) AS total FROM service_order_tasks',
+      );
+      expect(restantes[0]).toMatchObject({ total: 0 });
+    } finally {
+      await connection.end();
+      rmSync(folder, { recursive: true, force: true });
+      await adminConnection.query(`DROP DATABASE IF EXISTS \`${stepDb}\``);
+    }
+  });
+
   it('cria um banco vazio do zero com todas as migrations', async () => {
     const freshDb = 'nexo56_migration_fresh_test';
     await adminConnection.query(`DROP DATABASE IF EXISTS \`${freshDb}\``);
@@ -635,6 +810,8 @@ describe('upgrade incremental entre prompts', () => {
           // Prompt 07
           'service_orders',
           'service_order_timeline',
+          // Prompt 08
+          'service_order_tasks',
         ]),
       );
     } finally {

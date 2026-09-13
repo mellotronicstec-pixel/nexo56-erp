@@ -276,22 +276,43 @@ erDiagram
         char36 customer_id FK "FK composta com tenant_id"
         char36 equipment_id FK "FK composta com tenant_id"
         char36 intake_id UK "nulo = sem recebimento; FK composta com tenant_id E com unit_id"
-        varchar status "um unico estado hoje; varchar para o Prompt 08"
+        varchar status "um dos nove estados do workflow; varchar, nunca ENUM"
         text customer_report "o que o CLIENTE disse - nao e diagnostico"
         text internal_notes "recado da equipe, nao vai ao cliente"
         datetime opened_at
         varchar idempotency_key UK "mesmo comando, mesma OS"
+        datetime status_changed_at "P08 - instante da ultima transicao"
+        int version "P08 - concorrencia otimista, compare-and-swap"
+        char36 assigned_technician_id FK "P08 - FK composta com tenant_id"
+        varchar follow_up_at "P08 - DATA CIVIL no fuso da empresa, nao instante"
+        varchar follow_up_alerted_for "P08 - prazo que ja gerou evento"
         composite uq_service_order_id_tenant UK "alvo de FK composta"
     }
     SERVICE_ORDER_TIMELINE {
         char36 id PK
         char36 tenant_id FK
         char36 service_order_id FK "FK composta com tenant_id"
-        varchar kind "created customer_report_updated details_updated"
+        varchar kind "nove tipos; texto, para crescer sem migration"
         varchar summary "sem PII"
-        json metadata "sem PII"
+        json metadata "sem PII - so chaves tecnicas"
+        varchar reason "P08 - justificativa escrita da transicao"
         char36 actor_id
         datetime occurred_at
+    }
+    SERVICE_ORDER_TASKS {
+        char36 id PK
+        char36 tenant_id FK
+        char36 unit_id FK "unidade da ordem - FK composta"
+        char36 service_order_id FK "FK composta, ON DELETE CASCADE"
+        varchar kind "delivery_preparation part_pickup - NAO e situacao da OS"
+        varchar title "texto oficial, lido na bancada"
+        varchar description "em part_pickup: texto livre"
+        char36 assignee_id FK "nulo quando quem abriu perdeu acesso"
+        varchar due_date "DATA CIVIL no fuso da empresa"
+        varchar status "open done cancelled"
+        tinyint open_marker UK "1 enquanto aberta, NULL depois"
+        datetime completed_at
+        char36 completed_by
     }
 ```
 

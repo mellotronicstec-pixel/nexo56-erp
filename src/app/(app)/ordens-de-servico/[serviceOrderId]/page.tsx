@@ -11,8 +11,10 @@ import {
   Section,
 } from '@/design-system/components';
 import { IconCamera, IconHistory } from '@/design-system/icons';
+import { can } from '@/modules/access-control/application/authorization-service';
 import { requireAccessForPage } from '@/modules/access-control/application/guard';
 import { PERMISSIONS } from '@/modules/access-control/domain/permissions';
+import { formatCivilDateBR, isOverdue, isDueOrOverdue } from '@/core/time/civil-date';
 import {
   POWER_CABLE_LABEL,
   VOLTAGE_LABEL,
@@ -23,27 +25,59 @@ import { FEATURES } from '@/modules/features/domain/catalog';
 import {
   findServiceOrderDetail,
   getServiceOrderNumberFormat,
+  listUnitMembers,
 } from '@/modules/service-orders/application/service-order-queries';
+import { isDeliveryPreparationDone } from '@/modules/service-orders/application/workflow-service';
 import {
   formatServiceOrderNumber,
-  statusLabel,
   timelineLabel,
 } from '@/modules/service-orders/domain/service-order';
-import { hasPermission } from '@/modules/tenancy/domain/tenant-context';
+import {
+  CANCEL_RULE,
+  TASK_STATUS_LABEL,
+  manualTransitionsFrom,
+  type TaskStatus,
+} from '@/modules/service-orders/domain/workflow';
+import {
+  assignTechnicianAction,
+  cancelServiceOrderAction,
+  completeTaskAction,
+  notifyCustomerReadyAction,
+  requestPartPickupAction,
+  rescheduleFollowUpAction,
+  transitionAction,
+} from '../actions';
+import {
+  CompleteTaskButton,
+  FollowUpPanel,
+  NotifyCustomerPanel,
+  PartPickupPanel,
+  TechnicianPanel,
+  WorkflowPanel,
+  type TransitionOption,
+} from './workflow-panel';
 
 export const metadata: Metadata = { title: 'Ordem de Servico' };
 
 /**
- * Ficha da Ordem de Servico (Prompt 07, itens 51 a 60).
+ * Ficha da Ordem de Servico (Prompt 07, itens 51 a 60; Prompt 08, itens 78 a 86).
  *
  * Esta e a BASE do futuro workspace da OS. Hoje ela mostra exatamente o que
  * existe: identificacao, cliente, aparelho, o que o cliente relatou, o que veio
- * no recebimento e a linha do tempo real.
+ * no recebimento, a situacao no workflow, quem e o responsavel, o proximo
+ * acompanhamento, as tarefas e a linha do tempo real.
  *
  * NAO HA ABA VAZIA (item 58) nem botao sem backend (item 60). Diagnostico,
  * orcamento, pecas e garantia terao seu lugar aqui quando existirem — e aba
  * "em breve" e pior do que a ausencia dela, porque ensina a equipe a ignorar a
  * interface.
+ *
+ * QUEM DECIDE O QUE APARECE NAO E ESTA PAGINA (Prompt 08, item 79). Ela
+ * pergunta a maquina de estados quais transicoes existem a partir da situacao
+ * atual e pergunta ao controle de acesso quais delas esta pessoa pode executar
+ * NA UNIDADE DA ORDEM — que nem sempre e a unidade ativa da sessao. A
+ * revalidacao no servidor continua acontecendo dentro de cada caso de uso: o
+ * que a tela esconde, o backend tambem recusa.
  */
 export default async function ServiceOrderDetailPage({
   params,
@@ -69,13 +103,83 @@ export default async function ServiceOrderDetailPage({
   const number = formatServiceOrderNumber(order.number, numberFormat.prefix, numberFormat.padding);
   const title = equipmentTitle(equipmentItem);
 
-  const canUpdate = hasPermission(context, PERMISSIONS.SERVICE_ORDERS_UPDATE);
+  /**
+   * Permissoes SEMPRE na unidade da ordem (item 81).
+   *
+   * Usar a unidade ativa aqui deixaria alguem com acesso a duas lojas mexer na
+   * ordem da loja B enquanto olha a loja A — e a lista de botoes ficaria
+   * diferente do que o caso de uso aceita.
+   */
+  const unitScope = { featureKey: FEATURES.CORE_SERVICE_ORDERS, unitId: order.unitId } as const;
+  const [
+    canUpdateDecision,
+    canCancelDecision,
+    canAssignDecision,
+    canFollowUpDecision,
+    canTasksDecision,
+  ] = await Promise.all([
+    can(context, { ...unitScope, permission: PERMISSIONS.SERVICE_ORDERS_UPDATE }),
+    can(context, { ...unitScope, permission: CANCEL_RULE.permission }),
+    can(context, { ...unitScope, permission: PERMISSIONS.SERVICE_ORDERS_ASSIGN_TECHNICIAN }),
+    can(context, { ...unitScope, permission: PERMISSIONS.SERVICE_ORDERS_MANAGE_FOLLOW_UP }),
+    can(context, { ...unitScope, permission: PERMISSIONS.SERVICE_ORDERS_MANAGE_TASKS }),
+  ]);
+
+  /**
+   * As transicoes vem da maquina de estados, nao de um `if` nesta pagina. O
+   * filtro por permissao e por transicao porque finalizar exige permissao
+   * propria (item 51).
+   */
+  const candidates = manualTransitionsFrom(order.status).filter(
+    (rule) => rule.to !== CANCEL_RULE.to,
+  );
+  const allowed = await Promise.all(
+    candidates.map((rule) => can(context, { ...unitScope, permission: rule.permission })),
+  );
+  const transitions: TransitionOption[] = candidates
+    .filter((_, index) => allowed[index]?.allowed === true)
+    .map((rule) => ({
+      to: rule.to,
+      label: rule.label,
+      requiresReason: rule.requiresReason === true,
+      ...(rule.hint ? { hint: rule.hint } : {}),
+    }));
+
+  const cancelOption: TransitionOption | null =
+    canCancelDecision.allowed && manualTransitionsFrom(order.status).length > 0
+      ? {
+          to: CANCEL_RULE.to,
+          label: CANCEL_RULE.label,
+          requiresReason: true,
+          ...(CANCEL_RULE.hint ? { hint: CANCEL_RULE.hint } : {}),
+        }
+      : null;
+
+  /**
+   * A lista de responsaveis so e consultada quando a pessoa pode atribuir, e a
+   * condicao da acao "Informar Ordem Disponivel" so e consultada no estado em
+   * que ela existe — nao ha consulta paga para desenhar o que nao aparece.
+   */
+  const [members, preparationDone] = await Promise.all([
+    canAssignDecision.allowed ? listUnitMembers(context, order.unitId) : Promise.resolve([]),
+    order.status === 'awaiting_delivery_preparation'
+      ? isDeliveryPreparationDone(context, order.id)
+      : Promise.resolve(false),
+  ]);
 
   const formatter = new Intl.DateTimeFormat('pt-BR', {
     dateStyle: 'short',
     timeStyle: 'short',
     timeZone: context.tenantTimezone,
   });
+
+  const openTasks = detail.tasks.filter((task) => task.status === 'open');
+  const followUpLate = order.followUpAt
+    ? isOverdue(order.followUpAt, context.tenantTimezone)
+    : false;
+  const followUpDue = order.followUpAt
+    ? isDueOrOverdue(order.followUpAt, context.tenantTimezone)
+    : false;
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -104,7 +208,7 @@ export default async function ServiceOrderDetailPage({
           </>
         }
         actions={
-          canUpdate ? (
+          canUpdateDecision.allowed ? (
             <Link
               href={`/ordens-de-servico/${order.id}/editar`}
               className={linkButtonClass('secondary')}
@@ -115,22 +219,170 @@ export default async function ServiceOrderDetailPage({
         }
       />
 
+      {/*
+        SITUACAO E ACOES juntas, no topo (itens 78 e 84). Quem abre a ficha no
+        celular precisa ver onde a ordem esta e o que fazer em seguida sem
+        rolar a tela.
+      */}
+      <WorkflowPanel
+        serviceOrderId={order.id}
+        status={order.status}
+        version={order.version}
+        transitions={transitions}
+        canCancel={cancelOption}
+        transitionAction={transitionAction}
+        cancelAction={cancelServiceOrderAction}
+      />
+
       <Card>
         <CardBody>
           <dl className="grid gap-4 text-ui sm:grid-cols-2">
             <div>
-              <dt className="text-small text-ink-500">Situacao</dt>
-              <dd className="mt-1">
-                <Badge>{statusLabel(order.status)}</Badge>
+              <dt className="text-small text-ink-500">Aberta por</dt>
+              <dd className="text-ink-900">{openedByName ?? 'Sistema'}</dd>
+            </div>
+            <div>
+              <dt className="text-small text-ink-500">Tecnico responsavel</dt>
+              <dd className="text-ink-900">
+                {detail.technicianName ?? 'Ainda sem responsavel definido'}
               </dd>
             </div>
             <div>
-              <dt className="text-small text-ink-500">Aberta por</dt>
-              <dd className="text-ink-900">{openedByName ?? 'Sistema'}</dd>
+              <dt className="text-small text-ink-500">Proximo acompanhamento</dt>
+              <dd className="text-ink-900">
+                {order.followUpAt ? (
+                  <span className="flex flex-wrap items-center gap-2">
+                    {formatCivilDateBR(order.followUpAt)}
+                    {/* Cor com rotulo em texto ao lado (item 86). */}
+                    {followUpLate ? (
+                      <Badge tone="danger">Vencido</Badge>
+                    ) : followUpDue ? (
+                      <Badge tone="warning">Vence hoje</Badge>
+                    ) : null}
+                  </span>
+                ) : (
+                  'Sem acompanhamento agendado'
+                )}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-small text-ink-500">Tarefas abertas</dt>
+              <dd className="text-ink-900">
+                {openTasks.length === 0 ? 'Nenhuma' : `${openTasks.length} tarefa(s)`}
+              </dd>
             </div>
           </dl>
         </CardBody>
       </Card>
+
+      {/*
+        RESPONSABILIDADE E ACOMPANHAMENTO (itens 26 a 29 e 39). Cada painel so
+        aparece para quem tem a permissao correspondente NA UNIDADE DA ORDEM.
+      */}
+      {canAssignDecision.allowed || canFollowUpDecision.allowed ? (
+        <Section
+          id="acompanhamento"
+          title="Responsabilidade e acompanhamento"
+          description="Quem conserta e quando esta ordem volta a pedir atencao."
+        >
+          <Card>
+            <CardBody className="grid gap-6 sm:grid-cols-2">
+              {canAssignDecision.allowed ? (
+                <TechnicianPanel
+                  serviceOrderId={order.id}
+                  technicianId={order.assignedTechnicianId}
+                  members={members}
+                  action={assignTechnicianAction}
+                />
+              ) : null}
+              {canFollowUpDecision.allowed ? (
+                <FollowUpPanel
+                  serviceOrderId={order.id}
+                  followUpAt={order.followUpAt}
+                  action={rescheduleFollowUpAction}
+                />
+              ) : null}
+            </CardBody>
+          </Card>
+        </Section>
+      ) : null}
+
+      {/*
+        TAREFAS (itens 22, 23, 30 a 32). Tarefa NAO e situacao: a ordem pode
+        estar Aguardando Peca com ou sem a tarefa de busca aberta, e concluir a
+        preparacao nao muda a situacao sozinho.
+      */}
+      <Section
+        id="tarefas"
+        title="Tarefas"
+        description="O trabalho pratico desta ordem. Concluir uma tarefa nao muda a situacao sozinho."
+      >
+        <Card>
+          <CardBody className="space-y-4">
+            {detail.tasks.length === 0 ? (
+              <p className="text-ui text-ink-600">Nenhuma tarefa registrada nesta ordem.</p>
+            ) : (
+              <ul className="divide-y divide-ink-200">
+                {detail.tasks.map((task) => {
+                  const late =
+                    task.status === 'open' &&
+                    task.dueDate !== null &&
+                    isOverdue(task.dueDate, context.tenantTimezone);
+
+                  return (
+                    <li key={task.id} className="py-3 first:pt-0 last:pb-0">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <p className="font-medium text-ink-900">{task.title}</p>
+                        <span className="flex flex-wrap items-center gap-2">
+                          <Badge tone={task.status === 'done' ? 'success' : 'neutral'}>
+                            {TASK_STATUS_LABEL[task.status as TaskStatus] ?? task.status}
+                          </Badge>
+                          {late ? <Badge tone="danger">Atrasada</Badge> : null}
+                        </span>
+                      </div>
+                      {task.description ? (
+                        <p className="mt-1 text-ui text-ink-700">{task.description}</p>
+                      ) : null}
+                      <p className="mt-1 text-small text-ink-500">
+                        {task.dueDate ? `Prazo ${formatCivilDateBR(task.dueDate)}` : 'Sem prazo'}
+                        {task.assigneeName ? ` · ${task.assigneeName}` : ''}
+                        {task.completedAt
+                          ? ` · Concluida em ${formatter.format(task.completedAt)}`
+                          : ''}
+                      </p>
+                      {task.status === 'open' && canTasksDecision.allowed ? (
+                        <CompleteTaskButton taskId={task.id} action={completeTaskAction} />
+                      ) : null}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+
+            {/*
+              "Buscar Peca" e ACAO, nao estado (itens 13 e 16): a ordem segue
+              Aguardando Peca depois de registrada.
+            */}
+            {order.status === 'awaiting_part' && canTasksDecision.allowed ? (
+              <PartPickupPanel serviceOrderId={order.id} action={requestPartPickupAction} />
+            ) : null}
+
+            {/*
+              "Informar Ordem Disponivel" e a UNICA porta para Aguardando
+              Cliente Retirar (itens 17, 62 e 132), e depende da preparacao
+              concluida.
+            */}
+            {order.status === 'awaiting_delivery_preparation' ? (
+              <NotifyCustomerPanel
+                serviceOrderId={order.id}
+                version={order.version}
+                ready={preparationDone}
+                action={notifyCustomerReadyAction}
+              />
+            ) : null}
+          </CardBody>
+        </Card>
+      </Section>
 
       {/*
         RELATO DO CLIENTE em bloco proprio, com rotulo explicito de que nao e
@@ -325,6 +577,16 @@ export default async function ServiceOrderDetailPage({
                     <p className="font-medium text-ink-900">
                       {entry.summary ?? timelineLabel(entry.kind)}
                     </p>
+                    {/*
+                      O MOTIVO ESCRITO APARECE AQUI (item 108). Exigir a
+                      justificativa no cancelamento e guarda-la sem nunca
+                      mostra-la transformaria a exigencia em burocracia: quem
+                      abre a ficha meses depois precisa ler POR QUE a ordem foi
+                      encerrada, nao so que foi.
+                    */}
+                    {entry.reason ? (
+                      <p className="whitespace-pre-wrap text-ui text-ink-700">{entry.reason}</p>
+                    ) : null}
                     <p className="text-small text-ink-500">
                       {formatter.format(entry.occurredAt)}
                       {entry.actorName ? ` · ${entry.actorName}` : ''}

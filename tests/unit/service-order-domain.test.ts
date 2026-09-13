@@ -3,6 +3,7 @@ import {
   CUSTOMER_REPORT_MAX,
   INTERNAL_NOTES_MAX,
   SERVICE_ORDER_INITIAL_STATUS,
+  SERVICE_ORDER_STATUSES,
   SERVICE_ORDER_STATUS_LABEL,
   TIMELINE_KINDS,
   buildLabelData,
@@ -57,26 +58,34 @@ describe('numero humano (itens 13, 18 e 19)', () => {
   });
 });
 
-describe('estado inicial (itens 25, 26 e 27)', () => {
-  it('existe um unico estado, e e o inicial', () => {
-    // Se este teste quebrar porque alguem acrescentou estados aqui, a maquina
-    // de estados esta sendo antecipada — ela pertence ao Prompt 08.
-    expect(Object.keys(SERVICE_ORDER_STATUS_LABEL)).toEqual([SERVICE_ORDER_INITIAL_STATUS]);
-  });
-
+describe('estado inicial (Prompt 07, itens 25 a 27; formalizado no Prompt 08)', () => {
   it('o estado inicial e aguardando parecer tecnico', () => {
     expect(SERVICE_ORDER_INITIAL_STATUS).toBe('awaiting_technical_opinion');
-    expect(statusLabel(SERVICE_ORDER_INITIAL_STATUS)).toBe('Aguardando parecer tecnico');
+    expect(statusLabel(SERVICE_ORDER_INITIAL_STATUS)).toBe('Aguardando Parecer Tecnico');
   });
 
   it('estado desconhecido volta como veio, sem inventar rotulo', () => {
-    expect(statusLabel('estado_do_prompt_08')).toBe('estado_do_prompt_08');
+    expect(statusLabel('estado_que_nao_existe')).toBe('estado_que_nao_existe');
   });
 
-  it('nao ha estado que seja uma ACAO (item 27)', () => {
-    const proibidos = ['buscar_peca', 'enviar_orcamento', 'informar_disponivel'];
+  it('todo estado declarado tem rotulo em pt-BR', () => {
+    for (const status of SERVICE_ORDER_STATUSES) {
+      expect(SERVICE_ORDER_STATUS_LABEL[status]).toBeTruthy();
+    }
+  });
+
+  it('nao ha estado que seja uma ACAO (item 27 do Prompt 07; item 13 do Prompt 08)', () => {
+    // A trava continua valendo depois do Prompt 08: "buscar peca" e "informar
+    // disponivel" ganharam implementacao como ACAO, nunca como situacao.
+    const proibidos = [
+      'buscar_peca',
+      'enviar_orcamento',
+      'informar_disponivel',
+      'part_pickup',
+      'notify_customer',
+    ];
     for (const chave of proibidos) {
-      expect(SERVICE_ORDER_STATUS_LABEL[chave]).toBeUndefined();
+      expect((SERVICE_ORDER_STATUS_LABEL as Record<string, string>)[chave]).toBeUndefined();
     }
   });
 });
@@ -165,16 +174,31 @@ describe('etiqueta fisica (itens 81 a 85)', () => {
 });
 
 describe('linha do tempo (itens 37 e 38)', () => {
-  it('so declara os fatos que ja acontecem neste prompt', () => {
+  it('so declara fatos que acontecem de verdade', () => {
+    // Cresceu com o Prompt 08, que trouxe os fatos de workflow. Cada entrada
+    // aqui corresponde a algo que o codigo escreve — nao ha tipo reservado
+    // para o futuro.
     expect(Object.values(TIMELINE_KINDS).sort()).toEqual([
       'created',
+      'customer_notification_requested',
       'customer_report_updated',
       'details_updated',
+      'follow_up_rescheduled',
+      'part_pickup_requested',
+      'status_changed',
+      'task_completed',
+      'technician_assigned',
     ]);
   });
 
-  it('tipo desconhecido volta como veio — o Prompt 08 acrescenta os seus', () => {
-    expect(timelineLabel('status_changed')).toBe('status_changed');
+  it('todo tipo declarado tem rotulo legivel', () => {
+    for (const kind of Object.values(TIMELINE_KINDS)) {
+      expect(timelineLabel(kind)).not.toBe(kind);
+    }
+  });
+
+  it('tipo desconhecido volta como veio, sem inventar rotulo', () => {
+    expect(timelineLabel('fato_do_prompt_09')).toBe('fato_do_prompt_09');
     expect(timelineLabel(TIMELINE_KINDS.CREATED)).toBe('Ordem de Servico aberta');
   });
 });

@@ -23,7 +23,7 @@ export function ErrorState({
         <IconAlert size={22} />
       </span>
       <h2 className="font-heading text-h5 font-semibold text-ink-900">{title}</h2>
-      <p className="mt-1 max-w-md text-ui text-ink-600">{description}</p>
+      <p className="mt-1 max-w-[28rem] text-ui text-ink-600">{description}</p>
       {action ? <div className="mt-4">{action}</div> : null}
     </div>
   );

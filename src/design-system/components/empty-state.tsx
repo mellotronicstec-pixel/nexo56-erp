@@ -30,7 +30,9 @@ export function EmptyState({
         <div aria-hidden="true" className="mb-3 size-10 rounded-lg bg-ink-100" />
       )}
       <p className="font-heading text-h5 font-semibold text-ink-800">{title}</p>
-      {description ? <p className="mt-1 max-w-md text-ui text-ink-500">{description}</p> : null}
+      {description ? (
+        <p className="mt-1 max-w-[28rem] text-ui text-ink-500">{description}</p>
+      ) : null}
       {action ? <div className="mt-4">{action}</div> : null}
     </div>
   );

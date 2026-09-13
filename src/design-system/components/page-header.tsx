@@ -44,7 +44,7 @@ export function PageHeader({
 
           <h1 className="font-heading text-h2 font-bold text-ink-900">{title}</h1>
 
-          {description ? <p className="max-w-2xl text-ui text-ink-600">{description}</p> : null}
+          {description ? <p className="max-w-[42rem] text-ui text-ink-600">{description}</p> : null}
 
           {metadata ? (
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pt-1 text-small text-ink-500">

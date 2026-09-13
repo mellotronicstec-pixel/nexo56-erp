@@ -50,7 +50,9 @@ Classificação que orienta log, auditoria, exportação, retenção e acesso
 | Relato anterior, após correção                 | `audit_logs.before`                | **Pessoal** (incidental)                  | Exceção consciente: o texto anterior vai por inteiro, senão "relato alterado" não permitiria reconstruir o que o cliente disse                |
 | Observações internas da OS                     | `service_orders.internal_notes`    | Interno                                   | Da equipe; não é apresentado ao cliente nem ao futuro Portal                                                                                  |
 | Número da OS                                   | `service_orders.number`            | Interno                                   | Identificador de documento; sequencial por empresa                                                                                            |
-| Linha do tempo da OS                           | `service_order_timeline`           | Interno                                   | `summary` e `metadata` nunca carregam o relato — coberto por teste                                                                            |
+| Linha do tempo da OS                           | `service_order_timeline`           | Interno                                   | `summary`, `metadata` e `reason` nunca carregam o relato — coberto por teste                                                                  |
+| Motivo de transição ou cancelamento            | `service_order_timeline.reason`    | Interno                                   | Texto humano escrito pela equipe. Fica no histórico e na auditoria; não é apresentado ao cliente                                              |
+| Tarefas do fluxo                               | `service_order_tasks`              | Interno                                   | `description` de "Buscar Peça" é texto livre da equipe; não carrega dado do cliente                                                           |
 
 ### Redação automática
 

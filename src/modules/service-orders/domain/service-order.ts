@@ -21,38 +21,31 @@
  */
 
 // ---------------------------------------------------------------------------
-// Estado inicial minimo (itens 25, 26 e 27)
+// Estado (itens 25, 26 e 27 do Prompt 07; formalizado no Prompt 08)
 // ---------------------------------------------------------------------------
 
 /**
- * Estado com que toda OS nasce.
+ * O ESTADO E A MAQUINA DE ESTADOS VIVEM EM `workflow.ts`.
  *
- * A Constituicao preve que uma OS comum entre no fluxo aguardando o parecer
- * tecnico. Persistimos exatamente esse estado inicial formal — e NADA alem
- * disso: nao ha transicao, nao ha acao que o altere, nao ha regra que dependa
- * dele. O Prompt 08 sera a autoridade sobre a maquina de estados.
+ * O Prompt 07 declarou aqui um unico estado inicial, deliberadamente, para nao
+ * antecipar o workflow. O Prompt 08 trouxe os estados oficiais e as transicoes
+ * — e o lugar deles e um arquivo so, que e a autoridade. Reexportamos os nomes
+ * que o restante do modulo ja usava, em vez de manter uma segunda lista aqui:
+ * duas listas de estados divergem no primeiro ajuste.
  *
- * `status` e persistido como texto livre de tamanho fixo, e nao como ENUM do
- * MySQL, justamente para que o Prompt 08 acrescente estados sem precisar de
- * um `ALTER TABLE ... MODIFY COLUMN` na coluna (item 157).
+ * `status` continua persistido como texto de tamanho fixo, e nao como ENUM do
+ * MySQL — foi essa decisao que permitiu ao Prompt 08 acrescentar oito estados
+ * sem nenhum `ALTER TABLE ... MODIFY COLUMN`.
  */
-export const SERVICE_ORDER_INITIAL_STATUS = 'awaiting_technical_opinion';
-
-/**
- * Rotulo do unico estado que existe hoje.
- *
- * Deliberadamente um registro de uma entrada so: quando o Prompt 08 trouxer os
- * demais estados, eles entram aqui junto com o comportamento correspondente —
- * nunca antes.
- */
-export const SERVICE_ORDER_STATUS_LABEL: Readonly<Record<string, string>> = {
-  [SERVICE_ORDER_INITIAL_STATUS]: 'Aguardando parecer tecnico',
-};
-
-/** Rotulo legivel de um estado; desconhecido volta como veio, sem inventar. */
-export function statusLabel(status: string): string {
-  return SERVICE_ORDER_STATUS_LABEL[status] ?? status;
-}
+export {
+  SERVICE_ORDER_INITIAL_STATUS,
+  SERVICE_ORDER_STATUSES,
+  SERVICE_ORDER_STATUS_LABEL,
+  statusLabel,
+  statusTone,
+  isTerminal,
+  type ServiceOrderStatus,
+} from './workflow';
 
 // ---------------------------------------------------------------------------
 // Numero humano (itens 13, 18 e 19)
@@ -235,9 +228,18 @@ export function isLabelPrintable(data: ServiceOrderLabelData): boolean {
  * significaria expor nome de tabela e coluna a quem so quer acompanhar a OS.
  */
 export const TIMELINE_KINDS = {
+  // --- Prompt 07: abertura e correcao ---------------------------------------
   CREATED: 'created',
   CUSTOMER_REPORT_UPDATED: 'customer_report_updated',
   DETAILS_UPDATED: 'details_updated',
+
+  // --- Prompt 08: workflow --------------------------------------------------
+  STATUS_CHANGED: 'status_changed',
+  TECHNICIAN_ASSIGNED: 'technician_assigned',
+  FOLLOW_UP_RESCHEDULED: 'follow_up_rescheduled',
+  PART_PICKUP_REQUESTED: 'part_pickup_requested',
+  TASK_COMPLETED: 'task_completed',
+  CUSTOMER_NOTIFICATION_REQUESTED: 'customer_notification_requested',
 } as const;
 
 export type TimelineKind = (typeof TIMELINE_KINDS)[keyof typeof TIMELINE_KINDS];
@@ -246,6 +248,12 @@ export const TIMELINE_LABEL: Readonly<Record<string, string>> = {
   [TIMELINE_KINDS.CREATED]: 'Ordem de Servico aberta',
   [TIMELINE_KINDS.CUSTOMER_REPORT_UPDATED]: 'Relato do cliente atualizado',
   [TIMELINE_KINDS.DETAILS_UPDATED]: 'Dados de abertura atualizados',
+  [TIMELINE_KINDS.STATUS_CHANGED]: 'Situacao alterada',
+  [TIMELINE_KINDS.TECHNICIAN_ASSIGNED]: 'Tecnico responsavel definido',
+  [TIMELINE_KINDS.FOLLOW_UP_RESCHEDULED]: 'Acompanhamento reagendado',
+  [TIMELINE_KINDS.PART_PICKUP_REQUESTED]: 'Busca de peca registrada',
+  [TIMELINE_KINDS.TASK_COMPLETED]: 'Tarefa concluida',
+  [TIMELINE_KINDS.CUSTOMER_NOTIFICATION_REQUESTED]: 'Cliente marcado como avisado',
 };
 
 export function timelineLabel(kind: string): string {

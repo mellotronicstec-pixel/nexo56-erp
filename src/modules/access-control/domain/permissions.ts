@@ -54,6 +54,24 @@ export const PERMISSIONS = {
   SERVICE_ORDERS_VIEW: 'service_orders.view',
   SERVICE_ORDERS_CREATE: 'service_orders.create',
   SERVICE_ORDERS_UPDATE: 'service_orders.update',
+
+  // --- Prompt 08: workflow da ordem de servico ------------------------------
+  /**
+   * CAPACIDADES, NAO ESTADOS (item 71).
+   *
+   * Nao ha uma permissao por transicao: "liberar para conserto" e "marcar
+   * falta de peca" sao a mesma capacidade de negocio — conduzir o atendimento.
+   * O que ganha permissao propria e o que tem consequencia distinta: atribuir
+   * responsavel, mexer em prazo, cuidar de tarefa, cancelar e finalizar.
+   */
+  SERVICE_ORDERS_TRANSITION: 'service_orders.transition',
+  SERVICE_ORDERS_ASSIGN_TECHNICIAN: 'service_orders.assign_technician',
+  SERVICE_ORDERS_MANAGE_FOLLOW_UP: 'service_orders.manage_follow_up',
+  SERVICE_ORDERS_MANAGE_TASKS: 'service_orders.manage_tasks',
+  /** Separada porque encerra a ordem sem conclusao e nao se desfaz. */
+  SERVICE_ORDERS_CANCEL: 'service_orders.cancel',
+  /** Separada porque e terminal e recebera a trava financeira do Prompt 12. */
+  SERVICE_ORDERS_COMPLETE: 'service_orders.complete',
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -217,6 +235,42 @@ export const PERMISSION_CATALOG: readonly PermissionDefinition[] = [
     description: 'Corrige o relato do cliente e as observacoes internas da abertura.',
     featureKey: 'core.service_orders',
   },
+  {
+    key: PERMISSIONS.SERVICE_ORDERS_TRANSITION,
+    name: 'Conduzir o atendimento',
+    description: 'Move a Ordem de Servico entre as situacoes do fluxo.',
+    featureKey: 'core.service_orders',
+  },
+  {
+    key: PERMISSIONS.SERVICE_ORDERS_ASSIGN_TECHNICIAN,
+    name: 'Definir tecnico responsavel',
+    description: 'Atribui ou troca o tecnico responsavel pela Ordem de Servico.',
+    featureKey: 'core.service_orders',
+  },
+  {
+    key: PERMISSIONS.SERVICE_ORDERS_MANAGE_FOLLOW_UP,
+    name: 'Gerenciar prazo de acompanhamento',
+    description: 'Reagenda o proximo ponto de atencao da Ordem de Servico.',
+    featureKey: 'core.service_orders',
+  },
+  {
+    key: PERMISSIONS.SERVICE_ORDERS_MANAGE_TASKS,
+    name: 'Gerenciar tarefas da Ordem de Servico',
+    description: 'Conclui e cancela as tarefas operacionais geradas pelo fluxo.',
+    featureKey: 'core.service_orders',
+  },
+  {
+    key: PERMISSIONS.SERVICE_ORDERS_CANCEL,
+    name: 'Cancelar Ordem de Servico',
+    description: 'Encerra a ordem sem conclusao, com justificativa obrigatoria.',
+    featureKey: 'core.service_orders',
+  },
+  {
+    key: PERMISSIONS.SERVICE_ORDERS_COMPLETE,
+    name: 'Finalizar Ordem de Servico',
+    description: 'Encerra a ordem depois de o cliente retirar o aparelho.',
+    featureKey: 'core.service_orders',
+  },
 ];
 
 /** Papeis estruturais criados no bootstrap de cada tenant. */
@@ -363,6 +417,12 @@ export const PERMISSION_GROUPS = [
       PERMISSIONS.SERVICE_ORDERS_VIEW,
       PERMISSIONS.SERVICE_ORDERS_CREATE,
       PERMISSIONS.SERVICE_ORDERS_UPDATE,
+      PERMISSIONS.SERVICE_ORDERS_TRANSITION,
+      PERMISSIONS.SERVICE_ORDERS_ASSIGN_TECHNICIAN,
+      PERMISSIONS.SERVICE_ORDERS_MANAGE_FOLLOW_UP,
+      PERMISSIONS.SERVICE_ORDERS_MANAGE_TASKS,
+      PERMISSIONS.SERVICE_ORDERS_CANCEL,
+      PERMISSIONS.SERVICE_ORDERS_COMPLETE,
     ],
   },
   {

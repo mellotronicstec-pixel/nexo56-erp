@@ -8,10 +8,21 @@ import { logger } from '@/core/logging/logger';
 import { requireUnitAuthorization } from '@/modules/access-control/application/authorization-service';
 import { PERMISSIONS } from '@/modules/access-control/domain/permissions';
 import { FEATURES } from '@/modules/features/domain/catalog';
+import { requireContext } from '@/modules/auth/application/current-context';
+import {
+  assignTechnician,
+  cancelServiceOrder,
+  completeTask,
+  notifyCustomerReady,
+  requestPartPickup,
+  rescheduleFollowUp,
+} from '@/modules/service-orders/application/service-order-actions';
 import {
   createServiceOrder,
   updateServiceOrder,
 } from '@/modules/service-orders/application/service-order-service';
+import { transitionServiceOrder } from '@/modules/service-orders/application/workflow-service';
+import { statusLabel, type ServiceOrderStatus } from '@/modules/service-orders/domain/workflow';
 import { EMPTY_SERVICE_ORDER_STATE, type ServiceOrderActionState } from './action-state';
 import { assertSameOrigin } from '../actions';
 
@@ -119,4 +130,156 @@ export async function updateServiceOrderAction(
 
   if (updatedId) redirect(`/ordens-de-servico/${updatedId}`);
   return result;
+}
+
+// ---------------------------------------------------------------------------
+// Workflow (Prompt 08)
+// ---------------------------------------------------------------------------
+
+/**
+ * As acoes de workflow NAO revalidam permissao aqui.
+ *
+ * Elas chamam os casos de uso, e cada um autoriza no escopo da UNIDADE DA
+ * ORDEM — que nem sempre e a unidade ativa da sessao. Duplicar a checagem
+ * nesta camada criaria duas respostas possiveis para a mesma pergunta, e a
+ * errada seria a que usa a unidade ativa.
+ */
+
+function optionalVersion(formData: FormData): number | undefined {
+  const raw = String(formData.get('expectedVersion') ?? '');
+  const value = Number(raw);
+  return Number.isInteger(value) && value > 0 ? value : undefined;
+}
+
+function refresh(serviceOrderId: string): void {
+  revalidatePath('/ordens-de-servico');
+  revalidatePath(`/ordens-de-servico/${serviceOrderId}`);
+}
+
+export async function transitionAction(
+  _previous: ServiceOrderActionState,
+  formData: FormData,
+): Promise<ServiceOrderActionState> {
+  return run('transition', async () => {
+    const context = await requireContext();
+    const serviceOrderId = String(formData.get('serviceOrderId') ?? '');
+
+    const result = await transitionServiceOrder(context, {
+      serviceOrderId,
+      to: String(formData.get('to') ?? '') as ServiceOrderStatus,
+      reason: String(formData.get('reason') ?? ''),
+      expectedVersion: optionalVersion(formData),
+    });
+
+    refresh(serviceOrderId);
+    return {
+      ...EMPTY_SERVICE_ORDER_STATE,
+      success: `Situacao alterada para ${statusLabel(result.to)}.`,
+    };
+  });
+}
+
+export async function cancelServiceOrderAction(
+  _previous: ServiceOrderActionState,
+  formData: FormData,
+): Promise<ServiceOrderActionState> {
+  return run('cancelServiceOrder', async () => {
+    const context = await requireContext();
+    const serviceOrderId = String(formData.get('serviceOrderId') ?? '');
+
+    await cancelServiceOrder(
+      context,
+      serviceOrderId,
+      { reason: String(formData.get('reason') ?? '') },
+      optionalVersion(formData),
+    );
+
+    refresh(serviceOrderId);
+    return { ...EMPTY_SERVICE_ORDER_STATE, success: 'Ordem de Servico cancelada.' };
+  });
+}
+
+export async function assignTechnicianAction(
+  _previous: ServiceOrderActionState,
+  formData: FormData,
+): Promise<ServiceOrderActionState> {
+  return run('assignTechnician', async () => {
+    const context = await requireContext();
+    const serviceOrderId = String(formData.get('serviceOrderId') ?? '');
+    const technicianId = String(formData.get('technicianId') ?? '') || null;
+
+    await assignTechnician(context, serviceOrderId, technicianId);
+
+    refresh(serviceOrderId);
+    return {
+      ...EMPTY_SERVICE_ORDER_STATE,
+      success: technicianId ? 'Tecnico responsavel definido.' : 'Tecnico responsavel removido.',
+    };
+  });
+}
+
+export async function rescheduleFollowUpAction(
+  _previous: ServiceOrderActionState,
+  formData: FormData,
+): Promise<ServiceOrderActionState> {
+  return run('rescheduleFollowUp', async () => {
+    const context = await requireContext();
+    const serviceOrderId = String(formData.get('serviceOrderId') ?? '');
+
+    await rescheduleFollowUp(context, serviceOrderId, {
+      followUpAt: String(formData.get('followUpAt') ?? ''),
+    });
+
+    refresh(serviceOrderId);
+    return { ...EMPTY_SERVICE_ORDER_STATE, success: 'Acompanhamento atualizado.' };
+  });
+}
+
+export async function requestPartPickupAction(
+  _previous: ServiceOrderActionState,
+  formData: FormData,
+): Promise<ServiceOrderActionState> {
+  return run('requestPartPickup', async () => {
+    const context = await requireContext();
+    const serviceOrderId = String(formData.get('serviceOrderId') ?? '');
+
+    await requestPartPickup(context, serviceOrderId, {
+      note: String(formData.get('note') ?? ''),
+    });
+
+    refresh(serviceOrderId);
+    return { ...EMPTY_SERVICE_ORDER_STATE, success: 'Busca de peca registrada.' };
+  });
+}
+
+export async function completeTaskAction(
+  _previous: ServiceOrderActionState,
+  formData: FormData,
+): Promise<ServiceOrderActionState> {
+  return run('completeTask', async () => {
+    const context = await requireContext();
+    const { serviceOrderId } = await completeTask(context, String(formData.get('taskId') ?? ''));
+
+    refresh(serviceOrderId);
+    return { ...EMPTY_SERVICE_ORDER_STATE, success: 'Tarefa concluida.' };
+  });
+}
+
+export async function notifyCustomerReadyAction(
+  _previous: ServiceOrderActionState,
+  formData: FormData,
+): Promise<ServiceOrderActionState> {
+  return run('notifyCustomerReady', async () => {
+    const context = await requireContext();
+    const serviceOrderId = String(formData.get('serviceOrderId') ?? '');
+
+    await notifyCustomerReady(context, serviceOrderId, optionalVersion(formData));
+
+    refresh(serviceOrderId);
+    return {
+      ...EMPTY_SERVICE_ORDER_STATE,
+      // Texto VERDADEIRO: o registro existe, o envio nao (item 64).
+      success: 'Registrado. O envio automatico da mensagem ainda nao esta disponivel.',
+    };
+  });
 }

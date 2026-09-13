@@ -1,13 +1,15 @@
 import 'server-only';
 import { pruneExpiredSessions } from '@/modules/auth/application/session-service';
 import { requeueStaleJobs } from '@/modules/jobs/application/job-queue';
+import { sweepOverdueFollowUps } from '@/modules/service-orders/application/follow-up-job';
 import type { JobHandler } from '@/modules/jobs/domain/job';
 
 /**
  * Registro de handlers (Prompt 01, itens 33 a 35).
  *
- * Apenas jobs tecnicos REAIS da fundacao. Jobs de negocio (follow-up de OS,
- * alertas, automacoes) serao registrados pelos modulos correspondentes.
+ * Jobs tecnicos da fundacao mais os jobs de NEGOCIO que os modulos trouxeram.
+ * A regra de cada um vive no modulo dono; aqui fica so o nome e a
+ * periodicidade, para que a expressao cron nunca precise conhecer negocio.
  */
 
 /**
@@ -31,9 +33,27 @@ const requeueStaleJobsJob: JobHandler<{ olderThanMinutes?: number }> = {
   },
 };
 
+/**
+ * Marca as Ordens de Servico com acompanhamento vencido (Prompt 08).
+ *
+ * Idempotente por construcao: a ordem guarda para qual prazo o alerta ja saiu,
+ * e a marcacao acontece no `WHERE` do proprio `UPDATE`. Rodar duas vezes no
+ * mesmo dia nao emite dois eventos.
+ *
+ * NAO envia comunicacao: publica evento, que e o que existe hoje.
+ */
+const followUpSweepJob: JobHandler<Record<string, never>> = {
+  name: 'service-order.follow-up-sweep',
+  async handle() {
+    const result = await sweepOverdueFollowUps();
+    return { summary: 'ordens com acompanhamento vencido marcadas', affected: result.flagged };
+  },
+};
+
 const HANDLERS: readonly JobHandler<never>[] = [
   pruneSessionsJob as JobHandler<never>,
   requeueStaleJobsJob as JobHandler<never>,
+  followUpSweepJob as JobHandler<never>,
 ];
 
 const BY_NAME = new Map(HANDLERS.map((handler) => [handler.name, handler]));
@@ -56,4 +76,10 @@ export function listJobNames(): string[] {
 export const RECURRING_JOBS = [
   { name: 'session.prune-expired', everyMinutes: 60 },
   { name: 'jobs.requeue-stale', everyMinutes: 15 },
+  /**
+   * De hora em hora, e nao uma vez por dia: empresas em fusos diferentes viram
+   * a data em horas diferentes, e o job precisa alcancar cada uma logo depois
+   * da virada dela. Como e idempotente, as execucoes a mais nao custam nada.
+   */
+  { name: 'service-order.follow-up-sweep', everyMinutes: 60 },
 ] as const;

@@ -3,17 +3,25 @@
 Plataforma ERP/SaaS multiempresa para gestão de assistência técnica e reparo.
 
 **Estado atual: fundação completa + módulos de negócio Clientes, Equipamentos e
-Ordens de Serviço (Prompts 01 a 07).** Autenticação, sessões, usuários, perfis,
-permissões com **escopo por unidade**, multi-tenancy, modularidade, auditoria,
-eventos, jobs, Design System, interface responsiva, **Clientes**, **Equipamentos
-e Recebimento** (com fotos em storage privado) e a **fundação da Ordem de
-Serviço** (abertura, numeração humana, vínculos, ficha e histórico) estão
-implementados e testados. Orçamentos, Estoque, Compras, Financeiro, Garantias e
-demais serão construídos nos prompts seguintes.
+Ordens de Serviço com workflow (Prompts 01 a 08).** Autenticação, sessões,
+usuários, perfis, permissões com **escopo por unidade**, multi-tenancy,
+modularidade, auditoria, eventos, jobs, Design System, interface responsiva,
+**Clientes**, **Equipamentos e Recebimento** (com fotos em storage privado), a
+**Ordem de Serviço** (abertura, numeração humana, vínculos, ficha e histórico) e
+o seu **workflow** (nove estados, transições validadas, ações, responsável,
+follow-ups, tarefas e preparação para entrega) estão implementados e testados.
+Orçamentos, Estoque, Compras, Financeiro, Garantias e demais serão construídos
+nos prompts seguintes.
 
-O **workflow da Ordem de Serviço** — estados, transições, ações, follow-ups —
-**não** existe ainda: a OS nasce no estado inicial e não muda. Isso é o Prompt
-08, e a separação é deliberada (ADR-036).
+O **orçamento** não existe: há o estado `awaiting_approval`, e "registrar
+aprovação" é hoje uma transição manual feita por quem falou com o cliente — sem
+valores, itens ou aprovação registrada. Isso é o Prompt 09
+([fronteira](docs/modules/service-orders/quote-boundary.md)).
+
+**Nenhuma comunicação externa é enviada.** A ação "Informar Ordem Disponível"
+registra a intenção, publica o evento e diz isso em texto na própria tela; não
+há WhatsApp nem e-mail integrado (Prompt 16). **Nenhum evento é consumido**: não
+há handler, automação nem Rule Engine (Prompt 19).
 
 A **leitura automática de etiqueta** tem contrato, fluxo e testes, mas **não
 está operacional**: nenhum provider de OCR foi contratado ou configurado, e o
@@ -338,6 +346,10 @@ Pontos centrais:
 - Mídia fora de `public/`, com chave opaca gerada pelo servidor e entrega por
   rota autenticada; mídia de outro tenant responde 404.
 - Ordem de Serviço é da unidade: quem opera outra loja não a vê nem com o UUID.
+- O estado da OS muda por **uma porta só**, com a matriz de transições num
+  arquivo — e a permissão é avaliada na unidade **da ordem**, não na ativa.
+- Duas pessoas gravando a mesma OS ao mesmo tempo: só uma vence, e a outra é
+  avisada — nunca sobrescrita em silêncio.
 - Numeração humana única por empresa, alocada atomicamente e testada com
   aberturas simultâneas.
 - Imagem validada por **magic bytes**, não por extensão nem `Content-Type`.
@@ -372,23 +384,27 @@ produção** — não é tela de produto — e não lê nem grava dado algum.
 
 ## 14. Dívida técnica conhecida
 
-| Item                                      | Detalhe                                                                                                                                              | Caminho                                                                                     |
-| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| ESLint na linha 9.x                       | O `eslint-plugin-react` do `eslint-config-next@16` ainda não roda em ESLint 10                                                                       | atualizar quando o preset suportar                                                          |
-| 4 vulnerabilidades moderadas de dev       | Cadeia `drizzle-kit → @esbuild-kit → esbuild`; afetam apenas o servidor de desenvolvimento, não o runtime de produção                                | aguardar atualização do drizzle-kit                                                         |
-| CSP com `'unsafe-inline'` em `script-src` | O runtime do Next injeta scripts inline sem nonce em `next start`                                                                                    | CSP por nonce via middleware                                                                |
-| Rate limit por processo                   | Store em memória; conta por instância                                                                                                                | implementar `RateLimitStore` com Redis                                                      |
-| Sem worker de outbox                      | Eventos são despachados em processo; a tabela já tem formato de outbox                                                                               | worker lendo `published_at IS NULL`                                                         |
-| Build depende de rede para as fontes      | `next/font/google` baixa Sora e Inter no build                                                                                                       | versionar WOFF2 se houver build offline                                                     |
-| Sem 2FA                                   | Não há segundo fator; o pipeline de autorização comporta a condição adicional sem reconstrução                                                       | prompt futuro de segurança                                                                  |
-| Sem autoatendimento de redefinição        | Nenhum serviço de e-mail configurado; o código é gerado por um administrador e entregue pessoalmente                                                 | configurar canal de e-mail                                                                  |
-| Rate limit só no login                    | Troca de senha e ações administrativas não têm limite próprio                                                                                        | estender quando houver store compartilhado                                                  |
-| Leitura de etiqueta sem provider          | Contrato, normalização e fluxo prontos; nenhum fornecedor de OCR contratado ou configurado — a interface declara isso                                | implementar um `EquipmentLabelRecognitionProvider` e habilitar `platform.label_recognition` |
-| Código de barras não decodificado         | O campo existe no contrato; não há decoder embarcado                                                                                                 | avaliar decoder no navegador ou no provider                                                 |
-| HEIC depende do navegador                 | O servidor recusa HEIC com explicação; a conversão depende de o navegador decodificar o arquivo. Não validado com arquivo HEIC real                  | testar em iOS/Safari com aparelho                                                           |
-| Câmera física não exercitada em teste     | O navegador dos testes não tem câmera; só o caminho de arquivo é executado, com o mesmo código de preparo                                            | validação manual em aparelho                                                                |
-| Backup em duas partes                     | Banco e `STORAGE_ROOT` precisam ser copiados juntos, ou as fotos ficam órfãs                                                                         | rotina única de backup                                                                      |
-| Anonimização não remove mídia             | A rotina de anonimização (ainda inexistente) terá de apagar arquivos do storage, não só limpar colunas                                               | prompt de LGPD                                                                              |
-| Etiqueta física não imprimível            | O contrato de dados existe e é testado, mas faltam o QR e a classificação de garantia; imprimir três dos cinco elementos seria pior que não imprimir | Prompt 13 (garantia) + decisão de QR                                                        |
-| QR da OS não implementado                 | Princípios fixados (referência opaca; QR identifica mas não autoriza); formato do token e ciclo de vida ainda não decididos                          | prompt futuro                                                                               |
-| Workflow da OS ausente                    | Um único estado, nenhuma transição — por decisão (ADR-036)                                                                                           | Prompt 08                                                                                   |
+| Item                                       | Detalhe                                                                                                                                                           | Caminho                                                                                     |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| ESLint na linha 9.x                        | O `eslint-plugin-react` do `eslint-config-next@16` ainda não roda em ESLint 10                                                                                    | atualizar quando o preset suportar                                                          |
+| 4 vulnerabilidades moderadas de dev        | Cadeia `drizzle-kit → @esbuild-kit → esbuild`; afetam apenas o servidor de desenvolvimento, não o runtime de produção                                             | aguardar atualização do drizzle-kit                                                         |
+| CSP com `'unsafe-inline'` em `script-src`  | O runtime do Next injeta scripts inline sem nonce em `next start`                                                                                                 | CSP por nonce via middleware                                                                |
+| Rate limit por processo                    | Store em memória; conta por instância                                                                                                                             | implementar `RateLimitStore` com Redis                                                      |
+| Sem worker de outbox                       | Eventos são despachados em processo; a tabela já tem formato de outbox                                                                                            | worker lendo `published_at IS NULL`                                                         |
+| Build depende de rede para as fontes       | `next/font/google` baixa Sora e Inter no build                                                                                                                    | versionar WOFF2 se houver build offline                                                     |
+| Sem 2FA                                    | Não há segundo fator; o pipeline de autorização comporta a condição adicional sem reconstrução                                                                    | prompt futuro de segurança                                                                  |
+| Sem autoatendimento de redefinição         | Nenhum serviço de e-mail configurado; o código é gerado por um administrador e entregue pessoalmente                                                              | configurar canal de e-mail                                                                  |
+| Rate limit só no login                     | Troca de senha e ações administrativas não têm limite próprio                                                                                                     | estender quando houver store compartilhado                                                  |
+| Leitura de etiqueta sem provider           | Contrato, normalização e fluxo prontos; nenhum fornecedor de OCR contratado ou configurado — a interface declara isso                                             | implementar um `EquipmentLabelRecognitionProvider` e habilitar `platform.label_recognition` |
+| Código de barras não decodificado          | O campo existe no contrato; não há decoder embarcado                                                                                                              | avaliar decoder no navegador ou no provider                                                 |
+| HEIC depende do navegador                  | O servidor recusa HEIC com explicação; a conversão depende de o navegador decodificar o arquivo. Não validado com arquivo HEIC real                               | testar em iOS/Safari com aparelho                                                           |
+| Câmera física não exercitada em teste      | O navegador dos testes não tem câmera; só o caminho de arquivo é executado, com o mesmo código de preparo                                                         | validação manual em aparelho                                                                |
+| Backup em duas partes                      | Banco e `STORAGE_ROOT` precisam ser copiados juntos, ou as fotos ficam órfãs                                                                                      | rotina única de backup                                                                      |
+| Anonimização não remove mídia              | A rotina de anonimização (ainda inexistente) terá de apagar arquivos do storage, não só limpar colunas                                                            | prompt de LGPD                                                                              |
+| Etiqueta física não imprimível             | O contrato de dados existe e é testado, mas faltam o QR e a classificação de garantia; imprimir três dos cinco elementos seria pior que não imprimir              | Prompt 13 (garantia) + decisão de QR                                                        |
+| QR da OS não implementado                  | Princípios fixados (referência opaca; QR identifica mas não autoriza); formato do token e ciclo de vida ainda não decididos                                       | prompt futuro                                                                               |
+| Ninguém é notificado de follow-up vencido  | O job publica `SERVICE_ORDER_FOLLOW_UP_OVERDUE`; **não há canal de comunicação nem central de notificação interna**. As pendências aparecem na tela, por consulta | Prompt 16 (comunicação) + prompt de notificação interna                                     |
+| "Informar Ordem Disponível" não envia nada | Registra a intenção, muda o estado e publica evento com `delivered: false`. A interface declara isso                                                              | Prompt 16                                                                                   |
+| Eventos de workflow sem consumidor         | Seis tipos publicados no outbox, nenhum handler                                                                                                                   | Prompt 19 (automações)                                                                      |
+| "Buscar Peça" guarda texto livre           | Não há peça, fornecedor nem local de retirada como entidade                                                                                                       | Prompts 10 e 11                                                                             |
+| Follow-up em dias corridos                 | A regra fixa +2 e +3 e não menciona dias úteis; não há calendário de feriados                                                                                     | decisão de negócio (ADR-039)                                                                |

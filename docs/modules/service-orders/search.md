@@ -22,10 +22,20 @@ coluna e descartar o índice.
 
 ## Filtros
 
-Apenas atributos que existem: **período de abertura** (de/até) e **cliente**.
+Apenas atributos que existem: **período de abertura** (de/até), **cliente**,
+**situação**, **acompanhamento** (vencido / vence hoje / futuro) e **técnico
+responsável**.
 
-Não há filtro por estado de workflow, porque não há workflow. Ele chega com o
-Prompt 08 — e o índice `ix_service_order_tenant_status` já está no lugar.
+Os três últimos chegaram com o Prompt 08 e usam índices próprios
+(`ix_service_order_unit_status`, `ix_service_order_follow_up`,
+`ix_service_order_technician`). Uma situação desconhecida na URL é **ignorada**,
+não vira consulta.
+
+O filtro de acompanhamento compara com o **dia civil da empresa**, não com UTC
+(ver [follow-ups](follow-ups.md)).
+
+A coluna Situação traz o rótulo em **texto** junto do tom de cor: quem não
+distingue verde de amarelo continua sabendo em que situação a ordem está.
 
 Busca e filtros viajam na URL (`method="get"`): o endereço resultante pode ser
 guardado, compartilhado e reaberto, e o botão voltar funciona. Os filtros
@@ -41,8 +51,11 @@ Paginação por offset, no servidor. A paginação preserva os filtros vigentes.
 
 ## Sem N+1
 
-A listagem faz **duas consultas** para N ordens: a página (com `INNER JOIN` de
-cliente e equipamento e `LEFT JOIN` de unidade) e o total. Nunca uma consulta
+A listagem faz **três consultas** para N ordens: a página (com `INNER JOIN` de
+cliente e equipamento e `LEFT JOIN` de unidade e do técnico responsável), o
+total, e **uma consulta agregada** para a contagem de tarefas abertas da página
+inteira. Uma consulta por linha transformaria uma lista de 25 ordens em 26 idas
+ao banco — e esta é a tela mais aberta do sistema. Nunca uma consulta
 por linha.
 
 Na ficha, os nomes dos autores da linha do tempo vêm em **uma** consulta com

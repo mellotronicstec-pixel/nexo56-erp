@@ -1,5 +1,22 @@
 import 'server-only';
-import { and, asc, count, desc, eq, gte, inArray, like, lte, or, type SQL } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  gt,
+  gte,
+  inArray,
+  isNotNull,
+  like,
+  lt,
+  lte,
+  or,
+  type SQL,
+} from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/mysql-core';
 import { getDb } from '@/core/db/client';
 import { buildOffsetPage, resolveOffset, type OffsetPage } from '@/core/db/pagination';
 import { customers } from '@/modules/customers/infrastructure/schema';
@@ -17,9 +34,11 @@ import {
   parseServiceOrderNumber,
 } from '@/modules/service-orders/domain/service-order';
 import {
+  serviceOrderTasks,
   serviceOrderTimeline,
   serviceOrders,
 } from '@/modules/service-orders/infrastructure/schema';
+import { todayIn } from '@/core/time/civil-date';
 import { SEQUENCE_TYPES, peekSequence } from '@/modules/tenancy/application/sequence-service';
 import { units } from '@/modules/tenancy/infrastructure/schema';
 import { users } from '@/modules/users/infrastructure/schema';
@@ -65,6 +84,12 @@ export interface ServiceOrderListFilters {
   from?: string;
   /** Abertas ate esta data (inclusive), em ISO `YYYY-MM-DD`. */
   to?: string;
+  /** Situacao do workflow (Prompt 08, item 88). */
+  status?: string;
+  /** Tecnico responsavel (item 90). */
+  technicianId?: string;
+  /** Acompanhamento: vencido, hoje, ou nos proximos dias (item 89). */
+  followUp?: 'overdue' | 'today' | 'upcoming';
   page?: number;
   pageSize?: number;
 }
@@ -74,6 +99,10 @@ export interface ServiceOrderListItem {
   number: number;
   status: string;
   openedAt: Date;
+  /** Data civil ISO, ou `null` quando a ordem saiu do radar. */
+  followUpAt: string | null;
+  technicianName: string | null;
+  openTaskCount: number;
   customerId: string;
   customerName: string;
   equipmentId: string;
@@ -143,6 +172,9 @@ export async function listServiceOrders(
 
   const db = getDb();
 
+  /** Hoje no fuso do tenant: "vencido" e relativo a quem opera. */
+  const today = todayIn(context.tenantTimezone);
+
   const where = and(
     eq(serviceOrders.tenantId, context.tenantId),
     eq(serviceOrders.unitId, context.activeUnitId),
@@ -152,7 +184,20 @@ export async function listServiceOrders(
       ? gte(serviceOrders.openedAt, new Date(`${filters.from}T00:00:00.000Z`))
       : undefined,
     filters.to ? lte(serviceOrders.openedAt, endOfDay(filters.to)) : undefined,
+    filters.status ? eq(serviceOrders.status, filters.status) : undefined,
+    filters.technicianId ? eq(serviceOrders.assignedTechnicianId, filters.technicianId) : undefined,
+    /**
+     * Filtros de acompanhamento (item 89). Ordem terminal nunca entra: ela ja
+     * perdeu o follow-up na transicao, e listar "vencida" uma ordem finalizada
+     * seria ruido puro.
+     */
+    filters.followUp === 'overdue' ? lt(serviceOrders.followUpAt, today) : undefined,
+    filters.followUp === 'today' ? eq(serviceOrders.followUpAt, today) : undefined,
+    filters.followUp === 'upcoming' ? gt(serviceOrders.followUpAt, today) : undefined,
+    filters.followUp ? isNotNull(serviceOrders.followUpAt) : undefined,
   );
+
+  const technician = alias(users, 'technician');
 
   const [rows, [totals]] = await Promise.all([
     db
@@ -161,6 +206,7 @@ export async function listServiceOrders(
         number: serviceOrders.number,
         status: serviceOrders.status,
         openedAt: serviceOrders.openedAt,
+        followUpAt: serviceOrders.followUpAt,
         customerId: serviceOrders.customerId,
         customerName: customers.name,
         equipmentId: serviceOrders.equipmentId,
@@ -169,11 +215,14 @@ export async function listServiceOrders(
         equipmentModel: equipment.model,
         equipmentSerial: equipment.serial,
         unitName: units.name,
+        technicianName: technician.name,
       })
       .from(serviceOrders)
       .innerJoin(customers, eq(customers.id, serviceOrders.customerId))
       .innerJoin(equipment, eq(equipment.id, serviceOrders.equipmentId))
       .leftJoin(units, eq(units.id, serviceOrders.unitId))
+      // Tecnico por JOIN, nao por consulta por linha (item 93).
+      .leftJoin(technician, eq(technician.id, serviceOrders.assignedTechnicianId))
       .where(where)
       // Mais recentes primeiro, com `id` como desempate deterministico.
       .orderBy(desc(serviceOrders.openedAt), desc(serviceOrders.id))
@@ -187,7 +236,37 @@ export async function listServiceOrders(
       .where(where),
   ]);
 
-  return buildOffsetPage(rows, Number(totals?.total ?? 0), { page, pageSize: limit });
+  /**
+   * Tarefas abertas da PAGINA inteira em UMA consulta agregada (item 93).
+   * Uma consulta por linha transformaria uma lista de 25 ordens em 26 idas ao
+   * banco — e a lista da unidade e a tela mais aberta do sistema.
+   */
+  const openTasks = new Map<string, number>();
+  if (rows.length > 0) {
+    const counts = await db
+      .select({ serviceOrderId: serviceOrderTasks.serviceOrderId, total: count() })
+      .from(serviceOrderTasks)
+      .where(
+        and(
+          eq(serviceOrderTasks.tenantId, context.tenantId),
+          eq(serviceOrderTasks.status, 'open'),
+          inArray(
+            serviceOrderTasks.serviceOrderId,
+            rows.map((row) => row.id),
+          ),
+        ),
+      )
+      .groupBy(serviceOrderTasks.serviceOrderId);
+
+    for (const row of counts) openTasks.set(row.serviceOrderId, Number(row.total));
+  }
+
+  const items: ServiceOrderListItem[] = rows.map((row) => ({
+    ...row,
+    openTaskCount: openTasks.get(row.id) ?? 0,
+  }));
+
+  return buildOffsetPage(items, Number(totals?.total ?? 0), { page, pageSize: limit });
 }
 
 export interface ServiceOrderDetail {
@@ -201,6 +280,10 @@ export interface ServiceOrderDetail {
     unitId: string;
     intakeId: string | null;
     updatedAt: Date;
+    /** Versao lida. Volta no formulario para travar a concorrencia (item 11). */
+    version: number;
+    followUpAt: string | null;
+    assignedTechnicianId: string | null;
   };
   customer: { id: string; name: string; kind: string };
   equipmentItem: {
@@ -213,6 +296,17 @@ export interface ServiceOrderDetail {
   };
   unitName: string | null;
   openedByName: string | null;
+  technicianName: string | null;
+  tasks: {
+    id: string;
+    kind: string;
+    title: string;
+    description: string | null;
+    status: string;
+    dueDate: string | null;
+    assigneeName: string | null;
+    completedAt: Date | null;
+  }[];
   intake: {
     id: string;
     receivedAt: Date;
@@ -228,6 +322,8 @@ export interface ServiceOrderDetail {
     id: string;
     kind: string;
     summary: string | null;
+    /** Justificativa escrita, quando a transicao exigiu uma. */
+    reason: string | null;
     actorName: string | null;
     occurredAt: Date;
   }[];
@@ -257,6 +353,9 @@ export async function findServiceOrderDetail(
       unitId: serviceOrders.unitId,
       intakeId: serviceOrders.intakeId,
       updatedAt: serviceOrders.updatedAt,
+      version: serviceOrders.version,
+      followUpAt: serviceOrders.followUpAt,
+      assignedTechnicianId: serviceOrders.assignedTechnicianId,
       createdBy: serviceOrders.createdBy,
       customerId: customers.id,
       customerName: customers.name,
@@ -279,13 +378,19 @@ export async function findServiceOrderDetail(
   if (!row) return null;
   if (!context.authorizedUnitIds.includes(row.unitId)) return null;
 
-  const [openedBy] = row.createdBy
-    ? await db
-        .select({ name: users.name })
-        .from(users)
-        .where(and(eq(users.tenantId, context.tenantId), eq(users.id, row.createdBy)))
-        .limit(1)
-    : [];
+  /**
+   * Nomes de quem abriu e de quem conserta em UMA consulta, nao duas
+   * (item 93). Sao no maximo dois ids, e com frequencia o mesmo.
+   */
+  const peopleIds = [...new Set([row.createdBy, row.assignedTechnicianId].filter(Boolean))];
+  const people = new Map<string, string>();
+  if (peopleIds.length > 0) {
+    const found = await db
+      .select({ id: users.id, name: users.name })
+      .from(users)
+      .where(and(eq(users.tenantId, context.tenantId), inArray(users.id, peopleIds as string[])));
+    for (const person of found) people.set(person.id, person.name);
+  }
 
   /**
    * O recebimento e LIDO, nao copiado (itens 10, 55 e 56).
@@ -358,7 +463,7 @@ export async function findServiceOrderDetail(
     }
   }
 
-  const [ownMedia, timelineRows] = await Promise.all([
+  const [ownMedia, timelineRows, taskRows] = await Promise.all([
     db
       .select({ id: equipmentMedia.id, kind: equipmentMedia.kind, caption: equipmentMedia.caption })
       .from(equipmentMedia)
@@ -375,6 +480,7 @@ export async function findServiceOrderDetail(
         id: serviceOrderTimeline.id,
         kind: serviceOrderTimeline.kind,
         summary: serviceOrderTimeline.summary,
+        reason: serviceOrderTimeline.reason,
         actorId: serviceOrderTimeline.actorId,
         occurredAt: serviceOrderTimeline.occurredAt,
       })
@@ -387,10 +493,41 @@ export async function findServiceOrderDetail(
       )
       .orderBy(desc(serviceOrderTimeline.occurredAt), desc(serviceOrderTimeline.id))
       .limit(50),
+    /** Tarefas da ordem, abertas primeiro. */
+    db
+      .select({
+        id: serviceOrderTasks.id,
+        kind: serviceOrderTasks.kind,
+        title: serviceOrderTasks.title,
+        description: serviceOrderTasks.description,
+        status: serviceOrderTasks.status,
+        dueDate: serviceOrderTasks.dueDate,
+        assigneeId: serviceOrderTasks.assigneeId,
+        completedAt: serviceOrderTasks.completedAt,
+      })
+      .from(serviceOrderTasks)
+      .where(
+        and(
+          eq(serviceOrderTasks.tenantId, context.tenantId),
+          eq(serviceOrderTasks.serviceOrderId, serviceOrderId),
+        ),
+      )
+      .orderBy(asc(serviceOrderTasks.status), asc(serviceOrderTasks.dueDate))
+      .limit(20),
   ]);
 
-  /** Nomes dos autores da linha do tempo em UMA consulta, nao uma por fato. */
-  const actorIds = [...new Set(timelineRows.map((t) => t.actorId).filter((v): v is string => !!v))];
+  /**
+   * Nomes dos autores da linha do tempo e dos responsaveis pelas tarefas em UMA
+   * consulta — nao uma por fato nem uma por tarefa (item 93).
+   */
+  const actorIds = [
+    ...new Set(
+      [
+        ...timelineRows.map((entry) => entry.actorId),
+        ...taskRows.map((task) => task.assigneeId),
+      ].filter((value): value is string => Boolean(value)),
+    ),
+  ];
   const actorNames = new Map<string, string>();
   if (actorIds.length > 0) {
     const actors = await db
@@ -399,6 +536,17 @@ export async function findServiceOrderDetail(
       .where(and(eq(users.tenantId, context.tenantId), inArray(users.id, actorIds)));
     for (const actor of actors) actorNames.set(actor.id, actor.name);
   }
+
+  const tasks = taskRows.map((task) => ({
+    id: task.id,
+    kind: task.kind,
+    title: task.title,
+    description: task.description,
+    status: task.status,
+    dueDate: task.dueDate,
+    assigneeName: task.assigneeId ? (actorNames.get(task.assigneeId) ?? null) : null,
+    completedAt: task.completedAt,
+  }));
 
   return {
     order: {
@@ -411,6 +559,9 @@ export async function findServiceOrderDetail(
       unitId: row.unitId,
       intakeId: row.intakeId,
       updatedAt: row.updatedAt,
+      version: row.version,
+      followUpAt: row.followUpAt,
+      assignedTechnicianId: row.assignedTechnicianId,
     },
     customer: { id: row.customerId, name: row.customerName, kind: row.customerKind },
     equipmentItem: {
@@ -422,13 +573,18 @@ export async function findServiceOrderDetail(
       voltage: row.equipmentVoltage,
     },
     unitName: row.unitName,
-    openedByName: openedBy?.name ?? null,
+    openedByName: row.createdBy ? (people.get(row.createdBy) ?? null) : null,
+    technicianName: row.assignedTechnicianId
+      ? (people.get(row.assignedTechnicianId) ?? null)
+      : null,
+    tasks,
     intake,
     equipmentMedia: ownMedia,
     timeline: timelineRows.map((entry) => ({
       id: entry.id,
       kind: entry.kind,
       summary: entry.summary,
+      reason: entry.reason,
       actorName: entry.actorId ? (actorNames.get(entry.actorId) ?? null) : null,
       occurredAt: entry.occurredAt,
     })),
@@ -489,4 +645,35 @@ export async function findServiceOrderByNumber(
     .limit(1);
 
   return row ?? null;
+}
+
+/**
+ * Pessoas que podem ser responsaveis por uma ordem desta unidade.
+ *
+ * O criterio e ACESSO REAL, nao o nome do papel (item 28): "Tecnico" e um
+ * rotulo que cada empresa escreve como quiser, e filtrar por ele deixaria de
+ * fora o eletronico que a loja chama de "bancada". Quem aparece aqui e quem
+ * esta ativo e tem vinculo com a unidade; a escolha de quem e capaz e de quem
+ * atribui.
+ */
+export async function listUnitMembers(
+  context: TenantContext,
+  unitId: string,
+): Promise<{ id: string; name: string }[]> {
+  if (!context.authorizedUnitIds.includes(unitId)) return [];
+
+  const rows = await getDb().execute(sql`
+    SELECT u.id, u.name
+      FROM users u
+      JOIN user_units uu ON uu.user_id = u.id AND uu.unit_id = ${unitId}
+     WHERE u.tenant_id = ${context.tenantId}
+       AND u.status = 'active'
+     ORDER BY u.name ASC
+     LIMIT 100
+  `);
+
+  return ((rows as unknown as Array<{ id: string; name: string }>[])[0] ?? []) as Array<{
+    id: string;
+    name: string;
+  }>;
 }

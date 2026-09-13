@@ -5,18 +5,22 @@ import { getDb } from '@/core/db/client';
 import { runInTransaction, type TransactionExecutor } from '@/core/db/unit-of-work';
 import { BusinessRuleError, NotFoundError, ValidationError } from '@/core/errors';
 import { newId } from '@/core/ids/id';
+import { civilDaysFromNow } from '@/core/time/civil-date';
 import { AUDIT_ACTIONS, recordAudit } from '@/modules/audit/application/audit-service';
 import { equipment, equipmentIntakes } from '@/modules/equipment/infrastructure/schema';
 import { EVENT_TYPES } from '@/modules/events/domain/event';
 import {
   CUSTOMER_REPORT_MAX,
   INTERNAL_NOTES_MAX,
-  SERVICE_ORDER_INITIAL_STATUS,
   SERVICE_ORDER_NUMBER_PADDING,
   SERVICE_ORDER_NUMBER_PREFIX,
   TIMELINE_KINDS,
   normalizeCustomerReport,
 } from '@/modules/service-orders/domain/service-order';
+import {
+  FOLLOW_UP_ON_CREATION_DAYS,
+  SERVICE_ORDER_INITIAL_STATUS,
+} from '@/modules/service-orders/domain/workflow';
 import {
   serviceOrderTimeline,
   serviceOrders,
@@ -231,6 +235,19 @@ export async function createServiceOrder(
         equipmentId: input.equipmentId,
         intakeId,
         status: SERVICE_ORDER_INITIAL_STATUS,
+        statusChangedAt: now,
+        /**
+         * FOLLOW-UP PADRAO DA ABERTURA: +2 dias corridos (Prompt 08, item 34).
+         *
+         * Gravado aqui, na MESMA transacao da criacao, e nao por um handler de
+         * evento: uma ordem que nasce sem prazo e uma ordem que ninguem
+         * acompanha, e a janela entre criar e reagir seria justamente quando o
+         * atendente fecha a tela.
+         *
+         * Data CIVIL no fuso do tenant — "daqui a dois dias" e um dia inteiro,
+         * nao um instante.
+         */
+        followUpAt: civilDaysFromNow(context.tenantTimezone, FOLLOW_UP_ON_CREATION_DAYS, now),
         customerReport,
         internalNotes: input.internalNotes || null,
         openedAt: now,
@@ -267,6 +284,7 @@ export async function createServiceOrder(
             customerId: targetEquipment.customerId,
             intakeId,
             status: SERVICE_ORDER_INITIAL_STATUS,
+            followUpDays: FOLLOW_UP_ON_CREATION_DAYS,
             // Tamanho, nao conteudo: o relato pode conter dado pessoal.
             customerReportLength: customerReport.length,
           },

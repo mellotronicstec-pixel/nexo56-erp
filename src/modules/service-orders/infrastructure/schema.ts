@@ -5,13 +5,23 @@ import {
   json,
   mysqlTable,
   text,
+  tinyint,
   unique,
   varchar,
 } from 'drizzle-orm/mysql-core';
-import { actorColumns, id, idRef, instant, tenantId, timestamps, unitId } from '@/core/db/columns';
+import {
+  actorColumns,
+  civilDate,
+  id,
+  idRef,
+  instant,
+  tenantId,
+  timestamps,
+  unitId,
+} from '@/core/db/columns';
 import { customers } from '@/modules/customers/infrastructure/schema';
 import { equipment, equipmentIntakes } from '@/modules/equipment/infrastructure/schema';
-import { SERVICE_ORDER_INITIAL_STATUS } from '@/modules/service-orders/domain/service-order';
+import { SERVICE_ORDER_INITIAL_STATUS } from '@/modules/service-orders/domain/workflow';
 import { tenants, units } from '@/modules/tenancy/infrastructure/schema';
 import { users } from '@/modules/users/infrastructure/schema';
 
@@ -79,6 +89,56 @@ export const serviceOrders = mysqlTable(
      * um unico valor, o inicial, e nenhuma transicao.
      */
     status: varchar('status', { length: 40 }).notNull().default(SERVICE_ORDER_INITIAL_STATUS),
+
+    /**
+     * Quando a situacao mudou pela ultima vez (Prompt 08).
+     *
+     * Separado de `updated_at`, que tambem muda ao corrigir o relato. Responde
+     * "ha quanto tempo esta ordem esta parada neste estado" sem varrer a linha
+     * do tempo.
+     */
+    statusChangedAt: instant('status_changed_at'),
+
+    /**
+     * CONTROLE OTIMISTA DE CONCORRENCIA (Prompt 08, item 11).
+     *
+     * Duas pessoas abrem a mesma OS em Aguardando Conserto; uma marca falta de
+     * peca, a outra conclui o reparo. Sem isto, a segunda gravacao sobrescreve
+     * a primeira e a ordem termina num estado que ninguem escolheu — com a
+     * linha do tempo contando duas historias incompativeis.
+     *
+     * Toda transicao faz `UPDATE ... WHERE id = ? AND version = ?` e exige uma
+     * linha afetada. Quem perder a corrida recebe erro e recarrega.
+     */
+    version: int('version', { unsigned: true }).notNull().default(1),
+
+    /**
+     * Tecnico responsavel (itens 26 a 29).
+     *
+     * Diferente de `created_by`: quem abriu a ordem no balcao raramente e quem
+     * conserta. FK COMPOSTA com o tenant.
+     */
+    assignedTechnicianId: idRef('assigned_technician_id'),
+
+    /**
+     * Proximo ponto de atencao (itens 33 a 36).
+     *
+     * DATA CIVIL, nao instante: "+2 dias" e um dia inteiro no fuso de quem
+     * opera. Guardar como timestamp faria a data virar para o dia anterior
+     * conforme o servidor, e uma ordem que vence hoje apareceria como vencida
+     * ontem. `NULL` = sem follow-up (ordem terminal, ou prazo encerrado).
+     */
+    followUpAt: civilDate('follow_up_at'),
+
+    /**
+     * Ultimo prazo para o qual o alerta de vencimento ja foi emitido.
+     *
+     * E o que torna o job idempotente sem tabela de alertas (item 101): se
+     * `follow_up_alerted_for` ja e igual a `follow_up_at`, nao ha o que emitir.
+     * Reagendar o follow-up muda `follow_up_at` e, com isso, volta a permitir
+     * um alerta novo — que e o comportamento desejado.
+     */
+    followUpAlertedFor: civilDate('follow_up_alerted_for'),
 
     /**
      * O que o CLIENTE disse (item 21). Nao e diagnostico (item 22).
@@ -167,6 +227,21 @@ export const serviceOrders = mysqlTable(
       .onDelete('restrict')
       .onUpdate('cascade'),
 
+    /**
+     * Tecnico responsavel, tenant-safe (Prompt 08, item 27).
+     *
+     * Impede no banco que a ordem de uma empresa aponte para um usuario de
+     * outra. A checagem de UNIDADE e de usuario ativo fica no servico, porque
+     * ambas dependem de vinculo e situacao, que mudam com o tempo.
+     */
+    foreignKey({
+      name: 'fk_service_order_technician_tenant',
+      columns: [table.assignedTechnicianId, table.tenantId],
+      foreignColumns: [users.id, users.tenantId],
+    })
+      .onDelete('restrict')
+      .onUpdate('cascade'),
+
     /** Autoria tenant-safe (item 108). */
     foreignKey({
       name: 'fk_service_order_created_by_tenant',
@@ -200,6 +275,12 @@ export const serviceOrders = mysqlTable(
     index('ix_service_order_tenant_customer').on(table.tenantId, table.customerId),
     index('ix_service_order_tenant_equipment').on(table.tenantId, table.equipmentId),
     index('ix_service_order_tenant_status').on(table.tenantId, table.status),
+    /** Fila por situacao dentro da unidade — o filtro operacional do dia a dia. */
+    index('ix_service_order_unit_status').on(table.tenantId, table.unitId, table.status),
+    /** Pendencias: quem venceu, quem vence hoje (itens 40, 41 e 92). */
+    index('ix_service_order_follow_up').on(table.tenantId, table.followUpAt),
+    /** "Minhas OS" do futuro Modo Tecnico. */
+    index('ix_service_order_technician').on(table.tenantId, table.assignedTechnicianId),
   ],
 );
 
@@ -229,6 +310,17 @@ export const serviceOrderTimeline = mysqlTable(
     /** Detalhe estruturado do fato. Tambem sem PII. */
     metadata: json('metadata'),
 
+    /**
+     * Justificativa escrita, quando a transicao exige (Prompt 08, itens 52 e
+     * 108).
+     *
+     * Coluna propria, e nao dentro de `metadata`, justamente porque e TEXTO
+     * LIVRE de pessoa: pode conter dado sensivel incidental, tem limite de
+     * tamanho e precisa ser tratada como tal. `metadata` permanece livre de
+     * PII e continua seguro para log e diagnostico.
+     */
+    reason: varchar('reason', { length: 300 }),
+
     /** Quem provocou o fato. Nulo quando foi o sistema. */
     actorId: idRef('actor_id'),
     occurredAt: instant('occurred_at').notNull(),
@@ -246,5 +338,89 @@ export const serviceOrderTimeline = mysqlTable(
   ],
 );
 
+/**
+ * Tarefas de workflow da Ordem de Servico (Prompt 08, itens 30 a 32).
+ *
+ * MINIMO NECESSARIO AO WORKFLOW, e nada de Agenda: nao ha recorrencia,
+ * prioridade, etiqueta, comentario nem quadro. A entidade generica de Tarefas
+ * e do Prompt 14, e esta tabela foi desenhada para ser absorvida por ela sem
+ * reescrita — tenant, unidade, responsavel, titulo, descricao, prazo e
+ * situacao ja estao aqui.
+ */
+export const serviceOrderTasks = mysqlTable(
+  'service_order_tasks',
+  {
+    id: id().primaryKey(),
+    tenantId: tenantId().notNull(),
+    /** Herdada da ordem: a tarefa acontece onde o trabalho acontece. */
+    unitId: unitId().notNull(),
+    serviceOrderId: idRef('service_order_id').notNull(),
+
+    /** `delivery_preparation`, `part_pickup`. Texto, para o Prompt 14 crescer. */
+    kind: varchar('kind', { length: 40 }).notNull(),
+    title: varchar('title', { length: 160 }).notNull(),
+    description: varchar('description', { length: 500 }),
+
+    /** Responsavel. Nulo quando ainda nao ha a quem atribuir. */
+    assigneeId: idRef('assignee_id'),
+    /** Prazo como DATA CIVIL, pelo mesmo motivo do follow-up. */
+    dueDate: civilDate('due_date'),
+
+    status: varchar('status', { length: 20 }).notNull().default('open'),
+
+    /**
+     * Marcador de tarefa ABERTA (itens 101 e 130).
+     *
+     * Vale `1` enquanto a tarefa esta aberta e `NULL` depois. Como o MySQL
+     * trata cada `NULL` como distinto num indice unico, a UNIQUE abaixo deixa
+     * existir UMA tarefa aberta de cada tipo por ordem, e quantas concluidas
+     * ou canceladas forem necessarias. E isso que impede o reprocessamento de
+     * um evento de criar cinco tarefas iguais na bancada.
+     */
+    openMarker: tinyint('open_marker'),
+
+    /** Nulo = criada pelo proprio workflow, nao por uma pessoa. */
+    createdBy: idRef('created_by'),
+    completedAt: instant('completed_at'),
+    completedBy: idRef('completed_by'),
+
+    ...timestamps(),
+  },
+  (table) => [
+    foreignKey({
+      name: 'fk_so_task_order_tenant',
+      columns: [table.serviceOrderId, table.tenantId],
+      foreignColumns: [serviceOrders.id, serviceOrders.tenantId],
+    })
+      .onDelete('cascade')
+      .onUpdate('cascade'),
+
+    foreignKey({
+      name: 'fk_so_task_unit_tenant',
+      columns: [table.unitId, table.tenantId],
+      foreignColumns: [units.id, units.tenantId],
+    })
+      .onDelete('restrict')
+      .onUpdate('cascade'),
+
+    foreignKey({
+      name: 'fk_so_task_assignee_tenant',
+      columns: [table.assigneeId, table.tenantId],
+      foreignColumns: [users.id, users.tenantId],
+    })
+      .onDelete('restrict')
+      .onUpdate('cascade'),
+
+    /** Uma tarefa ABERTA de cada tipo por ordem. Ver `openMarker`. */
+    unique('uq_so_task_open').on(table.serviceOrderId, table.kind, table.openMarker),
+
+    index('ix_so_task_order').on(table.serviceOrderId, table.status),
+    /** Pendencias da unidade: o que venceu e o que vence hoje. */
+    index('ix_so_task_unit_due').on(table.tenantId, table.unitId, table.status, table.dueDate),
+    index('ix_so_task_assignee').on(table.tenantId, table.assigneeId, table.status),
+  ],
+);
+
 export type ServiceOrderRow = typeof serviceOrders.$inferSelect;
 export type ServiceOrderTimelineRow = typeof serviceOrderTimeline.$inferSelect;
+export type ServiceOrderTaskRow = typeof serviceOrderTasks.$inferSelect;

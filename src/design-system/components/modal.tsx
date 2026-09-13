@@ -52,12 +52,23 @@ export function Modal({
         aria-labelledby={titleId}
         aria-describedby={description ? descriptionId : undefined}
         tabIndex={-1}
+        /*
+          LARGURA EM MEDIDA EXPLICITA, e nao `sm:max-w-lg` (defeito real).
+
+          O Design System nomeia a escala de espacamento com tamanhos de
+          camiseta (`--spacing-sm`, `--spacing-lg`...). No Tailwind 4 o
+          utilitario `max-w-<nome>` resolve essa mesma escala antes da escala de
+          container, entao `sm:max-w-lg` virava `max-width: 1.5rem` — o dialogo
+          inteiro com 24px de largura no desktop, com o scrim por cima dos
+          botoes. Encontrado em navegador real, ao confirmar uma transicao de
+          Ordem de Servico.
+        */
         className={cn(
           'relative flex max-h-[90dvh] w-full flex-col rounded-t-xl bg-white shadow-lg',
           'sm:rounded-xl',
-          size === 'sm' && 'sm:max-w-md',
-          size === 'md' && 'sm:max-w-lg',
-          size === 'lg' && 'sm:max-w-2xl',
+          size === 'sm' && 'sm:max-w-[28rem]',
+          size === 'md' && 'sm:max-w-[32rem]',
+          size === 'lg' && 'sm:max-w-[42rem]',
         )}
       >
         <div className="flex items-start justify-between gap-4 border-b border-ink-200 px-5 py-4">

@@ -17,33 +17,39 @@ Conceitos e implementação: [access-control.md](access-control.md).
 Legenda de escopo: **T** = ação de nível tenant (papel TENANT);
 **U** = ação de unidade (papel TENANT ou papel UNIT daquela unidade).
 
-| Permissão                       | Permite                                          | Escopo | Risco |
-| ------------------------------- | ------------------------------------------------ | ------ | ----- |
-| `admin.access`                  | abrir a área de administração                    | T      | —     |
-| `users.view`                    | listar e abrir usuários da empresa               | T      | —     |
-| `users.manage`                  | criar, editar, ativar e desativar usuários       | T      | alto  |
-| `users.manage_access`           | vincular unidades e atribuir/revogar perfis      | T      | alto  |
-| `users.reset_password`          | gerar código de redefinição de senha de terceiro | T      | alto  |
-| `sessions.revoke`               | encerrar sessões de outro usuário                | T      | alto  |
-| `roles.view`                    | consultar perfis e suas permissões               | T      | —     |
-| `roles.manage`                  | criar, renomear e excluir perfis                 | T      | alto  |
-| `roles.manage_permissions`      | alterar **quais** permissões um perfil concede   | T      | alto  |
-| `units.view`                    | consultar unidades                               | T      | —     |
-| `units.manage`                  | criar e alterar unidades                         | T      | alto  |
-| `features.view`                 | consultar módulos disponíveis                    | T      | —     |
-| `features.manage`               | ativar e desativar módulos da empresa            | T      | alto  |
-| `audit.view`                    | consultar a trilha de auditoria                  | T      | —     |
-| `customers.view`                | listar e abrir clientes                          | T      | —     |
-| `customers.manage`              | cadastrar e corrigir clientes                    | T      | médio |
-| `customers.change_status`       | ativar e inativar cliente                        | T      | médio |
-| `equipment.view`                | consultar equipamentos e suas fotos              | T      | —     |
-| `equipment.manage`              | cadastrar e corrigir a identificação do aparelho | T      | médio |
-| `equipment_intake.view`         | consultar os recebimentos **da unidade**         | **U**  | —     |
-| `equipment_intake.create`       | registrar a entrada de um aparelho na unidade    | **U**  | médio |
-| `equipment_intake.manage_media` | anexar e remover fotos                           | **U**  | médio |
-| `service_orders.view`           | consultar Ordens de Servico da unidade           | **U**  | —     |
-| `service_orders.create`         | abrir uma Ordem de Servico                       | **U**  | médio |
-| `service_orders.update`         | corrigir o relato e as observacoes de abertura   | **U**  | médio |
+| Permissão                          | Permite                                          | Escopo | Risco |
+| ---------------------------------- | ------------------------------------------------ | ------ | ----- |
+| `admin.access`                     | abrir a área de administração                    | T      | —     |
+| `users.view`                       | listar e abrir usuários da empresa               | T      | —     |
+| `users.manage`                     | criar, editar, ativar e desativar usuários       | T      | alto  |
+| `users.manage_access`              | vincular unidades e atribuir/revogar perfis      | T      | alto  |
+| `users.reset_password`             | gerar código de redefinição de senha de terceiro | T      | alto  |
+| `sessions.revoke`                  | encerrar sessões de outro usuário                | T      | alto  |
+| `roles.view`                       | consultar perfis e suas permissões               | T      | —     |
+| `roles.manage`                     | criar, renomear e excluir perfis                 | T      | alto  |
+| `roles.manage_permissions`         | alterar **quais** permissões um perfil concede   | T      | alto  |
+| `units.view`                       | consultar unidades                               | T      | —     |
+| `units.manage`                     | criar e alterar unidades                         | T      | alto  |
+| `features.view`                    | consultar módulos disponíveis                    | T      | —     |
+| `features.manage`                  | ativar e desativar módulos da empresa            | T      | alto  |
+| `audit.view`                       | consultar a trilha de auditoria                  | T      | —     |
+| `customers.view`                   | listar e abrir clientes                          | T      | —     |
+| `customers.manage`                 | cadastrar e corrigir clientes                    | T      | médio |
+| `customers.change_status`          | ativar e inativar cliente                        | T      | médio |
+| `equipment.view`                   | consultar equipamentos e suas fotos              | T      | —     |
+| `equipment.manage`                 | cadastrar e corrigir a identificação do aparelho | T      | médio |
+| `equipment_intake.view`            | consultar os recebimentos **da unidade**         | **U**  | —     |
+| `equipment_intake.create`          | registrar a entrada de um aparelho na unidade    | **U**  | médio |
+| `equipment_intake.manage_media`    | anexar e remover fotos                           | **U**  | médio |
+| `service_orders.view`              | consultar Ordens de Servico da unidade           | **U**  | —     |
+| `service_orders.create`            | abrir uma Ordem de Servico                       | **U**  | médio |
+| `service_orders.update`            | corrigir o relato e as observacoes de abertura   | **U**  | médio |
+| `service_orders.transition`        | mover a Ordem de Servico pelo fluxo              | **U**  | médio |
+| `service_orders.complete`          | finalizar a Ordem de Servico                     | **U**  | alto  |
+| `service_orders.cancel`            | cancelar a Ordem de Servico                      | **U**  | alto  |
+| `service_orders.assign_technician` | definir o tecnico responsavel                    | **U**  | médio |
+| `service_orders.manage_follow_up`  | reagendar o acompanhamento                       | **U**  | médio |
+| `service_orders.manage_tasks`      | criar e concluir tarefas do fluxo                | **U**  | médio |
 
 Até o Prompt 04 todas as capacidades eram de nível **tenant** — o catálogo
 continha apenas administração estrutural. O Prompt 06 trouxe as primeiras de
@@ -52,10 +58,22 @@ três permissões de `equipment_intake` valem para a unidade ativa. Clientes e
 Equipamentos continuam de nível tenant, porque a entidade em si atravessa as
 unidades (ADR-026, ADR-029).
 
-O Prompt 07 acrescentou as três da Ordem de Serviço, também de nível unidade: a
-OS é o trabalho assumido por uma loja. As permissões de operação diária
-restantes (estoque, caixa) chegam com os módulos seguintes, e as **ações de
-workflow** da OS — orçar, encomendar peça, concluir — chegam com o Prompt 08.
+O Prompt 07 acrescentou as três primeiras da Ordem de Serviço, também de nível
+unidade: a OS é o trabalho assumido por uma loja. O Prompt 08 acrescentou as
+seis do **workflow**, todas de unidade — e com uma diferença que importa:
+
+> A permissão de workflow é avaliada na unidade **da ordem**, não na unidade
+> ativa da sessão.
+
+Alguém com acesso a duas lojas não deve conseguir mover o trabalho da loja B por
+estar com a loja A selecionada no seletor. Abertura e correção continuam usando
+a unidade ativa, porque ali a unidade **é** o destino do que se cria.
+
+Finalizar e cancelar têm permissão própria porque são irreversíveis: quem move o
+trabalho pela bancada não necessariamente encerra o atendimento.
+
+As permissões de operação diária restantes (orçamento, estoque, caixa) chegam
+com os módulos seguintes.
 
 ---
 
@@ -126,6 +144,10 @@ exige `users.view`; conceder-lhe um perfil exige `users.manage_access`.
 | 13  | Atendente com `service_orders.create` e unidade ativa abre uma OS a partir de um recebimento      | permitido |
 | 14  | Usuário com papel só na Unidade Norte abre OS de um recebimento registrado na Norte               | permitido |
 | 15  | Reenviar o mesmo formulário de abertura devolve a MESMA OS, sem criar a segunda                   | permitido |
+| 16  | Usuário com `service_orders.transition` move a OS de Aguardando Parecer para Aguardando Conserto  | permitido |
+| 17  | Papel TENANT com `service_orders.transition` move OS de qualquer unidade que a pessoa acesse      | permitido |
+| 18  | Usuário com `service_orders.manage_tasks` conclui a tarefa de preparação da própria unidade       | permitido |
+| 19  | Registrar busca de peça duas vezes: a segunda não cria tarefa duplicada e não é erro              | permitido |
 
 ---
 
@@ -168,6 +190,21 @@ exige `users.view`; conceder-lhe um perfil exige `users.manage_access`.
 | 33  | `INSERT` direto com número de OS repetido na mesma empresa                            | UNIQUE `(tenant, number)` | `ERROR 1062` do InnoDB                   |
 | 34  | Abrir OS sem unidade ativa                                                            | `UNIT_REQUIRED`           | erro de autorização                      |
 | 35  | Enviar `customerId` de outro cliente no formulário de abertura                        | valor ignorado            | cliente vem do equipamento               |
+| 36  | Mover OS da Unidade Sul com papel de transição concedido só na Unidade Norte          | escopo da **ordem**       | erro de autorização                      |
+| 37  | Finalizar a OS tendo só `service_orders.transition`                                   | `PERMISSION_DENIED`       | erro de autorização                      |
+| 38  | Cancelar a OS tendo só `service_orders.transition`                                    | `PERMISSION_DENIED`       | erro de autorização                      |
+| 39  | Cancelar a OS sem escrever o motivo                                                   | motivo obrigatório        | erro de validação                        |
+| 40  | Transição não prevista na matriz (ex.: Aguardando Peça → Reparo Concluído)            | regra de workflow         | recusa explicada em português            |
+| 41  | Qualquer transição a partir de OS Finalizada ou Cancelada                             | estado terminal           | recusa explicada em português            |
+| 42  | Ir para Aguardando Cliente Retirar pelo seletor genérico de situação                  | transição `actionOnly`    | recusa: só pela ação correspondente      |
+| 43  | "Informar Ordem Disponível" antes de concluir a preparação                            | condição da ação          | recusa explicada em português            |
+| 44  | Gravar uma transição com a versão que já ficou velha (outra pessoa gravou antes)      | conflito de versão        | aviso para recarregar; nada é gravado    |
+| 45  | Atribuir como técnico alguém sem vínculo com a unidade da ordem, ou inativo           | vínculo/situação          | erro de regra de negócio                 |
+| 46  | Atribuir como técnico alguém de **outra empresa**, com o UUID em mãos                 | fora do tenant            | erro de regra de negócio                 |
+| 47  | Concluir tarefa de outra unidade ou de outra empresa pelo UUID                        | escopo                    | "não encontrada"                         |
+| 48  | Concluir a mesma tarefa duas vezes                                                    | tarefa já encerrada       | erro de regra de negócio                 |
+| 49  | Registrar busca de peça fora de Aguardando Peça                                       | estado incompatível       | erro de regra de negócio                 |
+| 50  | `INSERT` direto de duas tarefas abertas do mesmo tipo na mesma OS                     | UNIQUE com `open_marker`  | `ERROR 1062` do InnoDB                   |
 
 **Por que o item 3 responde 404 e não 403:** responder "sem permissão"
 confirmaria que aquele registro existe. Para quem está do lado de fora, um ID

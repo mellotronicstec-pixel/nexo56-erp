@@ -20,11 +20,11 @@ testes próprios — nunca como placeholder (Prompt 01, itens 8 e 82).
 
 ## De negócio
 
-| Módulo           | Prompt | Responsabilidade                                                          | Tabelas                                                                                                                                        |
-| ---------------- | ------ | ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `customers`      | 05     | pessoas e empresas atendidas, contatos e endereços                        | `customers`, `customer_contacts`, `customer_addresses`                                                                                         |
-| `equipment`      | 06     | aparelhos, recebimento, acessórios, inspeção, fotos e leitura de etiqueta | `equipment`, `equipment_intakes`, `equipment_intake_accessories`, `equipment_intake_conditions`, `equipment_media`, `equipment_label_readings` |
-| `service-orders` | 07     | abertura, numeração, vínculos, ficha e histórico da Ordem de Serviço      | `service_orders`, `service_order_timeline`                                                                                                     |
+| Módulo           | Prompt | Responsabilidade                                                                   | Tabelas                                                                                                                                        |
+| ---------------- | ------ | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `customers`      | 05     | pessoas e empresas atendidas, contatos e endereços                                 | `customers`, `customer_contacts`, `customer_addresses`                                                                                         |
+| `equipment`      | 06     | aparelhos, recebimento, acessórios, inspeção, fotos e leitura de etiqueta          | `equipment`, `equipment_intakes`, `equipment_intake_accessories`, `equipment_intake_conditions`, `equipment_media`, `equipment_label_readings` |
+| `service-orders` | 07–08  | abertura, numeração, vínculos, ficha, histórico e **workflow** da Ordem de Serviço | `service_orders`, `service_order_timeline`, `service_order_tasks`                                                                              |
 
 O `equipment` usa também a abstração de armazenamento de arquivos
 (`core/storage`), introduzida no Prompt 06: os bytes das fotos ficam fora do

@@ -41,6 +41,7 @@ Escopo de cada entidade (Prompt 02, itens 6 a 14 e 85).
 | `equipment_label_readings`     | tenant               | obrigatório    | não                    | **sim**   | cascata do equipamento       |
 | `service_orders`               | **tenant + unidade** | obrigatório    | **obrigatório**        | **sim**⁷  | **nunca**                    |
 | `service_order_timeline`       | via ordem            | obrigatório    | herdado                | **sim**   | **nunca**                    |
+| `service_order_tasks`          | **tenant + unidade** | obrigatório    | **obrigatório**⁸       | não       | cascata da ordem             |
 
 ¹ Nulo em evento de plataforma anterior ao tenant existir.
 ² Nulo em job técnico global (ex.: limpeza de sessões expiradas).
@@ -53,8 +54,12 @@ entrada posterior nunca sobrescreve a anterior.
 ⁶ A foto é prova de como o aparelho estava naquele dia. Corrigir o cadastro do
 equipamento depois **não** altera a mídia.
 ⁷ A Ordem de Serviço é registro histórico operacional: não se exclui, e cliente,
-equipamento e unidade não mudam depois da abertura (ADR-033). Cancelamento será
-estado do workflow (Prompt 08), nunca `DELETE`.
+equipamento e unidade não mudam depois da abertura (ADR-033). Cancelamento é
+**estado do workflow** (`cancelled`, Prompt 08), nunca `DELETE`.
+⁸ A tarefa herda a unidade da ordem e é trabalho operacional, não histórico: ela
+segue a ordem no `CASCADE`. Encerrar a OS **cancela** as tarefas abertas — cada
+uma com seu próprio registro de auditoria, porque "a ordem foi cancelada" não
+explica, meses depois, por que a tarefa que estava na bancada de alguém sumiu.
 
 ### Justificativa das tabelas globais (item 7)
 

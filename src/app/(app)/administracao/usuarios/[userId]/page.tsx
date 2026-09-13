@@ -156,7 +156,7 @@ export default async function UserAccessPage({ params }: { params: Promise<{ use
                   <select
                     id="grant-unit"
                     name="unitId"
-                    className="h-10 w-full rounded-md border border-ink-300 bg-white px-3 text-ui text-ink-900 shadow-xs sm:max-w-xs"
+                    className="h-10 w-full rounded-md border border-ink-300 bg-white px-3 text-ui text-ink-900 shadow-xs sm:max-w-[20rem]"
                   >
                     {availableUnits.map((unit) => (
                       <option key={unit.id} value={unit.id}>

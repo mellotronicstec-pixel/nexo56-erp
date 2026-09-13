@@ -11,7 +11,7 @@ import { linkButtonClass } from '@/design-system/components';
 export default function NotFound() {
   return (
     <main className="flex min-h-dvh items-center justify-center px-4">
-      <div className="max-w-md text-center">
+      <div className="max-w-[28rem] text-center">
         <p className="font-heading text-h1 font-bold text-brand-500">404</p>
         <h1 className="mt-2 font-heading text-h3 font-semibold text-ink-900">
           Pagina nao encontrada
