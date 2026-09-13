@@ -76,7 +76,13 @@ export function Modal({
           </IconButton>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 text-ui text-ink-700">
+        {/*
+          `tabIndex={0}` nao e enfeite: quando o conteudo excede a altura, esta
+          area vira uma regiao rolavel, e regiao rolavel precisa ser alcancavel
+          pelo teclado — senao quem navega sem mouse nao consegue ler o que
+          esta abaixo da dobra. Encontrado por axe-core (scrollable-region-focusable).
+        */}
+        <div tabIndex={0} className="min-h-0 flex-1 overflow-y-auto px-5 py-4 text-ui text-ink-700">
           {children}
         </div>
 

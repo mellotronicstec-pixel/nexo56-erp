@@ -31,6 +31,11 @@ export const EVENT_TYPES = {
   ROLE_PERMISSIONS_CHANGED: 'ROLE_PERMISSIONS_CHANGED',
   PASSWORD_CHANGED: 'PASSWORD_CHANGED',
   SESSION_REVOKED: 'SESSION_REVOKED',
+
+  // --- Prompt 05: clientes -------------------------------------------------
+  CUSTOMER_CREATED: 'CUSTOMER_CREATED',
+  CUSTOMER_UPDATED: 'CUSTOMER_UPDATED',
+  CUSTOMER_STATUS_CHANGED: 'CUSTOMER_STATUS_CHANGED',
 } as const;
 
 export type EventType = (typeof EVENT_TYPES)[keyof typeof EVENT_TYPES];

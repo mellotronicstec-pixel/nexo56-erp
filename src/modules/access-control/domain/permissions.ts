@@ -27,6 +27,13 @@ export const PERMISSIONS = {
   FEATURES_MANAGE: 'features.manage',
   AUDIT_VIEW: 'audit.view',
   SESSIONS_REVOKE: 'sessions.revoke',
+
+  // --- Prompt 05: clientes -------------------------------------------------
+  CUSTOMERS_VIEW: 'customers.view',
+  /** Criar e editar cadastro. Segue a convencao `view`/`manage` do catalogo. */
+  CUSTOMERS_MANAGE: 'customers.manage',
+  /** Ativar e inativar — separada porque muda a operacao, nao o cadastro. */
+  CUSTOMERS_CHANGE_STATUS: 'customers.change_status',
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -123,6 +130,24 @@ export const PERMISSION_CATALOG: readonly PermissionDefinition[] = [
     name: 'Visualizar auditoria',
     description: 'Consulta a trilha de auditoria da empresa.',
     featureKey: 'core.audit',
+  },
+  {
+    key: PERMISSIONS.CUSTOMERS_VIEW,
+    name: 'Visualizar clientes',
+    description: 'Consulta a lista e a ficha dos clientes da empresa.',
+    featureKey: 'core.customers',
+  },
+  {
+    key: PERMISSIONS.CUSTOMERS_MANAGE,
+    name: 'Administrar clientes',
+    description: 'Cadastra e edita clientes, contatos e enderecos.',
+    featureKey: 'core.customers',
+  },
+  {
+    key: PERMISSIONS.CUSTOMERS_CHANGE_STATUS,
+    name: 'Ativar e inativar clientes',
+    description: 'Altera a situacao do cliente sem apagar o cadastro.',
+    featureKey: 'core.customers',
   },
 ];
 
@@ -241,6 +266,16 @@ export const PERMISSION_GROUPS = [
     permissions: [PERMISSIONS.UNITS_VIEW, PERMISSIONS.UNITS_MANAGE],
   },
   {
+    key: 'clientes',
+    name: 'Clientes',
+    description: 'Cadastro de clientes da empresa.',
+    permissions: [
+      PERMISSIONS.CUSTOMERS_VIEW,
+      PERMISSIONS.CUSTOMERS_MANAGE,
+      PERMISSIONS.CUSTOMERS_CHANGE_STATUS,
+    ],
+  },
+  {
     key: 'plataforma',
     name: 'Modulos e auditoria',
     description: 'Configuracao de funcionalidades e trilha de auditoria.',
@@ -259,6 +294,12 @@ export const PERMISSION_GROUPS = [
  *
  * Usadas pela politica anti-escalonamento (item 57): ninguem concede a um
  * perfil uma permissao de alto risco que a propria pessoa nao possua.
+ */
+/*
+ * NOTA sobre Clientes: `customers.*` NAO entra nesta lista. Alto risco aqui
+ * significa "amplia acesso, direta ou indiretamente" — e administrar clientes
+ * nao concede capacidade a ninguem. Elas sao permissoes de DADO PESSOAL, o que
+ * e uma preocupacao real e diferente, tratada pelo RBAC e pela auditoria.
  */
 export const HIGH_RISK_PERMISSIONS: readonly PermissionKey[] = [
   PERMISSIONS.ADMIN_ACCESS,

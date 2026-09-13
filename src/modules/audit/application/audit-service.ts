@@ -47,6 +47,13 @@ export const AUDIT_ACTIONS = {
   PASSWORD_RESET_COMPLETED: 'password.reset_completed',
   SESSION_REVOKED: 'session.revoked',
   ALL_SESSIONS_REVOKED: 'session.all_revoked',
+
+  // --- Prompt 05: clientes -------------------------------------------------
+  CUSTOMER_CREATED: 'customer.created',
+  CUSTOMER_UPDATED: 'customer.updated',
+  CUSTOMER_DOCUMENT_CHANGED: 'customer.document_changed',
+  CUSTOMER_ACTIVATED: 'customer.activated',
+  CUSTOMER_DEACTIVATED: 'customer.deactivated',
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];

@@ -16,6 +16,7 @@ export const FEATURES = {
   CORE_ACCESS_CONTROL: 'core.access_control',
   CORE_FEATURES: 'core.features',
   CORE_AUDIT: 'core.audit',
+  CORE_CUSTOMERS: 'core.customers',
   PLATFORM_MULTI_UNIT: 'platform.multi_unit',
 } as const;
 
@@ -70,6 +71,20 @@ export const FEATURE_CATALOG: readonly FeatureDefinition[] = [
     key: FEATURES.CORE_AUDIT,
     name: 'Auditoria',
     description: 'Trilha de auditoria das acoes relevantes.',
+    type: 'CORE',
+    dependsOn: [FEATURES.CORE_TENANCY],
+  },
+  {
+    key: FEATURES.CORE_CUSTOMERS,
+    name: 'Clientes',
+    description:
+      'Cadastro de clientes da empresa: pessoas fisicas e juridicas, contatos e enderecos.',
+    /**
+     * CORE, e nao OPTIONAL, por consequencia e nao por importancia: Ordens de
+     * Servico, Garantias e Financeiro vao depender de Cliente. Deixar o tenant
+     * desligar Clientes seria oferecer um botao que quebra os modulos que
+     * vierem depois — e o dado ficaria orfao na tela, nao apagado.
+     */
     type: 'CORE',
     dependsOn: [FEATURES.CORE_TENANCY],
   },

@@ -45,6 +45,11 @@ mudo**: um quadrado na cor institucional, sem letra, sem número e sem forma que
 imite a marca. Ele não é uma versão da logo — existe só para a aba do navegador
 ter um ícone.
 
-Ao receber o símbolo oficial: substitua `src/app/icon.svg` pelo SVG original,
+O mesmo vale para `public/favicon.ico` (16×16, um quadrado sólido) — ele existe
+porque o navegador pede `/favicon.ico` por conta própria, e um 404 a cada
+carregamento polui o console.
+
+Ao receber o símbolo oficial: substitua `src/app/icon.svg` e `public/favicon.ico`
+pelos arquivos originais,
 copie os mestres para esta pasta, e troque `BRAND_ASSETS_AVAILABLE` para `true`
 em `src/design-system/brand.ts`.

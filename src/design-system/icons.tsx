@@ -228,3 +228,11 @@ export const IconKey = (props: IconProps) => (
     <path d="M10.6 13L20 3.6M17.2 6.4l2 2M15 8.6l2 2" />
   </Icon>
 );
+
+export const IconCustomers = (props: IconProps) => (
+  <Icon {...props}>
+    <circle cx="12" cy="7.5" r="3.2" />
+    <path d="M5 20a7 7 0 0114 0" />
+    <path d="M3.2 9.5h1.6M19.2 9.5h1.6" />
+  </Icon>
+);

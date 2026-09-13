@@ -2,13 +2,12 @@
 
 Plataforma ERP/SaaS multiempresa para gestão de assistência técnica e reparo.
 
-**Estado atual: fundação técnica, camada de dados, controle de acesso e Design
-System (Prompts 01 a 04).** Autenticação, sessões, usuários, perfis, permissões
-com **escopo por unidade**, multi-tenancy, modularidade, auditoria, eventos,
-jobs, Design System completo e estrutura de interface responsiva estão
-implementados e testados. **Os módulos de negócio ainda
-não existem** — Clientes, Equipamentos, Ordens de Serviço, Orçamentos, Estoque,
-Compras, Financeiro, Garantias e demais serão construídos nos prompts seguintes.
+**Estado atual: fundação completa + primeiro módulo de negócio (Prompts 01 a
+05).** Autenticação, sessões, usuários, perfis, permissões com **escopo por
+unidade**, multi-tenancy, modularidade, auditoria, eventos, jobs, Design System,
+interface responsiva e o módulo **Clientes** estão implementados e testados.
+Equipamentos, Ordens de Serviço, Orçamentos, Estoque, Compras, Financeiro,
+Garantias e demais serão construídos nos prompts seguintes.
 
 ---
 
@@ -303,6 +302,7 @@ docs/             arquitetura, ADRs, Hostinger
 - **Papéis, permissões e escopo por unidade:** [docs/architecture/access-control.md](docs/architecture/access-control.md)
 - **Matriz de acesso:** [docs/architecture/access-matrix.md](docs/architecture/access-matrix.md)
 - **Design System:** [docs/design-system/overview.md](docs/design-system/overview.md)
+- **Clientes:** [docs/modules/customers/overview.md](docs/modules/customers/overview.md)
 
 ---
 

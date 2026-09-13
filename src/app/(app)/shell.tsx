@@ -18,6 +18,7 @@ import { BrandMark } from '@/design-system/components/brand-mark';
 import {
   IconBuilding,
   IconChevronDown,
+  IconCustomers,
   IconHistory,
   IconKey,
   IconLogout,
@@ -45,6 +46,7 @@ const NAV_ICONS: Record<NavIconKey, ComponentType<IconProps>> = {
   building: IconBuilding,
   modules: IconModules,
   history: IconHistory,
+  customers: IconCustomers,
 };
 
 /**

@@ -24,7 +24,8 @@ import { FEATURES } from '@/modules/features/domain/catalog';
  * fronteira entre os dois so aceita dados serializaveis — funcao de componente
  * nao atravessa. Entao o servidor manda o nome e o shell resolve o desenho.
  */
-export type NavIconKey = 'user' | 'users' | 'shield' | 'building' | 'modules' | 'history';
+export type NavIconKey =
+  'user' | 'users' | 'shield' | 'building' | 'modules' | 'history' | 'customers';
 
 export interface NavItem {
   href: string;
@@ -41,6 +42,18 @@ export interface NavSection {
 }
 
 export const NAV_SECTIONS: readonly NavSection[] = [
+  {
+    title: 'Operacao',
+    items: [
+      {
+        href: '/clientes',
+        label: 'Clientes',
+        featureKey: FEATURES.CORE_CUSTOMERS,
+        permission: PERMISSIONS.CUSTOMERS_VIEW,
+        icon: 'customers',
+      },
+    ],
+  },
   {
     title: 'Minha area',
     items: [
@@ -104,6 +117,7 @@ export const NAV_SECTIONS: readonly NavSection[] = [
  * o nome real do registro e passa a trilha completa.
  */
 export const BREADCRUMB_LABELS: Readonly<Record<string, string>> = {
+  clientes: 'Clientes',
   administracao: 'Administracao',
   usuarios: 'Usuarios',
   perfis: 'Perfis de acesso',

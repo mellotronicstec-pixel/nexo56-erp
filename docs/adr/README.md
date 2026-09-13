@@ -6,7 +6,7 @@ Cada ADR informa **contexto**, **decisão**, **motivo**, **alternativas** e
 
 Os ADRs 001–012 vêm do Prompt 01 (fundação técnica); 013–018 do Prompt 02
 (camada de dados); 019–022 do Prompt 03 (acesso, papéis e sessões); 023–025 do
-Prompt 04 (Design System e interface).
+Prompt 04 (Design System e interface); 026–028 do Prompt 05 (Clientes).
 
 Um ADR não é reescrito quando a decisão muda: cria-se um novo ADR que o
 substitui, e o antigo passa a `Substituído por ADR-XXX`.

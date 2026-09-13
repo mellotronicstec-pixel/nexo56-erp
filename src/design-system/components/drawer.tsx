@@ -62,7 +62,10 @@ export function Drawer({
           </IconButton>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
+        {/* Rolavel => alcancavel pelo teclado. Ver o comentario em modal.tsx. */}
+        <div tabIndex={0} className="min-h-0 flex-1 overflow-y-auto">
+          {children}
+        </div>
 
         {footer ? <div className="border-t border-ink-200 px-4 py-3">{footer}</div> : null}
       </div>
