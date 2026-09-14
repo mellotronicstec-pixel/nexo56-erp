@@ -109,6 +109,25 @@ export const AUDIT_ACTIONS = {
   STOCK_ADJUSTED: 'stock.adjusted',
   STOCK_TRANSFERRED: 'stock.transferred',
   STOCK_MINIMUM_CHANGED: 'stock.minimum_changed',
+
+  // --- Prompt 11: fornecedores e compras ------------------------------------
+  /**
+   * AUDITLOG != TIMELINE DO PEDIDO (item 44).
+   *
+   * A timeline conta a historia OPERACIONAL para quem acompanha a compra
+   * ("recebimento parcial: 6/10"). O AuditLog registra quem executou acao
+   * SENSIVEL: mexer no cadastro do fornecedor, autorizar a compra, receber
+   * mercadoria (que vira saldo) e cancelar o que sobrou.
+   */
+  SUPPLIER_CREATED: 'supplier.created',
+  SUPPLIER_UPDATED: 'supplier.updated',
+  SUPPLIER_STATUS_CHANGED: 'supplier.status_changed',
+  PURCHASE_ORDER_CREATED: 'purchase_order.created',
+  PURCHASE_ORDER_UPDATED: 'purchase_order.updated',
+  PURCHASE_ORDER_APPROVED: 'purchase_order.approved',
+  PURCHASE_ORDER_PLACED: 'purchase_order.placed',
+  PURCHASE_ORDER_CANCELLED: 'purchase_order.cancelled',
+  PURCHASE_RECEIPT_CREATED: 'purchase_receipt.created',
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];

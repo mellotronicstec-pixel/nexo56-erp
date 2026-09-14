@@ -1,4 +1,4 @@
-import { formatDocument, type DocumentType } from './document';
+import { formatDocument, type DocumentType } from '@/core/document/brazilian-document';
 
 /**
  * Tipos e regras puras do dominio de Clientes (Prompt 05, itens 5, 7 e 18).

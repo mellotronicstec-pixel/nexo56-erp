@@ -254,12 +254,25 @@ Duas decisões estruturais valem registro aqui, porque atravessam o schema:
 - **`stock_movements` é append-only.** Não tem `updated_at` nem `version`, e
   nenhum arquivo do projeto executa `UPDATE` ou `DELETE` nela — verificado por
   teste de arquitetura. Correção se faz com movimentação compensatória.
+- **O fornecedor é do tenant; o pedido de compra é da unidade** (Prompt 11).
+  `suppliers` não tem `unit_id` — a empresa negocia com o distribuidor, não a
+  loja; `purchase_orders`, `purchase_needs` e `purchase_receipts` têm, porque a
+  mercadoria chega em um endereço (ADR-052).
+- **`purchase_price_history` é append-only**, como o ledger e pela mesma razão:
+  o preço anterior nunca é sobrescrito, e é ele que responde como o custo
+  evoluiu (ADR-051).
+- **A dependência entre Compras e Estoque é de mão única.** A FK vai de
+  `purchase_receipt_items.stock_movement_id` para
+  `stock_movements(id, tenant_id)` — nunca o contrário. Foi por isso que o
+  Prompt 11 acrescentou a UNIQUE `(id, tenant_id)` em `stock_movements`, o
+  **único** ALTER sobre tabela pré-existente da migration `0009` (ADR-049).
 
 Documentação dos módulos acrescentados depois:
 
 - [docs/modules/service-orders/](../modules/service-orders/overview.md)
 - [docs/modules/quotes/](../modules/quotes/overview.md)
 - [docs/modules/inventory/](../modules/inventory/overview.md)
+- [docs/modules/purchasing/](../modules/purchasing/overview.md)
 
 ---
 

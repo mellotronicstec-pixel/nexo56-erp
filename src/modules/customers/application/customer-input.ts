@@ -4,8 +4,8 @@ import {
   DOCUMENT_TYPE_FOR_KIND,
   type CustomerKind,
 } from '@/modules/customers/domain/customer';
-import { isValidDocument, onlyDigits } from '@/modules/customers/domain/document';
-import { isValidPhone, normalizeEmail, normalizePhone } from '@/modules/customers/domain/phone';
+import { isValidDocument, onlyDigits } from '@/core/document/brazilian-document';
+import { isValidPhone, normalizeEmail, normalizePhone } from '@/core/contact/phone';
 
 /**
  * Entrada validada do cadastro de cliente (Prompt 05, itens 6, 7, 8 e 31).

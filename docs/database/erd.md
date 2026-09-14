@@ -427,8 +427,8 @@ erDiagram
         decimal resulting_on_hand "saldo apos - torna a reconciliacao comparacao"
         decimal unit_cost "congelado - mudar o custo da peca nao reescreve"
         decimal total_cost
-        varchar origin_kind "manual service_order transfer - NAO purchase_order"
-        varchar reference "nota, fornecedor, quem trouxe - texto livre"
+        varchar origin_kind "manual service_order transfer purchase_order"
+        varchar reference "texto livre - Compra PC 000037 mora aqui"
         varchar reason "OBRIGATORIO em ajuste"
         char36 service_order_id FK "FK composta com unit_id - isola a unidade"
         char36 transfer_id FK
@@ -436,6 +436,7 @@ erDiagram
         varchar idempotency_key UK "retry nao lanca duas vezes"
         char36 actor_id FK
         datetime occurred_at
+        composite uq_stock_movement_id_tenant UK "alvo da FK de purchase_receipt_items"
     }
     STOCK_RESERVATIONS {
         char36 id PK
@@ -460,6 +461,151 @@ erDiagram
         varchar status "sempre completed na V1 - nao ha in_transit"
         varchar idempotency_key UK "retry nao transfere duas vezes"
     }
+    SUPPLIERS {
+        char36 id PK
+        char36 tenant_id FK "TENANT - a empresa negocia, nao a loja"
+        varchar kind "company individual"
+        varchar name "razao social ou nome"
+        varchar name_search "normalizado - busca sem acento"
+        varchar document_type "cpf cnpj - OPCIONAL"
+        varchar document_digits UK "quando informado, validado e unico por tenant"
+        varchar phone_digits "so digitos - a busca acha com ou sem mascara"
+        int lead_time_days "prazo PROMETIDO - o real vive no historico"
+        varchar commercial_terms "texto livre"
+        varchar status "active inactive - inativar NAO apaga nada"
+        int version
+        composite uq_supplier_id_tenant UK "alvo de FK composta"
+    }
+    SUPPLIER_CONTACTS {
+        char36 id PK
+        char36 tenant_id FK
+        char36 supplier_id FK "FK composta com tenant_id"
+        varchar role "commercial financial other"
+        varchar name "DADO PESSOAL dentro de cadastro de empresa"
+        varchar email
+        varchar phone
+    }
+    SUPPLIER_PARTS {
+        char36 id PK
+        char36 tenant_id FK
+        char36 supplier_id FK
+        char36 part_id FK
+        varchar supplier_code "como o fornecedor chama a peca"
+        decimal last_unit_cost "CONVENIENCIA de tela - nao e autoridade de preco"
+        datetime last_purchased_at
+        composite uq_supplier_part UK "um vinculo por fornecedor por peca"
+    }
+    PURCHASE_PRICE_HISTORY {
+        char36 id PK "APPEND-ONLY - o preco anterior nunca e sobrescrito"
+        char36 tenant_id FK
+        char36 supplier_id FK
+        char36 part_id FK
+        char36 unit_id FK
+        char36 purchase_order_id FK
+        char36 purchase_receipt_id FK
+        decimal quantity
+        decimal unit_cost "o que se pagou, congelado"
+        decimal total_cost
+        int observed_lead_time_days "prazo REAL - nulo quando nao ha placed_at"
+        datetime occurred_at
+    }
+    PURCHASE_NEEDS {
+        char36 id PK
+        char36 tenant_id FK
+        char36 unit_id FK "UNIDADE - o que falta no centro nao falta no norte"
+        char36 part_id FK "FK composta com tenant_id"
+        decimal quantity "quanto precisa"
+        decimal ordered_quantity "quanto entrou em pedido - NAO significa atendida"
+        decimal received_quantity "quanto chegou - e isto que fecha"
+        varchar origin "manual service_order low_stock"
+        char36 service_order_id FK "OPCIONAL - FK composta com unit_id"
+        varchar justification "por que precisa"
+        varchar status "open ordered fulfilled cancelled"
+        int version
+    }
+    PURCHASE_ORDERS {
+        char36 id PK
+        char36 tenant_id FK
+        char36 unit_id FK "UNIDADE - a mercadoria chega em um endereco"
+        char36 supplier_id FK "FK composta com tenant_id"
+        int number UK "PC 000037 - unico por tenant"
+        varchar status "draft approved placed partially_received received cancelled"
+        decimal subtotal
+        decimal discount
+        decimal freight "entra no TOTAL do pedido, nao no custo da peca"
+        decimal other_costs
+        decimal total
+        varchar expected_at "data CIVIL - previsao e dia de calendario"
+        datetime approved_at
+        datetime placed_at
+        datetime cancelled_at
+        varchar cancel_reason "OBRIGATORIO a partir de aprovado"
+        varchar idempotency_key UK "duplo clique reencontra o pedido"
+        int version
+        composite uq_purchase_order_id_unit UK "alvo de FK composta"
+    }
+    PURCHASE_ORDER_ITEMS {
+        char36 id PK
+        char36 tenant_id FK
+        char36 purchase_order_id FK
+        char36 part_id FK
+        varchar description "SNAPSHOT - renomear a peca nao reescreve o pedido"
+        varchar unit_of_measure "snapshot"
+        varchar supplier_code "snapshot"
+        decimal quantity "quanto foi pedido"
+        decimal received_quantity "CHECK <= quantity - a trava de over-receipt"
+        decimal unit_cost
+        decimal total
+        char36 purchase_need_id FK "OPCIONAL - a necessidade que esta linha atende"
+    }
+    PURCHASE_RECEIPTS {
+        char36 id PK
+        char36 tenant_id FK
+        char36 unit_id FK
+        char36 purchase_order_id FK "FK composta com unit_id"
+        datetime received_at
+        varchar document_number "nota fiscal - preparado para o Prompt 12"
+        varchar document_date
+        varchar idempotency_key UK "garantia final contra duplicidade"
+    }
+    PURCHASE_RECEIPT_ITEMS {
+        char36 id PK
+        char36 tenant_id FK
+        char36 purchase_receipt_id FK
+        char36 purchase_order_item_id FK
+        char36 part_id FK
+        char36 unit_id FK
+        decimal quantity
+        decimal unit_cost
+        decimal total_cost
+        char36 location_id FK "onde guardou - opcional"
+        char36 stock_movement_id FK UK "FK composta para stock_movements(id, tenant_id)"
+    }
+    PURCHASE_ORDER_TIMELINE {
+        char36 id PK
+        char36 tenant_id FK
+        char36 purchase_order_id FK
+        varchar kind "created updated approved placed partially_received received cancelled"
+        varchar summary "em portugues, para quem abrir daqui a seis meses"
+        varchar reason
+        datetime occurred_at
+    }
+
+    SUPPLIERS ||--o{ SUPPLIER_CONTACTS : tem
+    SUPPLIERS ||--o{ SUPPLIER_PARTS : fornece
+    PARTS ||--o{ SUPPLIER_PARTS : "comprada de"
+    SUPPLIERS ||--o{ PURCHASE_ORDERS : atende
+    UNITS ||--o{ PURCHASE_ORDERS : recebe
+    PURCHASE_ORDERS ||--o{ PURCHASE_ORDER_ITEMS : contem
+    PARTS ||--o{ PURCHASE_ORDER_ITEMS : comprada
+    PURCHASE_NEEDS ||--o{ PURCHASE_ORDER_ITEMS : "atendida por (OPCIONAL)"
+    SERVICE_ORDERS ||--o{ PURCHASE_NEEDS : "origina (OPCIONAL, mesma unidade)"
+    PARTS ||--o{ PURCHASE_NEEDS : falta
+    PURCHASE_ORDERS ||--o{ PURCHASE_RECEIPTS : "N recebimentos"
+    PURCHASE_RECEIPTS ||--o{ PURCHASE_RECEIPT_ITEMS : contem
+    STOCK_MOVEMENTS ||--o| PURCHASE_RECEIPT_ITEMS : "rastreado por (Compras -> Estoque)"
+    PURCHASE_ORDERS ||--o{ PURCHASE_ORDER_TIMELINE : "historia"
+    PURCHASE_ORDERS ||--o{ PURCHASE_PRICE_HISTORY : "quanto se pagou"
 ```
 
 ### Destaques do diagrama
@@ -490,6 +636,14 @@ erDiagram
 - `SERVICE_ORDER_TIMELINE` existe ao lado de `AUDIT_LOGS`, não no lugar dela:
   uma responde "o que aconteceu com este aparelho", a outra "quem alterou o
   quê".
+- **A seta entre `STOCK_MOVEMENTS` e `PURCHASE_RECEIPT_ITEMS` aponta para
+  Compras, e isso é deliberado** (Prompt 11): a FK sai de Compras e vai para
+  `stock_movements(id, tenant_id)`. Estoque não conhece Compras. No sentido
+  inverso, a origem "Compra PC 000037" viaja como **texto** dentro do próprio
+  movimento — que é o que a mantém legível com o módulo de Compras desligado
+  (ADR-049).
+- `SUPPLIERS` **não tem `unit_id`**, e `PURCHASE_ORDERS` tem: o fornecedor é da
+  empresa, o pedido é da loja que vai receber a caixa (ADR-052).
 
 ---
 
@@ -505,8 +659,14 @@ erDiagram
 >
 > `PART`, `STOCK_BALANCE`, `STOCK_MOVEMENT`, `STOCK_LOCATION`,
 > `STOCK_RESERVATION` e `STOCK_TRANSFER` também já existem (Prompt 10) e estão
-> na seção 1. Aparecem abaixo só para mostrar onde Compras e Garantia vão se
-> ligar.
+> na seção 1.
+>
+> `SUPPLIER` e `PURCHASE_ORDER` **saíram deste diagrama conceitual**: os dois
+> foram implementados no Prompt 11 e estão na seção 1, com o nome real das
+> tabelas. `PURCHASE_REQUEST` virou `purchase_needs`, e a relação com o pedido
+> é **N para N pelo item**, não "origina" — ver
+> [ADR-048](../adr/ADR-048-necessidade-e-pedido-sao-coisas-diferentes.md).
+> Aqui eles aparecem apenas como ponto de ligação para Garantia e Financeiro.
 
 ```mermaid
 erDiagram
@@ -535,29 +695,32 @@ erDiagram
     STOCK_TRANSFER ||--o{ STOCK_MOVEMENT : "duas pontas, mesmo transfer_id"
     UNIT_C ||--o{ STOCK_TRANSFER : "origem / destino"
 
-    SUPPLIER ||--o{ PURCHASE_ORDER : fornece
-    PURCHASE_REQUEST ||--o{ PURCHASE_ORDER : origina
-    PURCHASE_ORDER ||--o{ STOCK_MOVEMENT : "abastece (Prompt 11)"
     PART ||--o{ WARRANTY : "garantia de peca"
     SUPPLIER ||--o{ WARRANTY : responde_por
+    PURCHASE_RECEIPT ||--o{ PAYABLE : "gancho do Prompt 12 - SEM consumidor hoje"
 
     UNIT_C ||--o{ APPOINTMENT : agenda
 ```
 
 ### Invariantes já decididas
 
-| Decisão                                    | Motivo                                                                                                     |
-| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
-| `service_orders.unit_id` **obrigatório**   | A OS acontece fisicamente em uma unidade                                                                   |
-| `quotes.unit_id` **obrigatório**           | Vem da OS; sustenta a FK `(service_order_id, unit_id)` (ADR-040)                                           |
-| `clients.unit_id` **não define ownership** | O mesmo cliente é atendido em qualquer filial                                                              |
-| `equipments` pertence a tenant + cliente   | Não se duplica por passar em outra unidade                                                                 |
-| Número da OS **único por tenant**          | Sem ambiguidade em QR, portal, suporte e garantia                                                          |
-| `warranties` é **entidade própria**        | Nunca um booleano dentro da OS (item 63)                                                                   |
-| `stock_balances` é **por unidade**         | **Implementado no Prompt 10**: estoque é físico (item 64)                                                  |
-| `stock_movements` é **append-only**        | **Implementado no Prompt 10**: saldo sem histórico é saldo não auditável (ADR-043)                         |
-| reserva é **entidade própria**             | **Prompt 10**: reservar não tira nada da prateleira (ADR-045)                                              |
-| `quote_items.part_id` é **anulável**       | **Prompt 10**: linha PART escrita à mão continua válida para sempre (ADR-047)                              |
-| `quotes` guarda **snapshot** de preço      | **Implementado no Prompt 09**: a linha guarda o valor proposto, e a revisão preserva cada versão (ADR-041) |
-| `payments` usa **DECIMAL exato**           | Nunca float (item 65)                                                                                      |
-| `attachments` guarda **chave de storage**  | Binário não vai para tabela de negócio (item 60)                                                           |
+| Decisão                                          | Motivo                                                                                                     |
+| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
+| `service_orders.unit_id` **obrigatório**         | A OS acontece fisicamente em uma unidade                                                                   |
+| `quotes.unit_id` **obrigatório**                 | Vem da OS; sustenta a FK `(service_order_id, unit_id)` (ADR-040)                                           |
+| `clients.unit_id` **não define ownership**       | O mesmo cliente é atendido em qualquer filial                                                              |
+| `equipments` pertence a tenant + cliente         | Não se duplica por passar em outra unidade                                                                 |
+| Número da OS **único por tenant**                | Sem ambiguidade em QR, portal, suporte e garantia                                                          |
+| `warranties` é **entidade própria**              | Nunca um booleano dentro da OS (item 63)                                                                   |
+| `stock_balances` é **por unidade**               | **Implementado no Prompt 10**: estoque é físico (item 64)                                                  |
+| `suppliers` **não tem `unit_id`**                | **Prompt 11**: a empresa negocia com o distribuidor, não a loja (ADR-052)                                  |
+| `purchase_orders.unit_id` **obrigatório**        | **Prompt 11**: a mercadoria chega em um endereço; pedido sem destino não existe                            |
+| necessidade e pedido são **entidades distintas** | **Prompt 11**: uma necessidade vira zero, um ou vários pedidos (ADR-048)                                   |
+| `received_quantity <= quantity` é **CHECK**      | **Prompt 11**: a trava de over-receipt vive no banco, não na aplicação (ADR-050)                           |
+| `purchase_price_history` é **append-only**       | **Prompt 11**: o preço anterior nunca é sobrescrito (ADR-051)                                              |
+| `stock_movements` é **append-only**              | **Implementado no Prompt 10**: saldo sem histórico é saldo não auditável (ADR-043)                         |
+| reserva é **entidade própria**                   | **Prompt 10**: reservar não tira nada da prateleira (ADR-045)                                              |
+| `quote_items.part_id` é **anulável**             | **Prompt 10**: linha PART escrita à mão continua válida para sempre (ADR-047)                              |
+| `quotes` guarda **snapshot** de preço            | **Implementado no Prompt 09**: a linha guarda o valor proposto, e a revisão preserva cada versão (ADR-041) |
+| `payments` usa **DECIMAL exato**                 | Nunca float (item 65)                                                                                      |
+| `attachments` guarda **chave de storage**        | Binário não vai para tabela de negócio (item 60)                                                           |

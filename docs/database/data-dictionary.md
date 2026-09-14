@@ -391,18 +391,18 @@ Saldo **materializado** por (unidade, peça). O histórico é `stock_movements`
 Ledger **append-only**. Não tem `updated_at` nem `version` — a ausência das
 colunas é a primeira barreira contra "corrigir" um lançamento.
 
-| Coluna                           | Observação                                                                                   |
-| -------------------------------- | -------------------------------------------------------------------------------------------- |
-| `type`                           | `receipt` `issue` `adjustment_in` `adjustment_out` `transfer_out` `transfer_in`              |
-| `quantity`                       | **com sinal**: `+5` entrou, `−2` saiu                                                        |
-| `resulting_on_hand`              | saldo da peça na unidade **depois** deste movimento                                          |
-| `unit_cost` / `total_cost`       | congelados; mudar o custo da peça não reescreve o passado                                    |
-| `origin_kind`                    | `manual` `service_order` `transfer`. **Não** existe `purchase_order` — Compras é o Prompt 11 |
-| `reference`                      | nota, fornecedor, quem trouxe. Texto livre                                                   |
-| `reason`                         | **obrigatório** em ajuste                                                                    |
-| `service_order_id`               | FK **composta com `unit_id`**: isola a unidade no banco                                      |
-| `transfer_id` / `reservation_id` | correlação                                                                                   |
-| `idempotency_key`                | UNIQUE por tenant: retry não lança duas vezes                                                |
+| Coluna                           | Observação                                                                                  |
+| -------------------------------- | ------------------------------------------------------------------------------------------- |
+| `type`                           | `receipt` `issue` `adjustment_in` `adjustment_out` `transfer_out` `transfer_in`             |
+| `quantity`                       | **com sinal**: `+5` entrou, `−2` saiu                                                       |
+| `resulting_on_hand`              | saldo da peça na unidade **depois** deste movimento                                         |
+| `unit_cost` / `total_cost`       | congelados; mudar o custo da peça não reescreve o passado                                   |
+| `origin_kind`                    | `manual` `service_order` `transfer` `purchase_order` (Prompt 11)                            |
+| `reference`                      | nota, fornecedor, quem trouxe. Texto livre — é aqui que mora `Compra PC 000037` (Prompt 11) |
+| `reason`                         | **obrigatório** em ajuste                                                                   |
+| `service_order_id`               | FK **composta com `unit_id`**: isola a unidade no banco                                     |
+| `transfer_id` / `reservation_id` | correlação                                                                                  |
+| `idempotency_key`                | UNIQUE por tenant: retry não lança duas vezes                                               |
 
 ---
 
@@ -445,6 +445,158 @@ escrita à mão. FK composta `(part_id, tenant_id) → parts(id, tenant_id)`,
 
 Vincular a peça **não** substitui descrição, quantidade nem valor aprovados: o
 orçamento continua sendo snapshot comercial (ADR-047).
+
+---
+
+## `suppliers` (Prompt 11)
+
+Fornecedor é do **TENANT**: não há `unit_id` nesta tabela. A empresa negocia com
+o distribuidor, não a loja ([ADR-052](../adr/ADR-052-fornecedor-pertence-ao-tenant.md)).
+
+| Coluna                              | Observação                                                                        |
+| ----------------------------------- | --------------------------------------------------------------------------------- |
+| `kind`                              | `company` ou `individual`                                                         |
+| `name` / `name_search`              | razão social e a forma normalizada para busca                                     |
+| `trade_name` / `trade_name_search`  | nome fantasia                                                                     |
+| `document_type` / `document_digits` | **opcional**; quando informado é validado e UNIQUE `(tenant_id, document_digits)` |
+| `phone` / `phone_digits`            | o segundo é a forma só-dígitos, que a busca usa                                   |
+| `lead_time_days`                    | prazo **prometido** pelo fornecedor. O real vive no histórico de preço            |
+| `commercial_terms`                  | texto livre: prazo de pagamento, pedido mínimo, frete                             |
+| `status`                            | `active` / `inactive`. Inativar **não apaga nada**                                |
+| `version`                           | concorrência otimista                                                             |
+
+UNIQUE auxiliar `(id, tenant_id)`, alvo das FKs compostas.
+
+---
+
+## `supplier_contacts` (Prompt 11)
+
+Pessoas com quem se fala. `role`: `commercial`, `financial`, `other`.
+**Dado pessoal** dentro de cadastro de empresa — ver
+[data-sensitivity.md](data-sensitivity.md).
+
+---
+
+## `supplier_parts` (Prompt 11)
+
+Vínculo fornecedor × peça, com UNIQUE `(tenant_id, supplier_id, part_id)`.
+
+`last_unit_cost` e `last_purchased_at` são **conveniência de tela, não
+autoridade de preço**: servem para acelerar o próximo pedido. Quem responde
+"como o custo evoluiu" é `purchase_price_history`.
+
+---
+
+## `purchase_price_history` (Prompt 11)
+
+**Append-only.** Uma linha por recebimento; o preço anterior nunca é
+sobrescrito.
+
+| Coluna                                      | Observação                                                                                                                               |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `supplier_id` / `part_id`                   | de quem, e do quê                                                                                                                        |
+| `unit_id`                                   | em qual loja a mercadoria entrou                                                                                                         |
+| `purchase_order_id` / `purchase_receipt_id` | de onde veio                                                                                                                             |
+| `quantity` / `unit_cost` / `total_cost`     | o que se pagou, congelado                                                                                                                |
+| `observed_lead_time_days`                   | prazo **real** entre `placed_at` e a chegada. Nulo quando o pedido não tem data de realização — inventar zero afirmaria entrega imediata |
+
+---
+
+## `purchase_needs` (Prompt 11)
+
+"Precisamos comprar isto" — e não "compramos isto"
+([ADR-048](../adr/ADR-048-necessidade-e-pedido-sao-coisas-diferentes.md)).
+Pertence à **unidade**.
+
+| Coluna              | Observação                                                                |
+| ------------------- | ------------------------------------------------------------------------- |
+| `quantity`          | quanto precisa                                                            |
+| `ordered_quantity`  | quanto já entrou em pedido. **Não** significa atendida                    |
+| `received_quantity` | quanto chegou de verdade. É isto que fecha a necessidade                  |
+| `origin`            | `manual`, `service_order`, `low_stock`                                    |
+| `service_order_id`  | opcional. FK **composta com `unit_id`**: a OS tem de ser da mesma unidade |
+| `status`            | `open` `ordered` `fulfilled` `cancelled`                                  |
+| `justification`     | por que precisa. Ajuda quem autoriza a despesa                            |
+
+CHECKs garantem que as quantidades acumuladas não passem do necessário.
+
+---
+
+## `purchase_orders` (Prompt 11)
+
+Pertence ao **TENANT e à UNIDADE**: a mercadoria chega em um endereço.
+
+| Coluna                                                        | Observação                                                                                                                                             |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `number`                                                      | `PC 000037`, por empresa, sobre `tenant_sequences` (ADR-034). UNIQUE `(tenant_id, number)`                                                             |
+| `status`                                                      | `draft` `approved` `placed` `partially_received` `received` `cancelled`                                                                                |
+| `subtotal` / `discount` / `freight` / `other_costs` / `total` | `total = subtotal − desconto + frete + outros`. Frete **não** entra no custo da peça ([ADR-051](../adr/ADR-051-custo-comercial-e-custo-de-estoque.md)) |
+| `expected_at`                                                 | data **civil** (`VARCHAR(10)`): previsão é dia de calendário                                                                                           |
+| `approved_at` / `placed_at` / `cancelled_at`                  | instantes                                                                                                                                              |
+| `cancel_reason`                                               | obrigatório a partir de `approved`                                                                                                                     |
+| `idempotency_key`                                             | UNIQUE por tenant: duplo clique reencontra o pedido                                                                                                    |
+| `version`                                                     | compare-and-swap nas transições                                                                                                                        |
+
+UNIQUEs auxiliares `(id, tenant_id)` e `(id, unit_id)`.
+
+---
+
+## `purchase_order_items` (Prompt 11)
+
+**Snapshot comercial**: `description`, `unit_of_measure` e `supplier_code` são
+congelados na linha. Renomear a peça depois não reescreve pedido nenhum.
+
+| Coluna                | Observação                                                                              |
+| --------------------- | --------------------------------------------------------------------------------------- |
+| `quantity`            | quanto foi pedido                                                                       |
+| `received_quantity`   | quanto chegou. CHECK `received_quantity <= quantity` — a trava de over-receipt no banco |
+| `unit_cost` / `total` | custo do fornecedor, congelado                                                          |
+| `purchase_need_id`    | opcional: a necessidade que esta linha atende                                           |
+
+---
+
+## `purchase_receipts` (Prompt 11)
+
+Uma chegada de mercadoria. Um pedido tem **N** recebimentos
+([ADR-050](../adr/ADR-050-recebimento-parcial-e-o-caso-normal.md)).
+
+| Coluna                              | Observação                                               |
+| ----------------------------------- | -------------------------------------------------------- |
+| `purchase_order_id`                 | FK **composta com `unit_id`**                            |
+| `received_at`                       | instante da chegada                                      |
+| `document_number` / `document_date` | nota fiscal. Preparado para o Financeiro, sem consumidor |
+| `idempotency_key`                   | UNIQUE por tenant. É a garantia final contra duplicidade |
+
+Não existe caminho de exclusão: correção é **ajuste de estoque, com motivo**.
+
+---
+
+## `purchase_receipt_items` (Prompt 11)
+
+| Coluna                                  | Observação                                                                                                                                                                                      |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `stock_movement_id`                     | FK **composta** para `stock_movements(id, tenant_id)`. A direção é Compras → Estoque, nunca o contrário ([ADR-049](../adr/ADR-049-recebimento-entra-no-estoque-pela-primitiva-do-inventory.md)) |
+| `location_id`                           | onde a peça foi guardada, quando informado                                                                                                                                                      |
+| `quantity` / `unit_cost` / `total_cost` | o que entrou, congelado                                                                                                                                                                         |
+
+UNIQUE em `stock_movement_id`: um movimento pertence a um recebimento.
+
+---
+
+## `purchase_order_timeline` (Prompt 11)
+
+A história do pedido em português, para quem abrir daqui a seis meses.
+`kind`: `created`, `updated`, `approved`, `placed`, `partially_received`,
+`received`, `cancelled`.
+
+---
+
+## `stock_movements.id + tenant_id` (UNIQUE acrescentada no Prompt 11)
+
+Único ALTER do Prompt 11 sobre tabela pré-existente. É o alvo composto da FK de
+`purchase_receipt_items.stock_movement_id` — o que mantém a rastreabilidade
+"entrada de estoque → recebimento" **tenant-safe no banco**, sem que o Estoque
+precise conhecer Compras.
 
 ---
 

@@ -132,6 +132,32 @@ duas. Origem e destino são unidades, amarradas ao mesmo tenant por FK composta
 (`stock_balances`). São coisas diferentes (item 64), e foi assim que o Prompt 10
 as implementou.
 
+## Fornecedores e Compras (Prompt 11)
+
+| Entidade                  | Dono        | Por quê                                                                |
+| ------------------------- | ----------- | ---------------------------------------------------------------------- |
+| `suppliers`               | TENANT      | A empresa negocia com o distribuidor, não a loja. **Não há `unit_id`** |
+| `supplier_contacts`       | TENANT      | Pertencem ao fornecedor                                                |
+| `supplier_parts`          | TENANT      | O que a empresa compra de quem                                         |
+| `purchase_needs`          | UNIDADE     | O que falta no centro não é o que falta no norte                       |
+| `purchase_orders`         | UNIDADE     | A mercadoria chega em um endereço                                      |
+| `purchase_order_items`    | (do pedido) | Herdam o dono do pedido                                                |
+| `purchase_receipts`       | UNIDADE     | A caixa foi aberta em uma loja                                         |
+| `purchase_receipt_items`  | UNIDADE     | O saldo subiu naquela unidade                                          |
+| `purchase_price_history`  | UNIDADE⁷    | O preço é da empresa; a entrada aconteceu numa loja                    |
+| `purchase_order_timeline` | (do pedido) | Herdam o dono do pedido                                                |
+
+⁷ `purchase_price_history` guarda `unit_id` porque o recebimento aconteceu numa
+unidade, mas a pergunta que ela responde — "quanto a empresa pagou nesta peça?"
+— é **de tenant**, e `listPriceHistoryForPart` consulta por tenant. O `unit_id`
+está lá para auditoria, não para segmentar o histórico.
+
+**A permissão de receber é verificada na unidade DO PEDIDO**, e não na unidade
+ativa da sessão: quem recebe cria saldo naquela unidade e só naquela
+([ADR-052](../adr/ADR-052-fornecedor-pertence-ao-tenant.md)).
+
+---
+
 ---
 
 ## Regra de `unit_id` obrigatório (item 11)
@@ -142,7 +168,8 @@ Entidade cuja operação pertence necessariamente a uma unidade:
   equipamento** (`equipment_intakes`, Prompt 06) — ambos implementados
 - Estoque físico e movimentação de estoque
 - Caixa e movimentação operacional por unidade
-- Compra e recebimento vinculados a unidade
+- **Compra e recebimento** (`purchase_orders`, `purchase_receipts`,
+  `purchase_needs`, Prompt 11) — implementados
 - Agenda operacional vinculada a unidade
 
 Toda unidade pertence a um tenant, e **todo tenant tem pelo menos uma unidade**

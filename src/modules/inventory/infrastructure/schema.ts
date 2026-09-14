@@ -420,6 +420,15 @@ export const stockMovements = mysqlTable(
 
     /** Retry nao lanca o mesmo movimento duas vezes (item 121). */
     unique('uq_stock_movement_idempotency').on(table.tenantId, table.idempotencyKey),
+    /**
+     * Alvo da FK composta de quem PRODUZIU o movimento (Prompt 11, item 48).
+     *
+     * Quem aponta e a linha do recebimento de compra, e nao o contrario: se
+     * `stock_movements` tivesse uma coluna apontando para `purchase_receipts`,
+     * o Estoque passaria a depender de Compras — e Estoque precisa continuar
+     * funcionando sem Compras (Prompt 11, item 49).
+     */
+    unique('uq_stock_movement_id_tenant').on(table.id, table.tenantId),
 
     /** Ficha da peca: movimentos daquela peca naquela unidade (item 68). */
     index('ix_stock_movement_part').on(

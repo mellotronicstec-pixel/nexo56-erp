@@ -34,7 +34,7 @@ import {
   displayDocument,
   displayName,
 } from '@/modules/customers/domain/customer';
-import { formatPhone } from '@/modules/customers/domain/phone';
+import { formatPhone } from '@/core/contact/phone';
 import { FEATURES } from '@/modules/features/domain/catalog';
 import { hasPermission } from '@/modules/tenancy/domain/tenant-context';
 

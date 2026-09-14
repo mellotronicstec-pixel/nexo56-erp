@@ -34,11 +34,15 @@ import { loadPart } from '@/modules/inventory/application/part-service';
 import {
   formatQuantityValue,
   isBelowMinimum,
+  movementOriginLabel,
   movementTypeLabel,
   PART_STATUS_LABEL,
   unitOfMeasureAbbreviation,
   unitOfMeasureLabel,
 } from '@/modules/inventory/domain/inventory';
+import { can as decide } from '@/modules/access-control/application/authorization-service';
+import { listPriceHistoryForPart } from '@/modules/purchasing/application/purchasing-queries';
+import { formatPurchaseOrderNumber } from '@/modules/purchasing/domain/purchasing';
 import { hasPermission } from '@/modules/tenancy/domain/tenant-context';
 import {
   adjustStockAction,
@@ -97,6 +101,23 @@ export default async function PartPage({ params }: PageProps) {
   const reserved = current ? Quantity.parse(current.reserved) : zero;
   const minimum = current ? Quantity.parse(current.minimumQuantity) : zero;
   const belowMinimum = isBelowMinimum({ onHand, reserved }, minimum);
+
+  /**
+   * HISTORICO DE PRECO PAGO — so quando Compras existe (Prompt 11, itens 28 e
+   * 80).
+   *
+   * Compras e modulo OPCIONAL: quando esta desligado, ou a pessoa nao tem
+   * `purchases.view`, a secao simplesmente nao aparece e a ficha da peca
+   * continua inteira. O Estoque nao depende de Compras para nada.
+   */
+  const podeVerCompras = await decide(context, {
+    permission: PERMISSIONS.PURCHASES_VIEW,
+    featureKey: FEATURES.OPERATIONS_PURCHASING,
+  });
+
+  const priceHistory = podeVerCompras.allowed
+    ? await listPriceHistoryForPart(context, partId, 15)
+    : [];
 
   const can = {
     receive: hasPermission(context, PERMISSIONS.INVENTORY_RECEIVE),
@@ -261,6 +282,69 @@ export default async function PartPage({ params }: PageProps) {
         </Card>
       ) : null}
 
+      {/*
+        QUANTO SE PAGOU, DE QUEM, E QUANDO (Prompt 11, itens 7 e 28).
+        Uma linha por recebimento, append-only: o preco anterior nunca e
+        sobrescrito. E isto — e nao o "ultimo custo" do cadastro do
+        fornecedor — que responde como o custo evoluiu.
+      */}
+      {podeVerCompras.allowed && priceHistory.length > 0 ? (
+        <Card>
+          <CardHeader
+            title="Historico de precos de compra"
+            description="Cada recebimento acrescenta uma linha. Nada aqui e reescrito quando o preco muda."
+            headingLevel={2}
+          />
+          <CardBody className="p-0">
+            <div className="overflow-x-auto">
+              <Table caption="Precos pagos nesta peca, por recebimento">
+                <THead>
+                  <TR>
+                    <TH>Quando</TH>
+                    <TH>Fornecedor</TH>
+                    <TH>Pedido</TH>
+                    <TH align="right">Quantidade</TH>
+                    <TH align="right">Custo unitario</TH>
+                    <TH align="right">Prazo real</TH>
+                  </TR>
+                </THead>
+                <TBody>
+                  {priceHistory.map((linha) => (
+                    <TR key={linha.id}>
+                      <TD className="whitespace-nowrap">
+                        {linha.occurredAt.toLocaleDateString('pt-BR')}
+                      </TD>
+                      <TD>
+                        <Link
+                          href={`/fornecedores/${linha.supplierId}`}
+                          className="font-semibold text-brand-600 hover:underline"
+                        >
+                          {linha.supplierName}
+                        </Link>
+                      </TD>
+                      <TD className="whitespace-nowrap">
+                        {formatPurchaseOrderNumber(linha.purchaseOrderNumber)}
+                      </TD>
+                      <TD align="right" className="whitespace-nowrap">
+                        {q(linha.quantity, part.unitOfMeasure)}
+                      </TD>
+                      <TD align="right" className="whitespace-nowrap">
+                        {formatBRL(linha.unitCost)}
+                      </TD>
+                      <TD align="right" className="whitespace-nowrap">
+                        {linha.observedLeadTimeDays === null
+                          ? '—'
+                          : `${linha.observedLeadTimeDays} dia(s)`}
+                      </TD>
+                    </TR>
+                  ))}
+                </TBody>
+              </Table>
+            </div>
+          </CardBody>
+        </Card>
+      ) : null}
+
       <Card>
         <CardHeader
           title="Movimentacoes"
@@ -307,6 +391,17 @@ export default async function PartPage({ params }: PageProps) {
                           >
                             OS {String(movement.serviceOrderNumber).padStart(6, '0')}
                           </Link>
+                        ) : movement.originKind !== 'manual' && movement.reference ? (
+                          /**
+                           * "Compra PC 000037" sai do PROPRIO movimento, em
+                           * texto (Prompt 11, item 50). O Estoque nao consulta
+                           * tabela de Compras e nao tem FK para la: por isso a
+                           * origem continua legivel mesmo com o modulo de
+                           * Compras desligado.
+                           */
+                          <span>
+                            {movementOriginLabel(movement.originKind)} {movement.reference}
+                          </span>
                         ) : (
                           (movement.reference ??
                           movement.reason ?? <span className="text-ink-400">—</span>)

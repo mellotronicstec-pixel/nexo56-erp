@@ -35,7 +35,9 @@ export type NavIconKey =
   | 'equipment'
   | 'intake'
   | 'service-order'
-  | 'inventory';
+  | 'inventory'
+  | 'supplier'
+  | 'purchase';
 
 export interface NavItem {
   href: string;
@@ -95,6 +97,26 @@ export const NAV_SECTIONS: readonly NavSection[] = [
         featureKey: FEATURES.OPERATIONS_INVENTORY,
         permission: PERMISSIONS.INVENTORY_VIEW,
         icon: 'inventory',
+      },
+      {
+        /**
+         * Fornecedores e Compras sao OPCIONAIS e dependem de Estoque (Prompt
+         * 11, itens 81 e 91). Sao DOIS itens de menu porque sao duas
+         * permissoes: quem cuida do cadastro do distribuidor nao e
+         * necessariamente quem autoriza a despesa.
+         */
+        href: '/fornecedores',
+        label: 'Fornecedores',
+        featureKey: FEATURES.OPERATIONS_PURCHASING,
+        permission: PERMISSIONS.SUPPLIERS_VIEW,
+        icon: 'supplier',
+      },
+      {
+        href: '/compras',
+        label: 'Compras',
+        featureKey: FEATURES.OPERATIONS_PURCHASING,
+        permission: PERMISSIONS.PURCHASES_VIEW,
+        icon: 'purchase',
       },
     ],
   },
@@ -168,6 +190,11 @@ export const BREADCRUMB_LABELS: Readonly<Record<string, string>> = {
   estoque: 'Estoque e pecas',
   'nova-peca': 'Nova peca',
   localizacoes: 'Localizacoes',
+  fornecedores: 'Fornecedores',
+  'novo-fornecedor': 'Novo fornecedor',
+  compras: 'Compras',
+  necessidades: 'Necessidades de compra',
+  'novo-pedido': 'Novo pedido',
   administracao: 'Administracao',
   usuarios: 'Usuarios',
   perfis: 'Perfis de acesso',

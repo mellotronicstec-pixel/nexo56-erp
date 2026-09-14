@@ -19,3 +19,4 @@ export * from '@/modules/equipment/infrastructure/schema';
 export * from '@/modules/service-orders/infrastructure/schema';
 export * from '@/modules/inventory/infrastructure/schema';
 export * from '@/modules/quotes/infrastructure/schema';
+export * from '@/modules/purchasing/infrastructure/schema';

@@ -10,7 +10,7 @@ import {
   normalizeSearchText,
   type CustomerStatus,
 } from '@/modules/customers/domain/customer';
-import { onlyDigits } from '@/modules/customers/domain/document';
+import { onlyDigits } from '@/core/document/brazilian-document';
 import {
   customerAddresses,
   customerContacts,

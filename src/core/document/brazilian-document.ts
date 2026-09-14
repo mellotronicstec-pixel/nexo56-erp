@@ -1,5 +1,10 @@
 /**
- * CPF e CNPJ (Prompt 05, itens 8 e 9).
+ * CPF e CNPJ.
+ *
+ * Nasceu no modulo de Clientes (Prompt 05, itens 8 e 9) e subiu para o core
+ * quando Fornecedores (Prompt 11) precisou da mesma validacao. Fornecedor nao
+ * e cliente: fazer Compras importar do modulo de Clientes criaria uma
+ * dependencia que nao existe no negocio.
  *
  * REGRA CENTRAL: o documento e OPCIONAL. Uma assistencia recebe cliente que
  * nao quer informar CPF no primeiro contato, e o sistema nao pode recusar o

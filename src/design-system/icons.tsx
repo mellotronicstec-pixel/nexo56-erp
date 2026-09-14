@@ -280,3 +280,26 @@ export const IconServiceOrder = (props: IconProps) => (
     <path d="M9 12.5h6M9 16h4" />
   </Icon>
 );
+
+/**
+ * Fornecedor: a fachada de quem vende a peca — porta, toldo e vitrine.
+ *
+ * Evita de proposito a metafora de caminhao: o fornecedor do Nexo56 e uma
+ * empresa com quem se negocia, e nem sempre ela entrega alguma coisa.
+ */
+export const IconSupplier = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="M4 9.5h16v10.5a.5.5 0 01-.5.5h-15a.5.5 0 01-.5-.5z" />
+    <path d="M3.5 9.5l1.8-5a.8.8 0 01.75-.5h11.9a.8.8 0 01.75.5l1.8 5" />
+    <path d="M9.5 20.5v-5.5h5v5.5" />
+  </Icon>
+);
+
+/** Pedido de compra: o documento com o carrinho da compra sobre ele. */
+export const IconPurchase = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="M3 4.5h2.2l2.1 9.4a1 1 0 00.98.78h8.1a1 1 0 00.97-.75L19 7.5H6" />
+    <circle cx="9.5" cy="18.5" r="1.4" />
+    <circle cx="16.5" cy="18.5" r="1.4" />
+  </Icon>
+);

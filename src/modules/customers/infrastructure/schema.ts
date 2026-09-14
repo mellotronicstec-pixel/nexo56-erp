@@ -16,7 +16,7 @@ import {
   CUSTOMER_KINDS,
   CUSTOMER_STATUSES,
 } from '@/modules/customers/domain/customer';
-import { DOCUMENT_TYPES } from '@/modules/customers/domain/document';
+import { DOCUMENT_TYPES } from '@/core/document/brazilian-document';
 import { tenants, units } from '@/modules/tenancy/infrastructure/schema';
 
 /**

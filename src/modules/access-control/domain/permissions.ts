@@ -118,6 +118,39 @@ export const PERMISSIONS = {
   INVENTORY_TRANSFER: 'inventory.transfer',
   /** Separada e sensivel: reescreve o saldo e exige motivo (itens 55 e 107). */
   INVENTORY_ADJUST: 'inventory.adjust',
+
+  // --- Prompt 11: fornecedores e compras ------------------------------------
+  /**
+   * DOIS RECURSOS, E NAO UM (itens 46 e 47).
+   *
+   * Fornecedor e cadastro do TENANT — quem administra a lista de fornecedores
+   * da empresa nao e, necessariamente, quem compra. Compra e operacao de
+   * UNIDADE: o pedido tem destino, e quem opera a loja do centro nao recebe
+   * mercadoria da loja do bairro.
+   *
+   * O corte dentro de compras separa o que tem CONSEQUENCIA DIFERENTE: montar
+   * o pedido, autorizar a compra, receber a mercadoria (que vira estoque de
+   * verdade) e cancelar o que sobrou.
+   */
+  SUPPLIERS_VIEW: 'suppliers.view',
+  SUPPLIERS_MANAGE: 'suppliers.manage',
+
+  PURCHASES_VIEW: 'purchases.view',
+  /** Registrar necessidade e montar pedido em rascunho. */
+  PURCHASES_CREATE: 'purchases.create',
+  PURCHASES_UPDATE: 'purchases.update',
+  /** Autoriza a compra. Quem monta nao precisa ser quem autoriza (item 17). */
+  PURCHASES_APPROVE: 'purchases.approve',
+  /**
+   * RECEBER E DAR ENTRADA NO ESTOQUE.
+   *
+   * Quem tem esta permissao cria movimentacao de estoque na unidade do pedido,
+   * pelo servico oficial do Prompt 10. Nao e um atalho: e a forma correta de a
+   * mercadoria comprada virar saldo, e esta escrito assim em
+   * docs/modules/purchasing/permissions.md.
+   */
+  PURCHASES_RECEIVE: 'purchases.receive',
+  PURCHASES_CANCEL: 'purchases.cancel',
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -409,6 +442,55 @@ export const PERMISSION_CATALOG: readonly PermissionDefinition[] = [
     description: 'Corrige o saldo fisico mediante motivo obrigatorio. Acao sensivel.',
     featureKey: 'operations.inventory',
   },
+  {
+    key: PERMISSIONS.SUPPLIERS_VIEW,
+    name: 'Visualizar fornecedores',
+    description: 'Consulta a lista e a ficha dos fornecedores da empresa.',
+    featureKey: 'operations.purchasing',
+  },
+  {
+    key: PERMISSIONS.SUPPLIERS_MANAGE,
+    name: 'Administrar fornecedores',
+    description: 'Cria, edita e inativa fornecedores, contatos e dados comerciais.',
+    featureKey: 'operations.purchasing',
+  },
+  {
+    key: PERMISSIONS.PURCHASES_VIEW,
+    name: 'Visualizar compras',
+    description: 'Consulta necessidades, pedidos de compra e recebimentos da unidade.',
+    featureKey: 'operations.purchasing',
+  },
+  {
+    key: PERMISSIONS.PURCHASES_CREATE,
+    name: 'Registrar necessidades e pedidos',
+    description: 'Registra necessidade de compra e monta pedido em rascunho.',
+    featureKey: 'operations.purchasing',
+  },
+  {
+    key: PERMISSIONS.PURCHASES_UPDATE,
+    name: 'Alterar pedido de compra',
+    description: 'Altera itens, custos e dados comerciais de um pedido em rascunho.',
+    featureKey: 'operations.purchasing',
+  },
+  {
+    key: PERMISSIONS.PURCHASES_APPROVE,
+    name: 'Aprovar e realizar compra',
+    description: 'Autoriza a compra e registra que o pedido foi realizado ao fornecedor.',
+    featureKey: 'operations.purchasing',
+  },
+  {
+    key: PERMISSIONS.PURCHASES_RECEIVE,
+    name: 'Receber compra',
+    description:
+      'Registra o recebimento e da entrada da mercadoria no estoque da unidade do pedido.',
+    featureKey: 'operations.purchasing',
+  },
+  {
+    key: PERMISSIONS.PURCHASES_CANCEL,
+    name: 'Cancelar compra',
+    description: 'Cancela o pedido e o saldo ainda pendente. Nao desfaz o que ja foi recebido.',
+    featureKey: 'operations.purchasing',
+  },
 ];
 
 /** Papeis estruturais criados no bootstrap de cada tenant. */
@@ -590,6 +672,21 @@ export const PERMISSION_GROUPS = [
       PERMISSIONS.INVENTORY_RESERVE,
       PERMISSIONS.INVENTORY_TRANSFER,
       PERMISSIONS.INVENTORY_ADJUST,
+    ],
+  },
+  {
+    key: 'compras',
+    name: 'Fornecedores e compras',
+    description: 'Cadastro de fornecedores, necessidades, pedidos e recebimentos.',
+    permissions: [
+      PERMISSIONS.SUPPLIERS_VIEW,
+      PERMISSIONS.SUPPLIERS_MANAGE,
+      PERMISSIONS.PURCHASES_VIEW,
+      PERMISSIONS.PURCHASES_CREATE,
+      PERMISSIONS.PURCHASES_UPDATE,
+      PERMISSIONS.PURCHASES_APPROVE,
+      PERMISSIONS.PURCHASES_RECEIVE,
+      PERMISSIONS.PURCHASES_CANCEL,
     ],
   },
   {

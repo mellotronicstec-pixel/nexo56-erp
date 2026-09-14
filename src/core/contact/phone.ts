@@ -1,5 +1,9 @@
 /**
- * Telefone (Prompt 05, item 12).
+ * Telefone e e-mail.
+ *
+ * Nasceu no modulo de Clientes (Prompt 05, item 12) e subiu para o core quando
+ * Fornecedores (Prompt 11) precisou do mesmo tratamento — o telefone do
+ * fornecedor tem exatamente os mesmos problemas do telefone do cliente.
  *
  * DOIS VALORES, PROPOSITOS DIFERENTES
  *

@@ -8,7 +8,7 @@ import {
   type CustomerKind,
   type CustomerStatus,
 } from '@/modules/customers/domain/customer';
-import type { DocumentType } from '@/modules/customers/domain/document';
+import type { DocumentType } from '@/core/document/brazilian-document';
 import {
   customerAddresses,
   customerContacts,

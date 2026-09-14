@@ -13,7 +13,7 @@ import {
   setCustomerStatus,
   updateCustomer,
 } from '@/modules/customers/application/customer-service';
-import { onlyDigits } from '@/modules/customers/domain/document';
+import { onlyDigits } from '@/core/document/brazilian-document';
 import { FEATURES } from '@/modules/features/domain/catalog';
 import { EMPTY_CUSTOMER_STATE, type CustomerActionState } from './action-state';
 import { assertSameOrigin } from '../actions';

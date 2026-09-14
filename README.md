@@ -2,22 +2,34 @@
 
 Plataforma ERP/SaaS multiempresa para gestão de assistência técnica e reparo.
 
-**Estado atual: fundação completa + módulos de negócio Clientes, Equipamentos e
-Ordens de Serviço com workflow (Prompts 01 a 08).** Autenticação, sessões,
+**Estado atual: fundação completa + módulos de negócio Clientes, Equipamentos,
+Ordens de Serviço com workflow, Orçamentos, Estoque e Compras (Prompts 01 a
+11).** Autenticação, sessões,
 usuários, perfis, permissões com **escopo por unidade**, multi-tenancy,
 modularidade, auditoria, eventos, jobs, Design System, interface responsiva,
 **Clientes**, **Equipamentos e Recebimento** (com fotos em storage privado), a
 **Ordem de Serviço** (abertura, numeração humana, vínculos, ficha e histórico) e
 o seu **workflow** (nove estados, transições validadas, ações, responsável,
 follow-ups, tarefas e preparação para entrega) estão implementados e testados.
-os **Orçamentos** (itens, valores, envio, aprovação, recusa e revisões) e o
+os **Orçamentos** (itens, valores, envio, aprovação, recusa e revisões), o
 **Estoque e Peças** (catálogo, localizações, saldos, ledger append-only,
-reservas e transferências) estão implementados e testados. Compras, Financeiro,
-Garantias e demais serão construídos nos prompts seguintes.
+reservas e transferências) e **Fornecedores e Compras** (cadastro de
+fornecedor, necessidades, pedidos, recebimento parcial e histórico de custo)
+estão implementados e testados. Financeiro, Garantias e demais serão
+construídos nos prompts seguintes.
 
-**Estoque é módulo OPCIONAL** (`operations.inventory`): a empresa pode
-desligá-lo, e o Orçamento continua inteiro com linha de peça escrita à mão
-([modularidade](docs/modules/inventory/modularity.md)).
+**Estoque e Compras são módulos OPCIONAIS** (`operations.inventory`,
+`operations.purchasing`): a empresa pode desligá-los. Sem Estoque, o Orçamento
+continua inteiro com linha de peça escrita à mão
+([modularidade do Estoque](docs/modules/inventory/modularity.md)); sem Compras,
+o Estoque não percebe diferença nenhuma e a origem "Compra PC 000037" continua
+legível no ledger
+([modularidade de Compras](docs/modules/purchasing/modularity.md)).
+
+**Não há Financeiro, e Contas a Pagar não foi implementada.** Receber mercadoria
+publica `PURCHASE_RECEIPT_CREATED`, e **esse evento não tem consumidor**:
+nenhum título nasce, nenhuma conta a pagar é aberta, e não existe tabela
+financeira no banco (Prompt 12).
 
 **Nenhuma comunicação externa é enviada.** A ação "Informar Ordem Disponível"
 registra a intenção, publica o evento e diz isso em texto na própria tela; não
@@ -345,6 +357,7 @@ docs/             arquitetura, ADRs, Hostinger
 - **Ordens de Serviço:** [docs/modules/service-orders/overview.md](docs/modules/service-orders/overview.md)
 - **Orçamentos:** [docs/modules/quotes/overview.md](docs/modules/quotes/overview.md)
 - **Estoque e Peças:** [docs/modules/inventory/overview.md](docs/modules/inventory/overview.md)
+- **Fornecedores e Compras:** [docs/modules/purchasing/overview.md](docs/modules/purchasing/overview.md)
 
 ---
 

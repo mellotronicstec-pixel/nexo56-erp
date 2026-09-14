@@ -24,7 +24,7 @@ import {
   displayDocument,
   displayName,
 } from '@/modules/customers/domain/customer';
-import { formatPhone } from '@/modules/customers/domain/phone';
+import { formatPhone } from '@/core/contact/phone';
 import { listEquipmentByCustomer } from '@/modules/equipment/application/equipment-queries';
 import { equipmentTitle, VOLTAGE_LABEL } from '@/modules/equipment/domain/equipment';
 import { checkAccess } from '@/modules/features/application/effective-access';

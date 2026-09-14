@@ -32,6 +32,12 @@ export const FEATURES = {
    * contradizer o tipo.
    */
   OPERATIONS_INVENTORY: 'operations.inventory',
+  /**
+   * Compras depende de Estoque, e nunca o contrario (Prompt 11, item 49).
+   * Quem compra precisa saber onde a mercadoria vai entrar; quem controla
+   * estoque nao precisa de fornecedor nenhum para funcionar.
+   */
+  OPERATIONS_PURCHASING: 'operations.purchasing',
   PLATFORM_MULTI_UNIT: 'platform.multi_unit',
   PLATFORM_LABEL_RECOGNITION: 'platform.label_recognition',
 } as const;
@@ -181,6 +187,23 @@ export const FEATURE_CATALOG: readonly FeatureDefinition[] = [
      */
     type: 'OPTIONAL',
     dependsOn: [FEATURES.CORE_SERVICE_ORDERS],
+  },
+  {
+    key: FEATURES.OPERATIONS_PURCHASING,
+    name: 'Fornecedores e compras',
+    description:
+      'Cadastro de fornecedores, necessidades de compra, pedidos, recebimento parcial e historico de custo.',
+    /**
+     * OPTIONAL (Prompt 11, item 49). Assistencia que compra no balcao da loja
+     * ao lado nao registra pedido: da entrada manual no estoque e pronto.
+     *
+     * Depende de Estoque porque RECEBER é dar entrada — sem catalogo de pecas
+     * e sem saldo, um recebimento nao teria onde chegar. A dependencia e de
+     * mao unica: desligar Compras nao afeta Estoque, e o historico de estoque
+     * originado por compra continua legivel (item 50).
+     */
+    type: 'OPTIONAL',
+    dependsOn: [FEATURES.OPERATIONS_INVENTORY],
   },
   {
     key: FEATURES.PLATFORM_MULTI_UNIT,

@@ -347,14 +347,32 @@ export function signedMovementQuantity(type: string, value: Quantity): Quantity 
  * Prompt 11 na estrutura de dados — e o dia em que Compras chegar, encontraria
  * linhas apontando para pedidos que nunca existiram.
  */
-export const MOVEMENT_ORIGINS = ['manual', 'service_order', 'transfer'] as const;
+export const MOVEMENT_ORIGINS = [
+  'manual',
+  'service_order',
+  'transfer',
+  /**
+   * Acrescentada pelo Prompt 11, quando Compras passou a existir de verdade.
+   *
+   * Ate aqui a origem de uma entrada era `manual` — e era honesto: fingir um
+   * `purchase_order` antes do modulo existir criaria linhas apontando para
+   * pedidos que nunca existiram. Os movimentos antigos continuam `manual`, e
+   * continuam corretos.
+   */
+  'purchase_order',
+] as const;
 export type MovementOrigin = (typeof MOVEMENT_ORIGINS)[number];
 
 export const MOVEMENT_ORIGIN_LABEL: Record<MovementOrigin, string> = {
   manual: 'Lancamento manual',
   service_order: 'Ordem de Servico',
   transfer: 'Transferencia entre unidades',
+  purchase_order: 'Compra',
 };
+
+export function movementOriginLabel(value: string): string {
+  return (MOVEMENT_ORIGIN_LABEL as Record<string, string>)[value] ?? value;
+}
 
 export const MOVEMENT_REASON_MAX = 300;
 export const MOVEMENT_REFERENCE_MAX = 120;

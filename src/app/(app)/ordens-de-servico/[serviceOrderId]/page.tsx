@@ -214,6 +214,20 @@ export default async function ServiceOrderDetailPage({
       })
     : { allowed: false };
 
+  /**
+   * COMPRAS E OPCIONAL E SEPARADO (Prompt 11, itens 29, 80 e 84).
+   *
+   * A OS nao sabe comprar nada: ela apenas oferece o atalho para registrar que
+   * uma peca falta. Se o modulo estiver desligado — ou a pessoa nao puder
+   * registrar necessidade — a secao simplesmente nao existe, e a OS continua
+   * inteira. Nada aqui muda a situacao da Ordem de Servico.
+   */
+  const canCreateNeedDecision = await can(context, {
+    permission: PERMISSIONS.PURCHASES_CREATE,
+    featureKey: FEATURES.OPERATIONS_PURCHASING,
+    unitId: order.unitId,
+  });
+
   const [members, preparationDone, quoteList, quoteNumberFormat, reservationList, partChoices] =
     await Promise.all([
       canAssignDecision.allowed ? listUnitMembers(context, order.unitId) : Promise.resolve([]),
@@ -498,6 +512,31 @@ export default async function ServiceOrderDetailPage({
             releaseAction={releaseReservationAction}
             consumeAction={consumeReservationAction}
           />
+        </Section>
+      ) : null}
+
+      {/*
+        COMPRAS — o atalho, nao o modulo (Prompt 11, item 29).
+        A OS nao compra: ela registra que a peca falta. Quem autoriza a despesa
+        e quem recebe a mercadoria estao em Compras, e a situacao desta OS nao
+        muda por causa de nenhum dos dois.
+      */}
+      {canCreateNeedDecision.allowed ? (
+        <Section
+          id="compras"
+          title="Compras"
+          description="Quando a peca nao esta no estoque, registre a necessidade. Registrar nao compra nada e nao muda a situacao desta Ordem de Servico."
+        >
+          <Card>
+            <CardBody>
+              <Link
+                href={`/compras/necessidades?os=${order.id}`}
+                className={linkButtonClass('secondary')}
+              >
+                Registrar necessidade de compra
+              </Link>
+            </CardBody>
+          </Card>
         </Section>
       ) : null}
 

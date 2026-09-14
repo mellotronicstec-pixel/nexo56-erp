@@ -1212,6 +1212,213 @@ describe('upgrade incremental entre prompts', () => {
     }
   });
 
+  it('leva um banco do Prompt 10, com estoque movimentado, ate o Prompt 11 sem perda', async () => {
+    const stepDb = 'nexo56_migration_step11_test';
+    await adminConnection.query(`DROP DATABASE IF EXISTS \`${stepDb}\``);
+    await adminConnection.query(
+      `CREATE DATABASE \`${stepDb}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`,
+    );
+
+    const folder = buildFolderUpTo('0008');
+    const connection = await mysql.createConnection({
+      uri: urlForDatabase(stepDb),
+      timezone: 'Z',
+      multipleStatements: true,
+    });
+
+    try {
+      // --- banco no estado do Prompt 10 --------------------------------------
+      await migrate(drizzle(connection), { migrationsFolder: folder });
+
+      const [beforeTables] = await connection.query<mysql.RowDataPacket[]>('SHOW TABLES');
+      const beforeNames = beforeTables.map((row) => Object.values(row)[0] as string);
+      expect(beforeNames).toContain('stock_movements');
+      expect(beforeNames).not.toContain('suppliers');
+      expect(beforeNames).not.toContain('purchase_orders');
+
+      await connection.query(`
+        INSERT INTO plans (id, \`key\`, name, description, is_internal, created_at, updated_at)
+        VALUES ('plan-p10', 'internal', 'Plano interno', '', 1, NOW(3), NOW(3));
+
+        INSERT INTO tenants (id, slug, name, status, timezone, plan_id, created_at, updated_at)
+        VALUES ('tenant-p10', 'empresa-p10', 'Empresa P10', 'active', 'America/Sao_Paulo', 'plan-p10', NOW(3), NOW(3)),
+               ('tenant-p10b', 'empresa-p10b', 'Empresa P10B', 'active', 'UTC', 'plan-p10', NOW(3), NOW(3));
+
+        INSERT INTO units (id, tenant_id, name, status, created_at, updated_at)
+        VALUES ('unit-p10', 'tenant-p10', 'Unidade P10', 'active', NOW(3), NOW(3)),
+               ('unit-p10b', 'tenant-p10', 'Unidade P10 Norte', 'active', NOW(3), NOW(3)),
+               ('unit-p10x', 'tenant-p10b', 'Unidade de outra empresa', 'active', NOW(3), NOW(3));
+
+        INSERT INTO users (id, tenant_id, email, name, password_hash, status, created_at, updated_at)
+        VALUES ('user-p10', 'tenant-p10', 'p10@empresa.invalid', 'Usuario P10', 'scrypt$65536$8$2$c2FsdA==$aGFzaA==', 'active', NOW(3), NOW(3));
+
+        INSERT INTO customers
+          (id, tenant_id, kind, name, name_normalized, status, created_at, updated_at, created_by)
+        VALUES ('cli-p10', 'tenant-p10', 'individual', 'Bruno Lima', 'bruno lima', 'active', NOW(3), NOW(3), 'user-p10');
+
+        INSERT INTO equipment
+          (id, tenant_id, customer_id, kind, kind_normalized, voltage, status,
+           created_at, updated_at, created_by)
+        VALUES ('eq-p10', 'tenant-p10', 'cli-p10', 'Televisor', 'televisor', 'bivolt', 'active',
+                NOW(3), NOW(3), 'user-p10');
+
+        INSERT INTO service_orders
+          (id, tenant_id, unit_id, number, customer_id, equipment_id, status, customer_report,
+           opened_at, version, status_changed_at, created_by, created_at, updated_at)
+        VALUES
+          ('so-p10-a', 'tenant-p10', 'unit-p10', 1, 'cli-p10', 'eq-p10', 'awaiting_repair',
+           'Nao liga.', NOW(3), 4, NOW(3), 'user-p10', NOW(3), NOW(3)),
+          ('so-p10-b', 'tenant-p10', 'unit-p10b', 2, 'cli-p10', 'eq-p10', 'in_repair',
+           'Sem imagem.', NOW(3), 2, NOW(3), 'user-p10', NOW(3), NOW(3));
+
+        INSERT INTO parts
+          (id, tenant_id, code, code_normalized, name, name_search, unit_of_measure, status,
+           version, created_at, updated_at, created_by)
+        VALUES ('peca-p10', 'tenant-p10', 'TELA-01', 'TELA01', 'Tela LCD', 'tela lcd', 'unit',
+                'active', 1, NOW(3), NOW(3), 'user-p10');
+
+        INSERT INTO stock_balances
+          (id, tenant_id, unit_id, part_id, on_hand, reserved, minimum_quantity, average_cost,
+           version, created_at, updated_at)
+        VALUES ('saldo-p10', 'tenant-p10', 'unit-p10', 'peca-p10', '5.0000', '0.0000', '2.0000',
+                '120.00', 1, NOW(3), NOW(3));
+
+        INSERT INTO stock_movements
+          (id, tenant_id, unit_id, part_id, type, quantity, resulting_on_hand, unit_cost,
+           total_cost, origin_kind, reference, occurred_at, created_at)
+        VALUES ('mov-p10', 'tenant-p10', 'unit-p10', 'peca-p10', 'receipt', '5.0000', '5.0000',
+                '120.00', '600.00', 'manual', 'NF 998', NOW(3), NOW(3));
+      `);
+
+      // --- upgrade para o Prompt 11 ------------------------------------------
+      await migrate(drizzle(connection), { migrationsFolder: './drizzle' });
+
+      const [afterTables] = await connection.query<mysql.RowDataPacket[]>('SHOW TABLES');
+      const afterNames = afterTables.map((row) => Object.values(row)[0] as string);
+      for (const tabela of [
+        'suppliers',
+        'supplier_contacts',
+        'supplier_parts',
+        'purchase_price_history',
+        'purchase_needs',
+        'purchase_orders',
+        'purchase_order_items',
+        'purchase_receipts',
+        'purchase_receipt_items',
+        'purchase_order_timeline',
+      ]) {
+        expect(afterNames).toContain(tabela);
+      }
+
+      /**
+       * NENHUMA TABELA FINANCEIRA (itens 41 e 88). Compras prepara o terreno
+       * para Contas a Pagar; nao a implementa.
+       */
+      for (const proibida of ['accounts_payable', 'payments', 'financial_entries', 'invoices']) {
+        expect(afterNames).not.toContain(proibida);
+      }
+
+      // O estoque do Prompt 10 continua intacto.
+      const [saldos] = await connection.query<mysql.RowDataPacket[]>(
+        'SELECT on_hand, average_cost FROM stock_balances WHERE id = ?',
+        ['saldo-p10'],
+      );
+      expect(saldos[0]).toMatchObject({ on_hand: '5.0000', average_cost: '120.00' });
+
+      const [movimentos] = await connection.query<mysql.RowDataPacket[]>(
+        'SELECT reference, origin_kind FROM stock_movements WHERE id = ?',
+        ['mov-p10'],
+      );
+      expect(movimentos[0]).toMatchObject({ reference: 'NF 998', origin_kind: 'manual' });
+
+      // A UNIQUE nova em stock_movements — o alvo da FK de rastreabilidade.
+      const [indices] = await connection.query<mysql.RowDataPacket[]>(
+        `SELECT index_name FROM information_schema.statistics
+          WHERE table_schema = ? AND table_name = 'stock_movements'
+            AND index_name = 'uq_stock_movement_id_tenant'`,
+        [stepDb],
+      );
+      expect(indices.length).toBeGreaterThan(0);
+
+      // --- as invariantes novas valem no banco -------------------------------
+      await connection.query(`
+        INSERT INTO suppliers
+          (id, tenant_id, kind, name, name_search, status, version, created_at, updated_at)
+        VALUES ('forn-p10', 'tenant-p10', 'company', 'Distribuidora P10', 'distribuidora p10',
+                'active', 1, NOW(3), NOW(3)),
+               ('forn-p10x', 'tenant-p10b', 'company', 'Distribuidora alheia', 'distribuidora alheia',
+                'active', 1, NOW(3), NOW(3));
+
+        INSERT INTO purchase_orders
+          (id, tenant_id, unit_id, supplier_id, number, status, subtotal, discount, freight,
+           other_costs, total, version, created_by, created_at, updated_at)
+        VALUES ('pc-p10', 'tenant-p10', 'unit-p10', 'forn-p10', 1, 'placed', '250.00', '0.00',
+                '30.00', '0.00', '280.00', 1, 'user-p10', NOW(3), NOW(3));
+      `);
+
+      // Pedido apontando para fornecedor de OUTRA empresa e recusado (item 78).
+      await expect(
+        connection.query(`
+          INSERT INTO purchase_orders
+            (id, tenant_id, unit_id, supplier_id, number, status, subtotal, discount, freight,
+             other_costs, total, version, created_by, created_at, updated_at)
+          VALUES ('pc-x', 'tenant-p10', 'unit-p10', 'forn-p10x', 2, 'draft', '0.00', '0.00',
+                  '0.00', '0.00', '0.00', 1, 'user-p10', NOW(3), NOW(3))
+        `),
+      ).rejects.toThrow();
+
+      // Item com recebido MAIOR que o pedido e recusado pela CHECK (item 22).
+      await expect(
+        connection.query(`
+          INSERT INTO purchase_order_items
+            (id, tenant_id, purchase_order_id, part_id, description, unit_of_measure, position,
+             quantity, received_quantity, unit_cost, total, created_at, updated_at)
+          VALUES ('item-x', 'tenant-p10', 'pc-p10', 'peca-p10', 'Tela LCD', 'unit', 1,
+                  '10.0000', '11.0000', '25.00', '250.00', NOW(3), NOW(3))
+        `),
+      ).rejects.toThrow();
+
+      // Necessidade apontando para OS de OUTRA unidade e recusada (item 79).
+      await expect(
+        connection.query(`
+          INSERT INTO purchase_needs
+            (id, tenant_id, unit_id, part_id, quantity, ordered_quantity, received_quantity,
+             origin, service_order_id, status, version, created_by, created_at, updated_at)
+          VALUES ('nec-x', 'tenant-p10', 'unit-p10', 'peca-p10', '1.0000', '0.0000', '0.0000',
+                  'service_order', 'so-p10-b', 'open', 1, 'user-p10', NOW(3), NOW(3))
+        `),
+      ).rejects.toThrow();
+
+      // Recebimento apontando para pedido de OUTRA unidade e recusado (item 79).
+      await expect(
+        connection.query(`
+          INSERT INTO purchase_receipts
+            (id, tenant_id, unit_id, purchase_order_id, received_at, created_by, created_at, updated_at)
+          VALUES ('rec-x', 'tenant-p10', 'unit-p10b', 'pc-p10', NOW(3), 'user-p10', NOW(3), NOW(3))
+        `),
+      ).rejects.toThrow();
+
+      // A necessidade legitima, na mesma unidade da OS, passa.
+      await connection.query(`
+        INSERT INTO purchase_needs
+          (id, tenant_id, unit_id, part_id, quantity, ordered_quantity, received_quantity,
+           origin, service_order_id, status, version, created_by, created_at, updated_at)
+        VALUES ('nec-ok', 'tenant-p10', 'unit-p10', 'peca-p10', '1.0000', '0.0000', '0.0000',
+                'service_order', 'so-p10-a', 'open', 1, 'user-p10', NOW(3), NOW(3))
+      `);
+
+      const [necessidades] = await connection.query<mysql.RowDataPacket[]>(
+        'SELECT status FROM purchase_needs WHERE id = ?',
+        ['nec-ok'],
+      );
+      expect(necessidades[0]).toMatchObject({ status: 'open' });
+    } finally {
+      await connection.end();
+      rmSync(folder, { recursive: true, force: true });
+      await adminConnection.query(`DROP DATABASE IF EXISTS \`${stepDb}\``);
+    }
+  });
+
   it('cria um banco vazio do zero com todas as migrations', async () => {
     const freshDb = 'nexo56_migration_fresh_test';
     await adminConnection.query(`DROP DATABASE IF EXISTS \`${freshDb}\``);

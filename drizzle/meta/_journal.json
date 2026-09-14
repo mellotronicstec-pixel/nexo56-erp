@@ -64,6 +64,13 @@
       "when": 1789360905036,
       "tag": "0008_inventory",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "5",
+      "when": 1789383444758,
+      "tag": "0009_purchasing",
+      "breakpoints": true
     }
   ]
 }

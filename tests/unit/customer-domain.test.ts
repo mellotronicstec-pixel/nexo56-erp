@@ -5,13 +5,8 @@ import {
   isValidCnpj,
   isValidCpf,
   onlyDigits,
-} from '@/modules/customers/domain/document';
-import {
-  formatPhone,
-  isValidPhone,
-  normalizeEmail,
-  normalizePhone,
-} from '@/modules/customers/domain/phone';
+} from '@/core/document/brazilian-document';
+import { formatPhone, isValidPhone, normalizeEmail, normalizePhone } from '@/core/contact/phone';
 import {
   displayDocument,
   displayName,

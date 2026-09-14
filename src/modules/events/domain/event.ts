@@ -90,6 +90,26 @@ export const EVENT_TYPES = {
    * notificado" seria mentira enquanto so existir isto.
    */
   LOW_STOCK_DETECTED: 'LOW_STOCK_DETECTED',
+
+  // --- Prompt 11: fornecedores e compras ------------------------------------
+  SUPPLIER_CREATED: 'SUPPLIER_CREATED',
+  SUPPLIER_UPDATED: 'SUPPLIER_UPDATED',
+  PURCHASE_NEED_CREATED: 'PURCHASE_NEED_CREATED',
+  PURCHASE_ORDER_CREATED: 'PURCHASE_ORDER_CREATED',
+  PURCHASE_ORDER_APPROVED: 'PURCHASE_ORDER_APPROVED',
+  /** O pedido foi feito ao fornecedor FORA do sistema, e alguem registrou. */
+  PURCHASE_ORDER_PLACED: 'PURCHASE_ORDER_PLACED',
+  PURCHASE_ORDER_PARTIALLY_RECEIVED: 'PURCHASE_ORDER_PARTIALLY_RECEIVED',
+  PURCHASE_ORDER_RECEIVED: 'PURCHASE_ORDER_RECEIVED',
+  PURCHASE_ORDER_CANCELLED: 'PURCHASE_ORDER_CANCELLED',
+  /**
+   * A mercadoria chegou e virou saldo.
+   *
+   * E o gancho que o Prompt 12 vai consumir para gerar Conta a Pagar. HOJE NAO
+   * HA CONSUMIDOR: nenhum titulo financeiro e criado, nenhum pagamento e
+   * registrado (itens 42 e 88).
+   */
+  PURCHASE_RECEIPT_CREATED: 'PURCHASE_RECEIPT_CREATED',
 } as const;
 
 export type EventType = (typeof EVENT_TYPES)[keyof typeof EVENT_TYPES];

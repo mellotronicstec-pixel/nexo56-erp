@@ -3,7 +3,7 @@ import { and, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { affectedRows } from '@/core/db/affected-rows';
 import { getDb } from '@/core/db/client';
-import { runInTransaction, type TransactionExecutor } from '@/core/db/unit-of-work';
+import { runInTransaction, type EmitFn, type TransactionExecutor } from '@/core/db/unit-of-work';
 import { BusinessRuleError, ConflictError, NotFoundError, ValidationError } from '@/core/errors';
 import { newId } from '@/core/ids/id';
 import { Money } from '@/core/money/money';
@@ -27,6 +27,7 @@ import {
   parseOperationQuantity,
   signedMovementQuantity,
   unitOfMeasureAbbreviation,
+  type MovementOrigin,
   type MovementType,
 } from '@/modules/inventory/domain/inventory';
 import {
@@ -524,12 +525,151 @@ export interface StockOperationResult {
 }
 
 /**
- * Entrada manual de estoque (item 76).
+ * ENTRADA DE ESTOQUE — A PRIMITIVA OFICIAL (Prompt 11, itens 20 e 54).
  *
- * ORIGEM `manual`, e nao `purchase_order` (item 77): nao existe modulo de
- * Compras, e inventar a referencia agora criaria linhas apontando para pedidos
- * que nunca existiram. Quem quiser registrar a nota fiscal usa `reference`,
- * que e texto.
+ * Por que existe um par plan/apply, e nao so `receiveStock`:
+ *
+ * O recebimento de uma compra precisa gravar, na MESMA transacao, o
+ * recebimento, suas linhas, a quantidade recebida do item, a entrada de
+ * estoque, o ledger, o saldo, o custo, a linha do tempo, a auditoria e os
+ * eventos (Prompt 11, item 54). Como `runInTransaction` nao aninha, o modulo
+ * de Compras precisa de uma primitiva que participe da transacao DELE.
+ *
+ * E o mesmo contrato que o Prompt 08 ofereceu ao Prompt 09 com
+ * `planTransition` + `applyTransition`, e pela mesma razao: sem ele, Compras
+ * duplicaria a aritmetica de saldo e de custo medio — que e exatamente o que o
+ * item 20 proibe.
+ *
+ * `planStockEntry` valida e resolve tudo que pode ser feito FORA da transacao.
+ * NAO AUTORIZA: quem chama e responsavel por autorizar a operacao dele
+ * (`inventory.receive` para entrada manual, `purchases.receive` para
+ * recebimento de compra).
+ */
+export interface StockEntryCommand {
+  unitId: string;
+  partId: string;
+  quantity: string;
+  locationId?: string | null;
+  unitCost?: string | null;
+  reference?: string | null;
+  /** `manual` por padrao; `purchase_order` quando vem de uma compra. */
+  originKind?: MovementOrigin;
+  idempotencyKey?: string | null;
+}
+
+export interface StockEntryPlan {
+  target: BalanceTarget;
+  part: PartForOperation;
+  amount: Quantity;
+  unitCost: Money | null;
+  locationId: string | null;
+  originKind: MovementOrigin;
+  reference: string | null;
+  idempotencyKey: string | null;
+  /**
+   * Movimento que ja existe com esta chave de comando.
+   *
+   * Quando presente, `applyStockEntry` NAO grava nada e devolve o que ja
+   * existia — e o retry que nao infla o estoque.
+   */
+  existing: { movementId: string; onHand: string } | null;
+}
+
+export async function planStockEntry(
+  context: TenantContext,
+  command: StockEntryCommand,
+): Promise<StockEntryPlan> {
+  assertUnitAuthorized(context, command.unitId);
+
+  const part = await loadPartForOperation(context, command.partId);
+  assertPartOperable(part);
+
+  const amount = parseOperationQuantity(command.quantity, part.unitOfMeasure);
+  const unitCost = parseOptionalCost(command.unitCost ?? undefined);
+  const key = command.idempotencyKey || null;
+
+  const found = await findMovementByKey(context.tenantId, key);
+
+  return {
+    target: { tenantId: context.tenantId, unitId: command.unitId, partId: part.id },
+    part,
+    amount,
+    unitCost,
+    locationId: await resolveLocation(context, command.unitId, command.locationId ?? undefined),
+    originKind: command.originKind ?? 'manual',
+    reference: command.reference || null,
+    idempotencyKey: key,
+    existing: found ? { movementId: found.id, onHand: found.resultingOnHand } : null,
+  };
+}
+
+/**
+ * Aplica a entrada DENTRO da transacao de quem chamou.
+ *
+ * Toda a aritmetica de saldo e de custo medio acontece aqui, em uma instrucao
+ * so (ADR-044) — e e por isso que Compras nao precisa, e nao pode, ter a sua.
+ */
+export async function applyStockEntry(
+  tx: TransactionExecutor,
+  emit: EmitFn,
+  context: TenantContext,
+  plan: StockEntryPlan,
+  extra: {
+    serviceOrderId?: string | null;
+    reason?: string | null;
+    now?: Date;
+  } = {},
+): Promise<{ movementId: string; onHand: string; reused: boolean }> {
+  if (plan.existing) {
+    return { ...plan.existing, reused: true };
+  }
+
+  const now = extra.now ?? new Date();
+
+  await increaseOnHand(tx, plan.target, plan.amount, plan.unitCost);
+  const onHand = await readOnHand(tx, plan.target);
+
+  const movementId = await writeMovement(tx, {
+    ...plan.target,
+    locationId: plan.locationId,
+    type: 'receipt',
+    quantity: plan.amount,
+    resultingOnHand: onHand,
+    unitCost: plan.unitCost,
+    originKind: plan.originKind,
+    reference: plan.reference,
+    reason: extra.reason ?? null,
+    serviceOrderId: extra.serviceOrderId ?? null,
+    transferId: null,
+    reservationId: null,
+    idempotencyKey: plan.idempotencyKey,
+    actorId: context.userId,
+    now,
+  });
+
+  await rememberPrimaryLocation(tx, plan.target, plan.locationId);
+
+  await emit({
+    type: EVENT_TYPES.STOCK_RECEIVED,
+    tenantId: context.tenantId,
+    payload: {
+      partId: plan.part.id,
+      unitId: plan.target.unitId,
+      quantity: plan.amount.toString(),
+      onHand: onHand.toString(),
+      originKind: plan.originKind,
+    },
+  });
+
+  return { movementId, onHand: onHand.toString(), reused: false };
+}
+
+/**
+ * Entrada MANUAL de estoque (Prompt 10, item 76).
+ *
+ * Origem `manual`: mercadoria que entrou sem pedido registrado — o caso da
+ * assistencia que compra o parafuso na loja da esquina. Quando existe pedido,
+ * quem da a entrada e o recebimento de compra, com origem `purchase_order`.
  */
 export async function receiveStock(
   context: TenantContext,
@@ -538,59 +678,13 @@ export async function receiveStock(
   const input = parse(receiveStockSchema, rawInput);
   await authorizeInUnit(context, input.unitId, PERMISSIONS.INVENTORY_RECEIVE);
 
-  const part = await loadPartForOperation(context, input.partId);
-  assertPartOperable(part);
+  const plan = await planStockEntry(context, { ...input, originKind: 'manual' });
 
-  const amount = parseOperationQuantity(input.quantity, part.unitOfMeasure);
-  const unitCost = parseOptionalCost(input.unitCost);
-  const key = input.idempotencyKey || null;
-
-  const existing = await findMovementByKey(context.tenantId, key);
-  if (existing) {
-    return { movementId: existing.id, onHand: existing.resultingOnHand, reused: true };
+  if (plan.existing) {
+    return { movementId: plan.existing.movementId, onHand: plan.existing.onHand, reused: true };
   }
 
-  const target = { tenantId: context.tenantId, unitId: input.unitId, partId: part.id };
-  const locationId = await resolveLocation(context, input.unitId, input.locationId);
-  const now = new Date();
-
-  return runInTransaction(async (tx, emit) => {
-    await increaseOnHand(tx, target, amount, unitCost);
-    const onHand = await readOnHand(tx, target);
-
-    const movementId = await writeMovement(tx, {
-      ...target,
-      locationId,
-      type: 'receipt',
-      quantity: amount,
-      resultingOnHand: onHand,
-      unitCost,
-      originKind: 'manual',
-      reference: input.reference || null,
-      reason: null,
-      serviceOrderId: null,
-      transferId: null,
-      reservationId: null,
-      idempotencyKey: key,
-      actorId: context.userId,
-      now,
-    });
-
-    await rememberPrimaryLocation(tx, target, locationId);
-
-    await emit({
-      type: EVENT_TYPES.STOCK_RECEIVED,
-      tenantId: context.tenantId,
-      payload: {
-        partId: part.id,
-        unitId: input.unitId,
-        quantity: amount.toString(),
-        onHand: onHand.toString(),
-      },
-    });
-
-    return { movementId, onHand: onHand.toString(), reused: false };
-  });
+  return runInTransaction(async (tx, emit) => applyStockEntry(tx, emit, context, plan));
 }
 
 // ---------------------------------------------------------------------------
