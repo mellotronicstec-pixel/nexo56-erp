@@ -109,6 +109,34 @@ de envio para proteger; quando ela existir, terá seu próprio quadro aqui.
 Nenhum evento do outbox é consumido: não há handler, não há automação, não há
 Rule Engine (Prompt 19).
 
+## Implementado e verificado — Orçamentos (Prompt 09)
+
+Quadro completo em
+[docs/modules/quotes/security.md](../modules/quotes/security.md). Os pontos
+estruturais:
+
+| Proteção                                            | Como                                                         | Verificação                         |
+| --------------------------------------------------- | ------------------------------------------------------------ | ----------------------------------- |
+| Orçamento na unidade errada                         | FK composta `(service_order_id, unit_id)`                    | teste com SQL direto                |
+| **`service_orders.status` escrito pelo orçamento**  | **não existe caminho**: `planTransition` + `applyTransition` | **teste arquitetural sobre `src/`** |
+| Envio com OS incompatível ou sem permissão de mover | plano validado e autorizado antes de qualquer gravação       | teste de integração                 |
+| Total forjado no formulário                         | recalculado no backend; o enviado é ignorado                 | teste de integração                 |
+| Float impreciso definindo valores                   | `Money` com inteiro de centavos, ponta a ponta               | testes unitários de dinheiro        |
+| `1.234,56` lido como R$ 1,23                        | `normalizeAmountInput` na Server Action                      | unitário + componente + E2E         |
+| Edição de proposta já enviada                       | domínio + caso de uso + `WHERE status='draft'`               | teste de integração                 |
+| Perda do valor que o cliente aprovou                | revisão é linha nova; a anterior não é tocada                | teste de integração + E2E           |
+| Duas propostas vivas / duas aprovações na mesma OS  | UNIQUE com marcador `NULL`-distinto                          | teste com SQL direto                |
+| Duas aprovações simultâneas                         | `version` + compare-and-swap                                 | **teste com duas simultâneas**      |
+| Evento de expiração duplicado                       | `status='sent'` no próprio `WHERE`                           | duas varreduras simultâneas         |
+| Valores ou relato do cliente em log/evento          | log registra operação; payload só com chaves técnicas        | teste com frase reconhecível        |
+
+### O que NÃO está protegido porque não existe
+
+Não há envio de comunicação externa, Portal do cliente, PDF, nem consumo de
+eventos. "Enviar orçamento" **formaliza** a proposta — nenhuma mensagem sai, e a
+interface declara isso em texto. A origem da decisão gravada é sempre
+`internal`, porque foi a equipe que registrou.
+
 ## Limitações conhecidas
 
 ### Rate limit conta por processo

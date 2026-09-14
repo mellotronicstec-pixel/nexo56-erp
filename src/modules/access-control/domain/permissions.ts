@@ -72,6 +72,26 @@ export const PERMISSIONS = {
   SERVICE_ORDERS_CANCEL: 'service_orders.cancel',
   /** Separada porque e terminal e recebera a trava financeira do Prompt 12. */
   SERVICE_ORDERS_COMPLETE: 'service_orders.complete',
+
+  // --- Prompt 09: orcamentos ------------------------------------------------
+  /**
+   * CAPACIDADES COMERCIAIS, e nao uma permissao por botao (item 71).
+   *
+   * O corte aqui separa quem MONTA a proposta de quem a FORMALIZA e de quem
+   * REGISTRA A DECISAO DO CLIENTE. Numa assistencia isso costuma ser gente
+   * diferente: o tecnico lanca os itens, o balcao envia, e aprovar ou recusar
+   * em nome do cliente e responsabilidade de quem falou com ele.
+   */
+  QUOTES_VIEW: 'quotes.view',
+  QUOTES_CREATE: 'quotes.create',
+  /** Mexer nos valores enquanto e rascunho. Depois de enviado, ninguem edita. */
+  QUOTES_UPDATE_DRAFT: 'quotes.update_draft',
+  /** Formaliza a proposta e move a Ordem de Servico. */
+  QUOTES_SEND: 'quotes.send',
+  /** Registra a decisao do cliente; leva a OS para o conserto. */
+  QUOTES_APPROVE: 'quotes.approve',
+  QUOTES_REJECT: 'quotes.reject',
+  QUOTES_CANCEL: 'quotes.cancel',
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -271,6 +291,50 @@ export const PERMISSION_CATALOG: readonly PermissionDefinition[] = [
     description: 'Encerra a ordem depois de o cliente retirar o aparelho.',
     featureKey: 'core.service_orders',
   },
+
+  // --- Prompt 09: orcamentos ------------------------------------------------
+  {
+    key: PERMISSIONS.QUOTES_VIEW,
+    name: 'Consultar orcamentos',
+    description: 'Ve os orcamentos das Ordens de Servico da unidade.',
+    featureKey: 'core.quotes',
+  },
+  {
+    key: PERMISSIONS.QUOTES_CREATE,
+    name: 'Criar orcamento',
+    description: 'Abre um novo orcamento ou uma revisao para a Ordem de Servico.',
+    featureKey: 'core.quotes',
+  },
+  {
+    key: PERMISSIONS.QUOTES_UPDATE_DRAFT,
+    name: 'Editar rascunho de orcamento',
+    description: 'Altera itens, valores e observacoes enquanto o orcamento e rascunho.',
+    featureKey: 'core.quotes',
+  },
+  {
+    key: PERMISSIONS.QUOTES_SEND,
+    name: 'Enviar orcamento',
+    description: 'Formaliza a proposta ao cliente e leva a Ordem de Servico para aprovacao.',
+    featureKey: 'core.quotes',
+  },
+  {
+    key: PERMISSIONS.QUOTES_APPROVE,
+    name: 'Registrar aprovacao de orcamento',
+    description: 'Registra que o cliente aprovou e libera a Ordem de Servico para conserto.',
+    featureKey: 'core.quotes',
+  },
+  {
+    key: PERMISSIONS.QUOTES_REJECT,
+    name: 'Registrar recusa de orcamento',
+    description: 'Registra que o cliente recusou a proposta, com o motivo.',
+    featureKey: 'core.quotes',
+  },
+  {
+    key: PERMISSIONS.QUOTES_CANCEL,
+    name: 'Cancelar orcamento',
+    description: 'Descarta um rascunho ou retira uma proposta antes da decisao do cliente.',
+    featureKey: 'core.quotes',
+  },
 ];
 
 /** Papeis estruturais criados no bootstrap de cada tenant. */
@@ -423,6 +487,20 @@ export const PERMISSION_GROUPS = [
       PERMISSIONS.SERVICE_ORDERS_MANAGE_TASKS,
       PERMISSIONS.SERVICE_ORDERS_CANCEL,
       PERMISSIONS.SERVICE_ORDERS_COMPLETE,
+    ],
+  },
+  {
+    key: 'orcamentos',
+    name: 'Orcamentos',
+    description: 'Propostas comerciais das Ordens de Servico.',
+    permissions: [
+      PERMISSIONS.QUOTES_VIEW,
+      PERMISSIONS.QUOTES_CREATE,
+      PERMISSIONS.QUOTES_UPDATE_DRAFT,
+      PERMISSIONS.QUOTES_SEND,
+      PERMISSIONS.QUOTES_APPROVE,
+      PERMISSIONS.QUOTES_REJECT,
+      PERMISSIONS.QUOTES_CANCEL,
     ],
   },
   {

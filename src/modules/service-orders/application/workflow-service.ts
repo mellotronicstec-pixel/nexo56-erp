@@ -2,7 +2,7 @@ import 'server-only';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { affectedRows } from '@/core/db/affected-rows';
 import { getDb } from '@/core/db/client';
-import { runInTransaction, type TransactionExecutor } from '@/core/db/unit-of-work';
+import { runInTransaction, type EmitFn, type TransactionExecutor } from '@/core/db/unit-of-work';
 import { BusinessRuleError, ConflictError, NotFoundError, ValidationError } from '@/core/errors';
 import { newId } from '@/core/ids/id';
 import { civilDaysFromNow } from '@/core/time/civil-date';
@@ -21,6 +21,7 @@ import {
   followUpPolicyFor,
   isKnownStatus,
   statusLabel,
+  type FollowUpPolicy,
   type ServiceOrderStatus,
 } from '@/modules/service-orders/domain/workflow';
 import {
@@ -124,17 +125,40 @@ function normalizeReason(raw: string | undefined): string | null {
 }
 
 /**
- * Executa uma transicao.
+ * Transicao JA VALIDADA E AUTORIZADA, pronta para ser gravada.
+ *
+ * Existe para que outro modulo — o Orcamento, no Prompt 09 — possa mover a OS
+ * DENTRO DA PROPRIA TRANSACAO dele, sem nunca escrever `status` por fora.
+ *
+ * A alternativa seria o orcamento gravar-se como enviado numa transacao e
+ * chamar `transitionServiceOrder` em outra: se a segunda falhasse, existiria
+ * um orcamento "enviado" com a OS parada, e ninguem saberia qual das duas
+ * verdades vale.
+ */
+export interface TransitionPlan {
+  order: OrderRow;
+  from: ServiceOrderStatus;
+  to: ServiceOrderStatus;
+  reason: string | null;
+  via: string | null;
+  expectedVersion: number | undefined;
+  nextVersion: number;
+  nextFollowUp: string | null;
+  followUpPolicyKind: FollowUpPolicy['kind'];
+}
+
+/**
+ * Valida e autoriza uma transicao SEM gravar nada.
  *
  * A ordem das verificacoes importa: primeiro a existencia e o escopo, depois a
  * regra de workflow, depois a autorizacao. Autorizar antes de saber se a
  * transicao existe faria o sistema responder "sem permissao" para algo que
  * simplesmente nao e possivel.
  */
-export async function transitionServiceOrder(
+export async function planTransition(
   context: TenantContext,
   input: TransitionInput,
-): Promise<TransitionResult> {
+): Promise<TransitionPlan> {
   if (!isKnownStatus(input.to)) {
     throw new ValidationError('Situacao de destino desconhecida.');
   }
@@ -170,18 +194,39 @@ export async function transitionServiceOrder(
   });
 
   const policy = followUpPolicyFor(input.to);
-  const now = new Date();
 
-  const nextFollowUp =
-    policy.kind === 'set'
-      ? civilDaysFromNow(context.tenantTimezone, policy.days, now)
-      : policy.kind === 'clear'
-        ? null
-        : order.followUpAt;
+  return {
+    order,
+    from: from as ServiceOrderStatus,
+    to: input.to,
+    reason,
+    via: input.via ?? null,
+    expectedVersion: input.expectedVersion,
+    nextVersion: order.version + 1,
+    nextFollowUp:
+      policy.kind === 'set'
+        ? civilDaysFromNow(context.tenantTimezone, policy.days)
+        : policy.kind === 'clear'
+          ? null
+          : order.followUpAt,
+    followUpPolicyKind: policy.kind,
+  };
+}
 
-  const nextVersion = order.version + 1;
-
-  await runInTransaction(async (tx, emit) => {
+/**
+ * Grava a transicao planejada, na transacao de quem chamou.
+ *
+ * ESTE E O UNICO LUGAR DO SISTEMA QUE ESCREVE `service_orders.status`.
+ */
+export async function applyTransition(
+  tx: TransactionExecutor,
+  emit: EmitFn,
+  context: TenantContext,
+  plan: TransitionPlan,
+  now: Date = new Date(),
+): Promise<TransitionResult> {
+  const { order, from, to, reason, via, nextVersion } = plan;
+  {
     /**
      * COMPARE-AND-SWAP (item 11).
      *
@@ -192,12 +237,12 @@ export async function transitionServiceOrder(
     const updated = await tx
       .update(serviceOrders)
       .set({
-        status: input.to,
+        status: to,
         statusChangedAt: now,
         version: nextVersion,
-        followUpAt: nextFollowUp,
+        followUpAt: plan.nextFollowUp,
         // Prazo novo merece alerta novo.
-        followUpAlertedFor: policy.kind === 'keep' ? undefined : null,
+        followUpAlertedFor: plan.followUpPolicyKind === 'keep' ? undefined : null,
         updatedBy: context.userId,
         updatedAt: now,
       })
@@ -206,9 +251,9 @@ export async function transitionServiceOrder(
           eq(serviceOrders.tenantId, context.tenantId),
           eq(serviceOrders.id, order.id),
           eq(serviceOrders.status, from),
-          input.expectedVersion === undefined
+          plan.expectedVersion === undefined
             ? eq(serviceOrders.version, order.version)
-            : eq(serviceOrders.version, input.expectedVersion),
+            : eq(serviceOrders.version, plan.expectedVersion),
         ),
       );
 
@@ -223,9 +268,9 @@ export async function transitionServiceOrder(
       tenantId: context.tenantId,
       serviceOrderId: order.id,
       kind: 'status_changed',
-      summary: `${statusLabel(from)} para ${statusLabel(input.to)}`,
+      summary: `${statusLabel(from)} para ${statusLabel(to)}`,
       // Sem PII: so as chaves tecnicas do fato.
-      metadata: { from, to: input.to, via: input.via ?? null },
+      metadata: { from, to, via },
       reason,
       actorId: context.userId,
       occurredAt: now,
@@ -240,16 +285,12 @@ export async function transitionServiceOrder(
         unitId: order.unitId,
         userId: context.userId,
         before: { status: from, version: order.version },
-        after: { status: input.to, version: nextVersion, via: input.via ?? null },
+        after: { status: to, version: nextVersion, via },
       },
       tx,
     );
 
-    await applyStateSideEffects(tx, context, {
-      order,
-      to: input.to,
-      now,
-    });
+    await applyStateSideEffects(tx, context, { order, to, now });
 
     /**
      * EVENTO DE TRANSICAO (item 49).
@@ -266,16 +307,30 @@ export async function transitionServiceOrder(
         number: order.number,
         unitId: order.unitId,
         from,
-        to: input.to,
-        via: input.via ?? null,
+        to,
+        via,
         actorId: context.userId,
         occurredAt: now.toISOString(),
         hasReason: reason !== null,
       },
     });
-  });
+  }
 
-  return { from: from as ServiceOrderStatus, to: input.to, version: nextVersion };
+  return { from, to, version: nextVersion };
+}
+
+/**
+ * Executa uma transicao do inicio ao fim, em transacao propria.
+ *
+ * E a porta usada pela interface e pelas Server Actions. Quem ja esta dentro de
+ * uma transacao usa `planTransition` + `applyTransition`.
+ */
+export async function transitionServiceOrder(
+  context: TenantContext,
+  input: TransitionInput,
+): Promise<TransitionResult> {
+  const plan = await planTransition(context, input);
+  return runInTransaction((tx, emit) => applyTransition(tx, emit, context, plan));
 }
 
 /**

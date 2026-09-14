@@ -56,6 +56,19 @@ export const EVENT_TYPES = {
   /** Intencao de avisar o cliente. O envio real e do Prompt 16. */
   SERVICE_ORDER_CUSTOMER_NOTIFICATION_REQUESTED: 'SERVICE_ORDER_CUSTOMER_NOTIFICATION_REQUESTED',
   SERVICE_ORDER_FOLLOW_UP_OVERDUE: 'SERVICE_ORDER_FOLLOW_UP_OVERDUE',
+
+  // --- Prompt 09: orcamentos ------------------------------------------------
+  QUOTE_CREATED: 'QUOTE_CREATED',
+  /**
+   * A proposta foi FORMALIZADA. Nao significa que uma mensagem saiu: nao ha
+   * canal de comunicacao (Prompt 16). E o gancho de que ele vai precisar.
+   */
+  QUOTE_SENT: 'QUOTE_SENT',
+  QUOTE_APPROVED: 'QUOTE_APPROVED',
+  QUOTE_REJECTED: 'QUOTE_REJECTED',
+  QUOTE_EXPIRED: 'QUOTE_EXPIRED',
+  QUOTE_CANCELLED: 'QUOTE_CANCELLED',
+  QUOTE_REVISED: 'QUOTE_REVISED',
 } as const;
 
 export type EventType = (typeof EVENT_TYPES)[keyof typeof EVENT_TYPES];

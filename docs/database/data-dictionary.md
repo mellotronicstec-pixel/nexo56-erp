@@ -286,6 +286,57 @@ encerradas se acumulam à vontade. Mesmo padrão do contato principal do cliente
 
 ---
 
+## `quotes` (Prompt 09)
+
+| Coluna                            | Tipo            | Obrig.       | Significado                                                                                             |
+| --------------------------------- | --------------- | ------------ | ------------------------------------------------------------------------------------------------------- |
+| `service_order_id`                | `CHAR(36)`      | **NN**, FK   | A OS a que a proposta pertence. FK composta com `tenant_id` **e** com `unit_id`                         |
+| `unit_id`                         | `CHAR(36)`      | **NN**, FK   | Unidade da OS. Redundante de propósito: sustenta a FK `(service_order_id, unit_id)`                     |
+| `number`                          | `INT UNSIGNED`  | NN           | Número humano; sequência do **tenant** (`tenant_sequences`, tipo `quote`), compartilhada entre unidades |
+| `revision`                        | `INT UNSIGNED`  | NN (=1)      | Revisão. A revisão é **linha nova com o mesmo número** (ADR-041)                                        |
+| `supersedes_quote_id`             | `CHAR(36)`      | opcional, FK | A versão que esta revisão substitui                                                                     |
+| `status`                          | `VARCHAR(20)`   | NN           | `draft` \| `sent` \| `approved` \| `rejected` \| `expired` \| `superseded` \| `cancelled`               |
+| `active_marker`                   | `TINYINT`       | opcional     | `1` enquanto rascunho ou enviado, `NULL` depois. Com a UNIQUE: **uma proposta viva por OS**             |
+| `approved_marker`                 | `TINYINT`       | opcional     | `1` só na versão aprovada. Com a UNIQUE: **uma aprovação por OS**                                       |
+| `subtotal` / `discount` / `total` | `DECIMAL(14,2)` | NN           | Recalculados pelo backend a cada gravação; o total enviado pelo formulário é ignorado                   |
+| `currency`                        | `VARCHAR(3)`    | NN (=BRL)    | Existe para o dia em que houver outra. Sem multimoeda implementada                                      |
+| `valid_until`                     | `VARCHAR(10)`   | opcional     | **Data civil** ISO no fuso da empresa (ADR-017). Nula: não há prazo padrão                              |
+| `customer_notes` 🔒               | `TEXT`          | opcional     | Texto que o cliente verá. Separado do interno de propósito                                              |
+| `internal_notes`                  | `TEXT`          | opcional     | Recado da equipe. Não vai ao cliente                                                                    |
+| `sent_at` / `sent_by`             | —               | opcional     | Quando e por quem a proposta foi **formalizada** (nenhuma mensagem é enviada)                           |
+| `decided_at` / `decided_by`       | —               | opcional     | Quando e quem **registrou** a decisão do cliente                                                        |
+| `decision_source`                 | `VARCHAR(40)`   | opcional     | Hoje sempre `internal`. `VARCHAR` para receber `customer_portal` quando o Portal existir                |
+| `decision_reason` 🔒              | `VARCHAR(300)`  | opcional     | Motivo da recusa ou do cancelamento. Texto livre de pessoa                                              |
+| `version`                         | `INT UNSIGNED`  | NN (=1)      | Concorrência otimista, mesmo padrão da OS                                                               |
+| `idempotency_key`                 | `VARCHAR(80)`   | opcional     | Mesmo comando não cria dois orçamentos. Cada `NULL` é distinto                                          |
+
+## `quote_items` (Prompt 09)
+
+| Coluna        | Tipo            | Obrig. | Significado                                                                  |
+| ------------- | --------------- | ------ | ---------------------------------------------------------------------------- |
+| `quote_id`    | `CHAR(36)`      | NN, FK | Orçamento a que a linha pertence. FK composta; `ON DELETE CASCADE`           |
+| `kind`        | `VARCHAR(20)`   | NN     | `service` \| `part` \| `other`. **`part` NÃO é item de estoque** — Prompt 10 |
+| `description` | `VARCHAR(200)`  | NN     | Obrigatória. Texto livre: a linha não depende de catálogo                    |
+| `quantity`    | `DECIMAL(14,4)` | NN     | Meia hora de bancada é `0.5000`                                              |
+| `unit_price`  | `DECIMAL(14,2)` | NN     | Preço em centavos; lido e escrito pelo `Money`, nunca por float              |
+| `discount`    | `DECIMAL(14,2)` | NN     | Desconto da linha, em **valor**                                              |
+| `total`       | `DECIMAL(14,2)` | NN     | `round(quantidade × unitário) − desconto`, calculado no backend              |
+| `position`    | `INT UNSIGNED`  | NN     | Ordem de exibição                                                            |
+
+A tabela **não tem** referência a produto, fornecedor ou SKU — há teste
+arquitetural que falha se aparecer.
+
+## `quote_timeline` (Prompt 09)
+
+`id`, `tenant_id`, `quote_id`, `kind`, `summary`, `metadata` (JSON, sem PII),
+`reason` (texto livre de pessoa, em coluna própria), `actor_id`, `occurred_at`.
+Append-only, `ON DELETE CASCADE` para o orçamento.
+
+Separada da linha do tempo da OS de propósito: a ficha do aparelho recebe o fato
+resumido ("Orçamento ORC #45 enviado"), e o detalhe vive aqui.
+
+---
+
 ## Tipos monetários e de quantidade (ainda sem uso físico)
 
 Definidos como convenção em `src/core/db/columns.ts`, aplicáveis assim que

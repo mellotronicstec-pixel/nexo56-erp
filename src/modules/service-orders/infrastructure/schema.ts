@@ -268,6 +268,15 @@ export const serviceOrders = mysqlTable(
     /** Alvo das FKs compostas das tabelas filhas. */
     unique('uq_service_order_id_tenant').on(table.id, table.tenantId),
 
+    /**
+     * Alvo da FK composta `(service_order_id, unit_id)` do Prompt 09.
+     *
+     * Acrescentada de forma ADITIVA para que o orcamento so possa existir na
+     * mesma unidade da sua OS — a mesma tecnica que `uq_intake_id_unit` usou
+     * no Prompt 07 para amarrar recebimento e OS.
+     */
+    unique('uq_service_order_id_unit').on(table.id, table.unitId),
+
     /** Fila da unidade, da mais recente para a mais antiga (itens 48 e 49). */
     index('ix_service_order_tenant_unit_opened').on(table.tenantId, table.unitId, table.openedAt),
     /** Busca pelo numero exato (item 46) — a consulta mais frequente do balcao. */

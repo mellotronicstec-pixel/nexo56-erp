@@ -8,40 +8,43 @@ Escopo de cada entidade (Prompt 02, itens 6 a 14 e 85).
 
 ## Entidades existentes (implementadas e migradas)
 
-| Entidade                       | Escopo               | Tenant         | Unit                   | Histórico | Soft delete                  |
-| ------------------------------ | -------------------- | -------------- | ---------------------- | --------- | ---------------------------- |
-| `tenants`                      | plataforma           | — (é o tenant) | —                      | não       | não — `status`               |
-| `units`                        | tenant               | obrigatório    | — (é a unidade)        | não       | não — `status`               |
-| `users`                        | tenant               | obrigatório    | via `user_units`       | não       | não — `status`               |
-| `user_units`                   | associação           | obrigatório    | obrigatório            | não       | não — hard delete            |
-| `sessions`                     | tenant               | obrigatório    | não                    | não       | não — `revoked_at`           |
-| `roles`                        | tenant               | obrigatório    | não                    | não       | não — `is_system` protege    |
-| `permissions`                  | **global**           | não            | não                    | não       | não                          |
-| `role_permissions`             | associação           | via `role`     | não                    | não       | não — hard delete            |
-| `user_roles`                   | associação           | obrigatório    | não                    | não       | não — hard delete            |
-| `user_unit_roles`              | associação           | obrigatório    | obrigatório            | não       | não — hard delete            |
-| `password_reset_tokens`        | tenant               | obrigatório    | não                    | não       | não — `used_at`/`expires_at` |
-| `features`                     | **global**           | não            | não                    | não       | não — `status`               |
-| `feature_dependencies`         | **global**           | não            | não                    | não       | não                          |
-| `plans`                        | **global**           | não            | não                    | não       | não                          |
-| `plan_entitlements`            | **global**           | não            | não                    | não       | não                          |
-| `tenant_features`              | tenant               | obrigatório    | não                    | não       | **não — desativar preserva** |
-| `tenant_sequences`             | tenant               | obrigatório    | não                    | não       | não                          |
-| `audit_logs`                   | tenant               | opcional¹      | opcional               | **sim**   | **nunca**                    |
-| `domain_events`                | tenant               | opcional¹      | não                    | **sim**   | **nunca**                    |
-| `jobs`                         | tenant               | opcional²      | não                    | não       | não — `status`               |
-| `customers`                    | tenant               | obrigatório    | **não**³               | não       | não — `status`               |
-| `customer_contacts`            | tenant               | obrigatório    | não                    | não       | não — hard delete            |
-| `customer_addresses`           | tenant               | obrigatório    | não                    | não       | não — hard delete            |
-| `equipment`                    | tenant               | obrigatório    | **não**⁴               | não       | não — `status`               |
-| `equipment_intakes`            | **tenant + unidade** | obrigatório    | **obrigatório**        | **sim**⁵  | **nunca**                    |
-| `equipment_intake_accessories` | via recebimento      | obrigatório    | herdado                | não       | cascata do recebimento       |
-| `equipment_intake_conditions`  | via recebimento      | obrigatório    | herdado                | não       | cascata do recebimento       |
-| `equipment_media`              | tenant               | obrigatório    | herdado do recebimento | **sim**⁶  | remoção explícita            |
-| `equipment_label_readings`     | tenant               | obrigatório    | não                    | **sim**   | cascata do equipamento       |
-| `service_orders`               | **tenant + unidade** | obrigatório    | **obrigatório**        | **sim**⁷  | **nunca**                    |
-| `service_order_timeline`       | via ordem            | obrigatório    | herdado                | **sim**   | **nunca**                    |
-| `service_order_tasks`          | **tenant + unidade** | obrigatório    | **obrigatório**⁸       | não       | cascata da ordem             |
+| Entidade                       | Escopo                | Tenant         | Unit                   | Histórico | Soft delete                  |
+| ------------------------------ | --------------------- | -------------- | ---------------------- | --------- | ---------------------------- |
+| `tenants`                      | plataforma            | — (é o tenant) | —                      | não       | não — `status`               |
+| `units`                        | tenant                | obrigatório    | — (é a unidade)        | não       | não — `status`               |
+| `users`                        | tenant                | obrigatório    | via `user_units`       | não       | não — `status`               |
+| `user_units`                   | associação            | obrigatório    | obrigatório            | não       | não — hard delete            |
+| `sessions`                     | tenant                | obrigatório    | não                    | não       | não — `revoked_at`           |
+| `roles`                        | tenant                | obrigatório    | não                    | não       | não — `is_system` protege    |
+| `permissions`                  | **global**            | não            | não                    | não       | não                          |
+| `role_permissions`             | associação            | via `role`     | não                    | não       | não — hard delete            |
+| `user_roles`                   | associação            | obrigatório    | não                    | não       | não — hard delete            |
+| `user_unit_roles`              | associação            | obrigatório    | obrigatório            | não       | não — hard delete            |
+| `password_reset_tokens`        | tenant                | obrigatório    | não                    | não       | não — `used_at`/`expires_at` |
+| `features`                     | **global**            | não            | não                    | não       | não — `status`               |
+| `feature_dependencies`         | **global**            | não            | não                    | não       | não                          |
+| `plans`                        | **global**            | não            | não                    | não       | não                          |
+| `plan_entitlements`            | **global**            | não            | não                    | não       | não                          |
+| `tenant_features`              | tenant                | obrigatório    | não                    | não       | **não — desativar preserva** |
+| `tenant_sequences`             | tenant                | obrigatório    | não                    | não       | não                          |
+| `audit_logs`                   | tenant                | opcional¹      | opcional               | **sim**   | **nunca**                    |
+| `domain_events`                | tenant                | opcional¹      | não                    | **sim**   | **nunca**                    |
+| `jobs`                         | tenant                | opcional²      | não                    | não       | não — `status`               |
+| `customers`                    | tenant                | obrigatório    | **não**³               | não       | não — `status`               |
+| `customer_contacts`            | tenant                | obrigatório    | não                    | não       | não — hard delete            |
+| `customer_addresses`           | tenant                | obrigatório    | não                    | não       | não — hard delete            |
+| `equipment`                    | tenant                | obrigatório    | **não**⁴               | não       | não — `status`               |
+| `equipment_intakes`            | **tenant + unidade**  | obrigatório    | **obrigatório**        | **sim**⁵  | **nunca**                    |
+| `equipment_intake_accessories` | via recebimento       | obrigatório    | herdado                | não       | cascata do recebimento       |
+| `equipment_intake_conditions`  | via recebimento       | obrigatório    | herdado                | não       | cascata do recebimento       |
+| `equipment_media`              | tenant                | obrigatório    | herdado do recebimento | **sim**⁶  | remoção explícita            |
+| `equipment_label_readings`     | tenant                | obrigatório    | não                    | **sim**   | cascata do equipamento       |
+| `service_orders`               | **tenant + unidade**  | obrigatório    | **obrigatório**        | **sim**⁷  | **nunca**                    |
+| `service_order_timeline`       | via ordem             | obrigatório    | herdado                | **sim**   | **nunca**                    |
+| `service_order_tasks`          | **tenant + unidade**  | obrigatório    | **obrigatório**⁸       | não       | cascata da ordem             |
+| `quotes`                       | **tenant + unidade**⁹ | obrigatório    | **obrigatório**        | **sim**   | **nunca**                    |
+| `quote_items`                  | via orçamento         | obrigatório    | herdado                | não       | cascata do orçamento         |
+| `quote_timeline`               | via orçamento         | obrigatório    | herdado                | **sim**   | cascata do orçamento         |
 
 ¹ Nulo em evento de plataforma anterior ao tenant existir.
 ² Nulo em job técnico global (ex.: limpeza de sessões expiradas).
@@ -60,6 +63,10 @@ equipamento e unidade não mudam depois da abertura (ADR-033). Cancelamento é
 segue a ordem no `CASCADE`. Encerrar a OS **cancela** as tarefas abertas — cada
 uma com seu próprio registro de auditoria, porque "a ordem foi cancelada" não
 explica, meses depois, por que a tarefa que estava na bancada de alguém sumiu.
+⁹ A unidade do orçamento **vem da Ordem de Serviço**, nunca da sessão, e a
+coerência é imposta pela FK composta `(service_order_id, unit_id)` — ADR-040. O
+orçamento é registro comercial e histórico: não se exclui, e a versão que o
+cliente viu nunca é reescrita (ADR-041).
 
 ### Justificativa das tabelas globais (item 7)
 

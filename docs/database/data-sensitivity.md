@@ -53,6 +53,10 @@ Classificação que orienta log, auditoria, exportação, retenção e acesso
 | Linha do tempo da OS                           | `service_order_timeline`           | Interno                                   | `summary`, `metadata` e `reason` nunca carregam o relato — coberto por teste                                                                  |
 | Motivo de transição ou cancelamento            | `service_order_timeline.reason`    | Interno                                   | Texto humano escrito pela equipe. Fica no histórico e na auditoria; não é apresentado ao cliente                                              |
 | Tarefas do fluxo                               | `service_order_tasks`              | Interno                                   | `description` de "Buscar Peça" é texto livre da equipe; não carrega dado do cliente                                                           |
+| Observações do orçamento para o cliente        | `quotes.customer_notes`            | Interno                                   | Escrito para o cliente ler. Sai no futuro PDF e no futuro Portal — separado do recado interno de propósito                                    |
+| Observações internas do orçamento              | `quotes.internal_notes`            | Interno                                   | Recado da equipe; nunca vai ao cliente                                                                                                        |
+| Motivo de recusa ou cancelamento               | `quotes.decision_reason`           | Interno                                   | Texto livre de pessoa; pode conter circunstância pessoal incidental                                                                           |
+| Valores e itens do orçamento                   | `quotes`, `quote_items`            | Interno                                   | Preço praticado é informação comercial. Nunca vai para log nem para payload de evento                                                         |
 
 ### Redação automática
 

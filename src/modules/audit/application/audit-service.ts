@@ -76,6 +76,17 @@ export const AUDIT_ACTIONS = {
   SERVICE_ORDER_TASK_COMPLETED: 'service_order_task.completed',
   SERVICE_ORDER_TASK_CANCELLED: 'service_order_task.cancelled',
   SERVICE_ORDER_CUSTOMER_NOTIFIED: 'service_order.customer_notification_requested',
+
+  // --- Prompt 09: orcamentos ------------------------------------------------
+  QUOTE_CREATED: 'quote.created',
+  QUOTE_UPDATED: 'quote.updated',
+  QUOTE_ITEMS_UPDATED: 'quote.items_updated',
+  QUOTE_SENT: 'quote.sent',
+  QUOTE_APPROVED: 'quote.approved',
+  QUOTE_REJECTED: 'quote.rejected',
+  QUOTE_EXPIRED: 'quote.expired',
+  QUOTE_CANCELLED: 'quote.cancelled',
+  QUOTE_SUPERSEDED: 'quote.superseded',
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];

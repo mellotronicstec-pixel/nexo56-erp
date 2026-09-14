@@ -20,6 +20,14 @@ export async function migrateTestDatabase(): Promise<void> {
  */
 const TABLES_IN_DELETE_ORDER = [
   'audit_logs',
+  // Filhas antes das maes: com FOREIGN_KEY_CHECKS desligado a ordem nao e
+  // obrigatoria, mas manter a lista coerente evita que um esquecimento aqui
+  // vire dado vazando de um teste para outro — foi o que aconteceu com
+  // `service_order_tasks`, ausente desde o Prompt 08.
+  'quote_timeline',
+  'quote_items',
+  'quotes',
+  'service_order_tasks',
   'service_order_timeline',
   'service_orders',
   'equipment_label_readings',

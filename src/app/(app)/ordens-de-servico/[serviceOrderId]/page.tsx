@@ -27,6 +27,10 @@ import {
   getServiceOrderNumberFormat,
   listUnitMembers,
 } from '@/modules/service-orders/application/service-order-queries';
+import {
+  getQuoteNumberFormat,
+  listQuotesForServiceOrder,
+} from '@/modules/quotes/application/quote-queries';
 import { isDeliveryPreparationDone } from '@/modules/service-orders/application/workflow-service';
 import {
   formatServiceOrderNumber,
@@ -56,6 +60,7 @@ import {
   WorkflowPanel,
   type TransitionOption,
 } from './workflow-panel';
+import { QuoteSection } from './orcamentos/quote-section';
 
 export const metadata: Metadata = { title: 'Ordem de Servico' };
 
@@ -117,12 +122,24 @@ export default async function ServiceOrderDetailPage({
     canAssignDecision,
     canFollowUpDecision,
     canTasksDecision,
+    canViewQuotesDecision,
+    canCreateQuoteDecision,
   ] = await Promise.all([
     can(context, { ...unitScope, permission: PERMISSIONS.SERVICE_ORDERS_UPDATE }),
     can(context, { ...unitScope, permission: CANCEL_RULE.permission }),
     can(context, { ...unitScope, permission: PERMISSIONS.SERVICE_ORDERS_ASSIGN_TECHNICIAN }),
     can(context, { ...unitScope, permission: PERMISSIONS.SERVICE_ORDERS_MANAGE_FOLLOW_UP }),
     can(context, { ...unitScope, permission: PERMISSIONS.SERVICE_ORDERS_MANAGE_TASKS }),
+    can(context, {
+      permission: PERMISSIONS.QUOTES_VIEW,
+      featureKey: FEATURES.CORE_QUOTES,
+      unitId: order.unitId,
+    }),
+    can(context, {
+      permission: PERMISSIONS.QUOTES_CREATE,
+      featureKey: FEATURES.CORE_QUOTES,
+      unitId: order.unitId,
+    }),
   ]);
 
   /**
@@ -160,11 +177,17 @@ export default async function ServiceOrderDetailPage({
    * condicao da acao "Informar Ordem Disponivel" so e consultada no estado em
    * que ela existe — nao ha consulta paga para desenhar o que nao aparece.
    */
-  const [members, preparationDone] = await Promise.all([
+  const [members, preparationDone, quoteList, quoteNumberFormat] = await Promise.all([
     canAssignDecision.allowed ? listUnitMembers(context, order.unitId) : Promise.resolve([]),
     order.status === 'awaiting_delivery_preparation'
       ? isDeliveryPreparationDone(context, order.id)
       : Promise.resolve(false),
+    canViewQuotesDecision.allowed
+      ? listQuotesForServiceOrder(context, order.id)
+      : Promise.resolve([]),
+    canViewQuotesDecision.allowed
+      ? getQuoteNumberFormat(context.tenantId)
+      : Promise.resolve({ prefix: 'ORC', padding: 6 }),
   ]);
 
   const formatter = new Intl.DateTimeFormat('pt-BR', {
@@ -383,6 +406,29 @@ export default async function ServiceOrderDetailPage({
           </CardBody>
         </Card>
       </Section>
+
+      {/*
+        ORCAMENTOS (Prompt 09, itens 80 e 81).
+        A secao so aparece para quem pode ver orcamentos — e so existe porque o
+        modulo existe. Ate o Prompt 08 a ficha nao tinha nada disto, justamente
+        para nao prometer o que nao havia.
+      */}
+      {canViewQuotesDecision.allowed ? (
+        <Section
+          id="orcamentos"
+          title="Orcamentos"
+          description="Propostas comerciais deste atendimento. O cliente so ve o que for enviado."
+        >
+          <QuoteSection
+            serviceOrderId={order.id}
+            quotes={quoteList}
+            numberFormat={quoteNumberFormat}
+            canCreate={canCreateQuoteDecision.allowed}
+            timeZone={context.tenantTimezone}
+            idempotencyKey={`os-${order.id}-orc-${quoteList.length}`}
+          />
+        </Section>
+      ) : null}
 
       {/*
         RELATO DO CLIENTE em bloco proprio, com rotulo explicito de que nao e

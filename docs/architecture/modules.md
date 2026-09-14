@@ -25,6 +25,7 @@ testes próprios — nunca como placeholder (Prompt 01, itens 8 e 82).
 | `customers`      | 05     | pessoas e empresas atendidas, contatos e endereços                                 | `customers`, `customer_contacts`, `customer_addresses`                                                                                         |
 | `equipment`      | 06     | aparelhos, recebimento, acessórios, inspeção, fotos e leitura de etiqueta          | `equipment`, `equipment_intakes`, `equipment_intake_accessories`, `equipment_intake_conditions`, `equipment_media`, `equipment_label_readings` |
 | `service-orders` | 07–08  | abertura, numeração, vínculos, ficha, histórico e **workflow** da Ordem de Serviço | `service_orders`, `service_order_timeline`, `service_order_tasks`                                                                              |
+| `quotes`         | 09     | propostas comerciais da OS: itens, valores, envio, aprovação, recusa e revisões    | `quotes`, `quote_items`, `quote_timeline`                                                                                                      |
 
 O `equipment` usa também a abstração de armazenamento de arquivos
 (`core/storage`), introduzida no Prompt 06: os bytes das fotos ficam fora do
@@ -47,6 +48,7 @@ jobs    ──→ auth (handler de limpeza de sessão), core
 customers      ──→ tenancy, access-control, features, audit, events
 equipment      ──→ customers, tenancy, access-control, features, audit, events, core/storage
 service-orders ──→ customers, equipment, tenancy (sequencias), access-control, features, audit, events
+quotes         ──→ service-orders (workflow + leitura), tenancy (sequencias), money, access-control, features, audit, events
 ```
 
 `customers` não conhece `equipment`, e nenhum dos dois conhece `service-orders`:
@@ -74,6 +76,7 @@ migration — não na carga do módulo.
    dependências; dependentes; dados ao desativar; frontend; backend/API;
    automações; permissões; plano; reativação; histórico). Exemplos respondidos:
    [Equipamentos](../modules/equipment/modularity.md) e
-   [Ordens de Serviço](../modules/service-orders/modularity.md).
+   [Ordens de Serviço](../modules/service-orders/modularity.md) e
+   [Orçamentos](../modules/quotes/modularity.md).
 5. Acrescentar testes de travessia entre tenants para as novas consultas.
 6. Gerar migration (`npm run db:generate`) e revisar o SQL antes de aplicar.

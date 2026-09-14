@@ -314,6 +314,55 @@ erDiagram
         datetime completed_at
         char36 completed_by
     }
+    QUOTES {
+        char36 id PK
+        char36 tenant_id FK
+        char36 unit_id FK "da OS - sustenta a FK composta com service_order_id"
+        char36 service_order_id FK "FK composta com tenant_id E com unit_id"
+        int number "numero humano, sequencia do TENANT"
+        int revision "revisao e LINHA NOVA com o mesmo numero"
+        char36 supersedes_quote_id FK "a versao que esta revisao substitui"
+        varchar status "draft sent approved rejected expired superseded cancelled"
+        tinyint active_marker UK "1 enquanto viva, NULL depois - uma por OS"
+        tinyint approved_marker UK "1 so na aprovada - uma por OS"
+        decimal subtotal "DECIMAL(14,2) - calculado no backend"
+        decimal discount "desconto em VALOR, nunca percentual"
+        decimal total "subtotal - desconto"
+        varchar currency "BRL - sem multimoeda"
+        varchar valid_until "DATA CIVIL no fuso da empresa; nulo = sem prazo"
+        text customer_notes "o cliente vera"
+        text internal_notes "recado da equipe, nao vai ao cliente"
+        datetime sent_at "formalizado - NENHUMA mensagem foi enviada"
+        datetime decided_at
+        varchar decision_source "hoje sempre internal - nao ha Portal"
+        varchar decision_reason "motivo da recusa, texto livre"
+        int version "concorrencia otimista"
+        varchar idempotency_key UK "mesmo comando, mesmo orcamento"
+        composite uq_quote_id_tenant UK "alvo de FK composta"
+    }
+    QUOTE_ITEMS {
+        char36 id PK
+        char36 tenant_id FK
+        char36 quote_id FK "FK composta, ON DELETE CASCADE"
+        varchar kind "service part other - PART NAO E ESTOQUE"
+        varchar description "obrigatoria, texto livre, sem catalogo"
+        decimal quantity "DECIMAL(14,4) - meia hora e 0.5"
+        decimal unit_price "DECIMAL(14,2) - lido pelo Money, nunca float"
+        decimal discount "desconto da linha, em valor"
+        decimal total "round(qtd x unitario) - desconto"
+        int position "ordem de exibicao"
+    }
+    QUOTE_TIMELINE {
+        char36 id PK
+        char36 tenant_id FK
+        char36 quote_id FK "FK composta, ON DELETE CASCADE"
+        varchar kind "created items_updated sent approved rejected..."
+        varchar summary "sem PII"
+        json metadata "sem PII - so chaves tecnicas"
+        varchar reason "motivo escrito, texto livre"
+        char36 actor_id
+        datetime occurred_at
+    }
 ```
 
 ### Destaques do diagrama
@@ -388,15 +437,16 @@ erDiagram
 
 ### Invariantes já decididas
 
-| Decisão                                    | Motivo                                                            |
-| ------------------------------------------ | ----------------------------------------------------------------- |
-| `service_orders.unit_id` **obrigatório**   | A OS acontece fisicamente em uma unidade                          |
-| `clients.unit_id` **não define ownership** | O mesmo cliente é atendido em qualquer filial                     |
-| `equipments` pertence a tenant + cliente   | Não se duplica por passar em outra unidade                        |
-| Número da OS **único por tenant**          | Sem ambiguidade em QR, portal, suporte e garantia                 |
-| `warranties` é **entidade própria**        | Nunca um booleano dentro da OS (item 63)                          |
-| `inventory` é **por unidade**              | Estoque é físico (item 64)                                        |
-| `inventory_movements` é **imutável**       | Saldo sem histórico é saldo não auditável                         |
-| `quotes` guarda **snapshot** de preço      | O que foi enviado ao cliente não muda se a tabela mudar (item 66) |
-| `payments` usa **DECIMAL exato**           | Nunca float (item 65)                                             |
-| `attachments` guarda **chave de storage**  | Binário não vai para tabela de negócio (item 60)                  |
+| Decisão                                    | Motivo                                                                                                     |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
+| `service_orders.unit_id` **obrigatório**   | A OS acontece fisicamente em uma unidade                                                                   |
+| `quotes.unit_id` **obrigatório**           | Vem da OS; sustenta a FK `(service_order_id, unit_id)` (ADR-040)                                           |
+| `clients.unit_id` **não define ownership** | O mesmo cliente é atendido em qualquer filial                                                              |
+| `equipments` pertence a tenant + cliente   | Não se duplica por passar em outra unidade                                                                 |
+| Número da OS **único por tenant**          | Sem ambiguidade em QR, portal, suporte e garantia                                                          |
+| `warranties` é **entidade própria**        | Nunca um booleano dentro da OS (item 63)                                                                   |
+| `inventory` é **por unidade**              | Estoque é físico (item 64)                                                                                 |
+| `inventory_movements` é **imutável**       | Saldo sem histórico é saldo não auditável                                                                  |
+| `quotes` guarda **snapshot** de preço      | **Implementado no Prompt 09**: a linha guarda o valor proposto, e a revisão preserva cada versão (ADR-041) |
+| `payments` usa **DECIMAL exato**           | Nunca float (item 65)                                                                                      |
+| `attachments` guarda **chave de storage**  | Binário não vai para tabela de negócio (item 60)                                                           |

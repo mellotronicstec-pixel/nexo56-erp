@@ -29,6 +29,7 @@ export {
   type TextareaProps,
   type SelectProps,
 } from './input';
+export { MoneyInput, type MoneyInputProps } from './money-input';
 export { PasswordInput } from './password-input';
 export { Checkbox, Radio, Switch } from './choice';
 export { FormField, Field } from './form-field';

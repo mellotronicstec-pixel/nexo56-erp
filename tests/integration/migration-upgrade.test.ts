@@ -752,6 +752,202 @@ describe('upgrade incremental entre prompts', () => {
     }
   });
 
+  it('leva um banco do Prompt 08, com OS e workflow, ate o Prompt 09 sem perda', async () => {
+    const stepDb = 'nexo56_migration_step09_test';
+    await adminConnection.query(`DROP DATABASE IF EXISTS \`${stepDb}\``);
+    await adminConnection.query(
+      `CREATE DATABASE \`${stepDb}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`,
+    );
+
+    const folder = buildFolderUpTo('0006');
+    const connection = await mysql.createConnection({
+      uri: urlForDatabase(stepDb),
+      timezone: 'Z',
+      multipleStatements: true,
+    });
+
+    try {
+      // --- banco no estado do Prompt 08 --------------------------------------
+      await migrate(drizzle(connection), { migrationsFolder: folder });
+
+      const [beforeTables] = await connection.query<mysql.RowDataPacket[]>('SHOW TABLES');
+      const beforeNames = beforeTables.map((row) => Object.values(row)[0] as string);
+      expect(beforeNames).toContain('service_order_tasks');
+      expect(beforeNames).not.toContain('quotes');
+
+      await connection.query(`
+        INSERT INTO plans (id, \`key\`, name, description, is_internal, created_at, updated_at)
+        VALUES ('plan-p8', 'internal', 'Plano interno', '', 1, NOW(3), NOW(3));
+
+        INSERT INTO tenants (id, slug, name, status, timezone, plan_id, created_at, updated_at)
+        VALUES ('tenant-p8', 'empresa-p8', 'Empresa P8', 'active', 'America/Sao_Paulo', 'plan-p8', NOW(3), NOW(3));
+
+        INSERT INTO units (id, tenant_id, name, status, created_at, updated_at)
+        VALUES ('unit-p8', 'tenant-p8', 'Unidade P8', 'active', NOW(3), NOW(3)),
+               ('unit-p8b', 'tenant-p8', 'Unidade P8 Norte', 'active', NOW(3), NOW(3));
+
+        INSERT INTO users (id, tenant_id, email, name, password_hash, status, created_at, updated_at)
+        VALUES ('user-p8', 'tenant-p8', 'p8@empresa.invalid', 'Usuario P8', 'scrypt$65536$8$2$c2FsdA==$aGFzaA==', 'active', NOW(3), NOW(3));
+
+        INSERT INTO customers
+          (id, tenant_id, kind, name, name_normalized, status, created_at, updated_at, created_by)
+        VALUES ('cli-p8', 'tenant-p8', 'individual', 'Rita Nunes', 'rita nunes', 'active', NOW(3), NOW(3), 'user-p8');
+
+        INSERT INTO equipment
+          (id, tenant_id, customer_id, kind, kind_normalized, voltage, status,
+           created_at, updated_at, created_by)
+        VALUES ('eq-p8', 'tenant-p8', 'cli-p8', 'Televisor', 'televisor', 'bivolt', 'active',
+                NOW(3), NOW(3), 'user-p8');
+
+        INSERT INTO service_orders
+          (id, tenant_id, unit_id, number, customer_id, equipment_id, status, customer_report,
+           opened_at, version, follow_up_at, status_changed_at, created_by, created_at, updated_at)
+        VALUES
+          ('so-p8-a', 'tenant-p8', 'unit-p8', 1, 'cli-p8', 'eq-p8', 'awaiting_approval',
+           'Tela sem imagem.', NOW(3), 4, '2026-10-01', NOW(3), 'user-p8', NOW(3), NOW(3)),
+          ('so-p8-b', 'tenant-p8', 'unit-p8', 2, 'cli-p8', 'eq-p8', 'awaiting_repair',
+           'Nao liga.', NOW(3), 2, NULL, NOW(3), 'user-p8', NOW(3), NOW(3));
+
+        INSERT INTO service_order_tasks
+          (id, tenant_id, unit_id, service_order_id, kind, title, status, open_marker,
+           created_at, updated_at)
+        VALUES ('task-p8', 'tenant-p8', 'unit-p8', 'so-p8-b', 'part_pickup', 'Buscar peca',
+                'open', 1, NOW(3), NOW(3));
+
+        INSERT INTO tenant_sequences (tenant_id, sequence_type, current_value, prefix, padding, updated_at)
+        VALUES ('tenant-p8', 'service_order', 2, 'OS', 6, NOW(3));
+      `);
+
+      // --- aplica o Prompt 09 -------------------------------------------------
+      await migrate(drizzle(connection), { migrationsFolder: './drizzle' });
+
+      const [rows] = await connection.query<mysql.RowDataPacket[]>(`
+        SELECT
+          (SELECT COUNT(*) FROM service_orders)      AS ordens,
+          (SELECT COUNT(*) FROM service_order_tasks) AS tarefas,
+          (SELECT COUNT(*) FROM quotes)              AS orcamentos,
+          (SELECT status  FROM service_orders WHERE id='so-p8-a') AS situacao_a,
+          (SELECT status  FROM service_orders WHERE id='so-p8-b') AS situacao_b,
+          (SELECT version FROM service_orders WHERE id='so-p8-a') AS versao_a,
+          (SELECT follow_up_at FROM service_orders WHERE id='so-p8-a') AS prazo_a,
+          (SELECT customer_report FROM service_orders WHERE id='so-p8-a') AS relato_a
+      `);
+
+      /**
+       * NADA DA OS FOI TOCADO (item 118). A migration e aditiva: nenhuma ordem
+       * muda de situacao, de versao ou de prazo por causa de uma tabela nova.
+       */
+      expect(rows[0]).toMatchObject({
+        ordens: 2,
+        tarefas: 1,
+        orcamentos: 0,
+        situacao_a: 'awaiting_approval',
+        situacao_b: 'awaiting_repair',
+        versao_a: 4,
+        prazo_a: '2026-10-01',
+        relato_a: 'Tela sem imagem.',
+      });
+
+      const [afterTables] = await connection.query<mysql.RowDataPacket[]>('SHOW TABLES');
+      const afterNames = afterTables.map((row) => Object.values(row)[0] as string);
+      expect(afterNames).toEqual(
+        expect.arrayContaining(['quotes', 'quote_items', 'quote_timeline']),
+      );
+
+      // O orcamento nasce preso a OS, a empresa E a unidade dela.
+      await connection.query(`
+        INSERT INTO quotes
+          (id, tenant_id, unit_id, service_order_id, number, revision, status, active_marker,
+           subtotal, discount, total, currency, version, created_by, created_at, updated_at)
+        VALUES ('orc-p8-a', 'tenant-p8', 'unit-p8', 'so-p8-a', 1, 1, 'draft', 1,
+                '0.00', '0.00', '0.00', 'BRL', 1, 'user-p8', NOW(3), NOW(3))
+      `);
+
+      // OS da unidade A nao aceita orcamento carimbado na unidade B (item 8).
+      await expect(
+        connection.query(`
+          INSERT INTO quotes
+            (id, tenant_id, unit_id, service_order_id, number, revision, status,
+             subtotal, discount, total, currency, version, created_at, updated_at)
+          VALUES ('orc-p8-x', 'tenant-p8', 'unit-p8b', 'so-p8-a', 9, 1, 'draft',
+                  '0.00', '0.00', '0.00', 'BRL', 1, NOW(3), NOW(3))
+        `),
+      ).rejects.toThrow();
+
+      // DUAS propostas vivas na mesma OS: recusado pelo BANCO (item 65).
+      await expect(
+        connection.query(`
+          INSERT INTO quotes
+            (id, tenant_id, unit_id, service_order_id, number, revision, status, active_marker,
+             subtotal, discount, total, currency, version, created_at, updated_at)
+          VALUES ('orc-p8-b', 'tenant-p8', 'unit-p8', 'so-p8-a', 2, 1, 'draft', 1,
+                  '0.00', '0.00', '0.00', 'BRL', 1, NOW(3), NOW(3))
+        `),
+      ).rejects.toThrow();
+
+      // Encerrada, ela libera o lugar: cada NULL e distinto no UNIQUE.
+      await connection.query(
+        "UPDATE quotes SET status='cancelled', active_marker=NULL WHERE id='orc-p8-a'",
+      );
+      await connection.query(`
+        INSERT INTO quotes
+          (id, tenant_id, unit_id, service_order_id, number, revision, status, active_marker,
+           subtotal, discount, total, currency, version, created_at, updated_at)
+        VALUES ('orc-p8-c', 'tenant-p8', 'unit-p8', 'so-p8-a', 1, 2, 'draft', 1,
+                '0.00', '0.00', '0.00', 'BRL', 1, NOW(3), NOW(3))
+      `);
+
+      // Numero + revisao sao unicos na empresa (item 12).
+      await expect(
+        connection.query(`
+          INSERT INTO quotes
+            (id, tenant_id, unit_id, service_order_id, number, revision, status,
+             subtotal, discount, total, currency, version, created_at, updated_at)
+          VALUES ('orc-p8-d', 'tenant-p8', 'unit-p8', 'so-p8-b', 1, 2, 'draft',
+                  '0.00', '0.00', '0.00', 'BRL', 1, NOW(3), NOW(3))
+        `),
+      ).rejects.toThrow();
+
+      // OS de OUTRA empresa e recusada pela FK composta (item 7).
+      await connection.query(`
+        INSERT INTO tenants (id, slug, name, status, timezone, plan_id, created_at, updated_at)
+        VALUES ('tenant-p8b', 'empresa-p8b', 'Empresa P8B', 'active', 'UTC', 'plan-p8', NOW(3), NOW(3))
+      `);
+      await expect(
+        connection.query(`
+          INSERT INTO quotes
+            (id, tenant_id, unit_id, service_order_id, number, revision, status,
+             subtotal, discount, total, currency, version, created_at, updated_at)
+          VALUES ('orc-p8-y', 'tenant-p8b', 'unit-p8', 'so-p8-a', 1, 1, 'draft',
+                  '0.00', '0.00', '0.00', 'BRL', 1, NOW(3), NOW(3))
+        `),
+      ).rejects.toThrow();
+
+      // O item segue o orcamento no CASCADE; a OS nunca some por baixo dele.
+      await connection.query(`
+        INSERT INTO quote_items
+          (id, tenant_id, quote_id, kind, description, quantity, unit_price, discount, total,
+           position, created_at, updated_at)
+        VALUES ('item-p8', 'tenant-p8', 'orc-p8-c', 'service', 'Bancada',
+                '1.0000', '100.00', '0.00', '100.00', 0, NOW(3), NOW(3))
+      `);
+      await connection.query("DELETE FROM quotes WHERE id = 'orc-p8-c'");
+      const [restantes] = await connection.query<mysql.RowDataPacket[]>(
+        'SELECT COUNT(*) AS total FROM quote_items',
+      );
+      expect(restantes[0]).toMatchObject({ total: 0 });
+
+      // E a OS com orcamento nao pode simplesmente sumir (ON DELETE RESTRICT).
+      await expect(
+        connection.query("DELETE FROM service_orders WHERE id = 'so-p8-a'"),
+      ).rejects.toThrow();
+    } finally {
+      await connection.end();
+      rmSync(folder, { recursive: true, force: true });
+      await adminConnection.query(`DROP DATABASE IF EXISTS \`${stepDb}\``);
+    }
+  });
+
   it('cria um banco vazio do zero com todas as migrations', async () => {
     const freshDb = 'nexo56_migration_fresh_test';
     await adminConnection.query(`DROP DATABASE IF EXISTS \`${freshDb}\``);
@@ -812,6 +1008,10 @@ describe('upgrade incremental entre prompts', () => {
           'service_order_timeline',
           // Prompt 08
           'service_order_tasks',
+          // Prompt 09
+          'quotes',
+          'quote_items',
+          'quote_timeline',
         ]),
       );
     } finally {

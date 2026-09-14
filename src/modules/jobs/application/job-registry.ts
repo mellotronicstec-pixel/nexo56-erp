@@ -1,6 +1,7 @@
 import 'server-only';
 import { pruneExpiredSessions } from '@/modules/auth/application/session-service';
 import { requeueStaleJobs } from '@/modules/jobs/application/job-queue';
+import { expireOverdueQuotes } from '@/modules/quotes/application/quote-expiry-job';
 import { sweepOverdueFollowUps } from '@/modules/service-orders/application/follow-up-job';
 import type { JobHandler } from '@/modules/jobs/domain/job';
 
@@ -50,10 +51,25 @@ const followUpSweepJob: JobHandler<Record<string, never>> = {
   },
 };
 
+/**
+ * Expira orcamentos cuja validade venceu (Prompt 09).
+ *
+ * Idempotente: a condicao `status = 'sent'` vai no proprio UPDATE. NAO cancela
+ * a Ordem de Servico e NAO avisa ninguem — publica evento, que e o que existe.
+ */
+const quoteExpiryJob: JobHandler<Record<string, never>> = {
+  name: 'quote.expire-overdue',
+  async handle() {
+    const result = await expireOverdueQuotes();
+    return { summary: 'orcamentos vencidos expirados', affected: result.expired };
+  },
+};
+
 const HANDLERS: readonly JobHandler<never>[] = [
   pruneSessionsJob as JobHandler<never>,
   requeueStaleJobsJob as JobHandler<never>,
   followUpSweepJob as JobHandler<never>,
+  quoteExpiryJob as JobHandler<never>,
 ];
 
 const BY_NAME = new Map(HANDLERS.map((handler) => [handler.name, handler]));
@@ -82,4 +98,6 @@ export const RECURRING_JOBS = [
    * da virada dela. Como e idempotente, as execucoes a mais nao custam nada.
    */
   { name: 'service-order.follow-up-sweep', everyMinutes: 60 },
+  /** Mesma razao da varredura de follow-up: cada empresa vira a data na sua hora. */
+  { name: 'quote.expire-overdue', everyMinutes: 60 },
 ] as const;

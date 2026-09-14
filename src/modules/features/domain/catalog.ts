@@ -20,6 +20,7 @@ export const FEATURES = {
   CORE_EQUIPMENT: 'core.equipment',
   CORE_EQUIPMENT_INTAKE: 'core.equipment_intake',
   CORE_SERVICE_ORDERS: 'core.service_orders',
+  CORE_QUOTES: 'core.quotes',
   PLATFORM_MULTI_UNIT: 'platform.multi_unit',
   PLATFORM_LABEL_RECOGNITION: 'platform.label_recognition',
 } as const;
@@ -131,6 +132,23 @@ export const FEATURE_CATALOG: readonly FeatureDefinition[] = [
      */
     type: 'CORE',
     dependsOn: [FEATURES.CORE_CUSTOMERS, FEATURES.CORE_EQUIPMENT],
+  },
+  {
+    key: FEATURES.CORE_QUOTES,
+    name: 'Orcamentos',
+    description:
+      'Propostas comerciais da Ordem de Servico: itens, valores, envio, aprovacao e recusa.',
+    /**
+     * CORE, e nao OPTIONAL: numa assistencia tecnica o cliente aprova um preco
+     * antes do conserto. Uma empresa que desligasse isto teria Ordens de
+     * Servico parando em Aguardando Aprovacao sem meio de sair dali pelo
+     * caminho comercial.
+     *
+     * Depende de Ordens de Servico porque todo orcamento pertence a uma OS
+     * (item 76) — nao existe orcamento avulso do tenant.
+     */
+    type: 'CORE',
+    dependsOn: [FEATURES.CORE_SERVICE_ORDERS],
   },
   {
     key: FEATURES.PLATFORM_MULTI_UNIT,
