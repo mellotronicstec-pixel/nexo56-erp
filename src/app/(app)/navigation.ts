@@ -11,8 +11,8 @@ import { FEATURES } from '@/modules/features/domain/catalog';
  * (Prompt 00, item 118).
  *
  * O menu NAO lista modulos inexistentes (Prompt 01, itens 56 e 82; Prompt 04,
- * item 117): Clientes, Equipamentos, Ordens de Servico, Estoque, Compras,
- * Financeiro, Garantias, Agenda e BI entrarao AQUI, cada um no seu prompt,
+ * item 117): Compras, Financeiro, Garantias, Agenda e BI entrarao AQUI, cada um no seu
+ * prompt,
  * com a feature e a permissao correspondentes. A estrutura de secoes ja
  * acomoda esse crescimento sem reescrita.
  */
@@ -34,7 +34,8 @@ export type NavIconKey =
   | 'customers'
   | 'equipment'
   | 'intake'
-  | 'service-order';
+  | 'service-order'
+  | 'inventory';
 
 export interface NavItem {
   href: string;
@@ -81,6 +82,19 @@ export const NAV_SECTIONS: readonly NavSection[] = [
         featureKey: FEATURES.CORE_SERVICE_ORDERS,
         permission: PERMISSIONS.SERVICE_ORDERS_VIEW,
         icon: 'service-order',
+      },
+      {
+        /**
+         * Estoque e OPCIONAL (Prompt 10, itens 84 e 91): o item so aparece se
+         * a empresa tiver o modulo ativo E a pessoa tiver `inventory.view`.
+         * Quando o modulo esta desligado, ele some — e o Orcamento continua
+         * funcionando com linha PART escrita a mao.
+         */
+        href: '/estoque',
+        label: 'Estoque e pecas',
+        featureKey: FEATURES.OPERATIONS_INVENTORY,
+        permission: PERMISSIONS.INVENTORY_VIEW,
+        icon: 'inventory',
       },
     ],
   },
@@ -151,6 +165,9 @@ export const BREADCRUMB_LABELS: Readonly<Record<string, string>> = {
   equipamentos: 'Equipamentos',
   recebimentos: 'Recebimentos',
   'ordens-de-servico': 'Ordens de Servico',
+  estoque: 'Estoque e pecas',
+  'nova-peca': 'Nova peca',
+  localizacoes: 'Localizacoes',
   administracao: 'Administracao',
   usuarios: 'Usuarios',
   perfis: 'Perfis de acesso',

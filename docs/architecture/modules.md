@@ -26,6 +26,7 @@ testes próprios — nunca como placeholder (Prompt 01, itens 8 e 82).
 | `equipment`      | 06     | aparelhos, recebimento, acessórios, inspeção, fotos e leitura de etiqueta          | `equipment`, `equipment_intakes`, `equipment_intake_accessories`, `equipment_intake_conditions`, `equipment_media`, `equipment_label_readings` |
 | `service-orders` | 07–08  | abertura, numeração, vínculos, ficha, histórico e **workflow** da Ordem de Serviço | `service_orders`, `service_order_timeline`, `service_order_tasks`                                                                              |
 | `quotes`         | 09     | propostas comerciais da OS: itens, valores, envio, aprovação, recusa e revisões    | `quotes`, `quote_items`, `quote_timeline`                                                                                                      |
+| `inventory`      | 10     | catálogo de peças, localizações, saldos, ledger, reservas e transferências         | `parts`, `stock_locations`, `stock_balances`, `stock_movements`, `stock_reservations`, `stock_transfers`                                       |
 
 O `equipment` usa também a abstração de armazenamento de arquivos
 (`core/storage`), introduzida no Prompt 06: os bytes das fotos ficam fora do
@@ -49,7 +50,13 @@ customers      ──→ tenancy, access-control, features, audit, events
 equipment      ──→ customers, tenancy, access-control, features, audit, events, core/storage
 service-orders ──→ customers, equipment, tenancy (sequencias), access-control, features, audit, events
 quotes         ──→ service-orders (workflow + leitura), tenancy (sequencias), money, access-control, features, audit, events
+inventory      ──→ service-orders (leitura + linha do tempo), tenancy (sequencias), money, quantity, access-control, features, audit, events
 ```
+
+`inventory` **nunca** importa `quotes`, e `quotes/application` **nunca** importa
+`inventory`: a única ponte é a FK `quote_items.part_id → parts`, declarada no
+schema. O grafo continua acíclico, e os dois sentidos são verificados por teste
+de arquitetura (ADR-047).
 
 `customers` não conhece `equipment`, e nenhum dos dois conhece `service-orders`:
 as seções que cruzam módulos (Equipamentos na ficha do cliente, Ordem de Serviço
@@ -77,6 +84,7 @@ migration — não na carga do módulo.
    automações; permissões; plano; reativação; histórico). Exemplos respondidos:
    [Equipamentos](../modules/equipment/modularity.md) e
    [Ordens de Serviço](../modules/service-orders/modularity.md) e
-   [Orçamentos](../modules/quotes/modularity.md).
+   [Orçamentos](../modules/quotes/modularity.md) e
+   [Estoque](../modules/inventory/modularity.md).
 5. Acrescentar testes de travessia entre tenants para as novas consultas.
 6. Gerar migration (`npm run db:generate`) e revisar o SQL antes de aplicar.

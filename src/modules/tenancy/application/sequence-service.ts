@@ -51,6 +51,8 @@ import { tenantSequences } from '@/modules/tenancy/infrastructure/schema';
 export const SEQUENCE_TYPES = {
   SERVICE_ORDER: 'service_order',
   QUOTE: 'quote',
+  /** Transferencia de estoque entre unidades (Prompt 10, item 51). */
+  STOCK_TRANSFER: 'stock_transfer',
   PURCHASE_ORDER: 'purchase_order',
   WARRANTY: 'warranty',
   DOCUMENT: 'document',

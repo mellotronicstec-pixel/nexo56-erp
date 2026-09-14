@@ -57,6 +57,10 @@ Classificação que orienta log, auditoria, exportação, retenção e acesso
 | Observações internas do orçamento              | `quotes.internal_notes`            | Interno                                   | Recado da equipe; nunca vai ao cliente                                                                                                        |
 | Motivo de recusa ou cancelamento               | `quotes.decision_reason`           | Interno                                   | Texto livre de pessoa; pode conter circunstância pessoal incidental                                                                           |
 | Valores e itens do orçamento                   | `quotes`, `quote_items`            | Interno                                   | Preço praticado é informação comercial. Nunca vai para log nem para payload de evento                                                         |
+| Catálogo de peças                              | `parts`                            | Interno                                   | **Não é dado pessoal.** Nome, código, fabricante e referência descrevem um objeto, não uma pessoa                                             |
+| Saldo, movimentação e reserva                  | `stock_*`                          | Interno                                   | **Não é dado pessoal.** Custo e margem são informação comercial; nunca vão para log                                                           |
+| Autor da movimentação                          | `stock_movements.actor_id`         | Interno                                   | Referência a usuário, como toda coluna de autoria. Não é PII em si; identifica quem operou                                                    |
+| Referência e motivo da movimentação            | `stock_movements.reference/reason` | Interno                                   | Texto livre de pessoa. Orientação: nota fiscal, fornecedor ou motivo operacional — **nunca** dado de cliente                                  |
 
 ### Redação automática
 

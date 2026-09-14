@@ -135,6 +135,7 @@ describe('total em tempo real, em pt-BR (itens 87 a 91)', () => {
           quantity: '1',
           unitPrice: '200.00',
           discount: '',
+          partId: '',
         },
       ],
     });
@@ -159,7 +160,14 @@ describe('total em tempo real, em pt-BR (itens 87 a 91)', () => {
   it('carrega os valores ja gravados', () => {
     renderEditor({
       initialItems: [
-        { kind: 'part', description: 'Fonte', quantity: '1', unitPrice: '149.90', discount: '' },
+        {
+          kind: 'part',
+          description: 'Fonte',
+          quantity: '1',
+          unitPrice: '149.90',
+          discount: '',
+          partId: '',
+        },
       ],
     });
     expect(screen.getByTestId('quote-total').textContent).toMatch(/149,90/);

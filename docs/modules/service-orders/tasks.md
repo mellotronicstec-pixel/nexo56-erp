@@ -50,9 +50,14 @@ Registra a busca. **Não muda o estado**: a ordem continua em Aguardando Peça,
 porque buscar a peça não é o mesmo que tê-la.
 
 A observação ("qual peça e onde buscar") é texto livre. A regra original prevê
-mostrar locais de retirada — Estoque e Compras são os Prompts 10 e 11, e
-inventar uma lista de fornecedores aqui criaria dado falso que alguém usaria. A
-estrutura aceita um catálogo quando ele existir.
+mostrar locais de retirada — Compras é o Prompt 11, e inventar uma lista de
+fornecedores aqui criaria dado falso que alguém usaria.
+
+O Prompt 10 trouxe Estoque, e **deliberadamente não mudou esta tarefa** (item
+48 do Prompt 10): "Buscar Peça" continua sendo ação de workflow e **não** virou
+movimentação de estoque. São coisas diferentes — encomendar/buscar a peça é
+trabalho; dar entrada dela é estoque. Quem tem a peça em mãos registra a
+entrada na ficha da peça, e conclui a tarefa aqui.
 
 ## Idempotência: o truque do `open_marker`
 

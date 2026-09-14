@@ -137,6 +137,39 @@ eventos. "Enviar orçamento" **formaliza** a proposta — nenhuma mensagem sai, 
 interface declara isso em texto. A origem da decisão gravada é sempre
 `internal`, porque foi a equipe que registrou.
 
+## Implementado e verificado — Estoque e Peças (Prompt 10)
+
+Quadro completo em
+[docs/modules/inventory/security.md](../modules/inventory/security.md). Os
+pontos estruturais:
+
+| Proteção                                             | Como                                                       | Verificação                          |
+| ---------------------------------------------------- | ---------------------------------------------------------- | ------------------------------------ |
+| **`service_orders.status` escrito pelo estoque**     | **não existe caminho** — nem por `planTransition`          | **teste arquitetural sobre `src/`**  |
+| **Ledger editado ou apagado**                        | sem `updated_at`, sem `version`, sem `UPDATE`/`DELETE`     | **teste arquitetural sobre `src/`**  |
+| Saldo negativo                                       | condição no `WHERE` + CHECK constraint                     | integração + SQL direto              |
+| Reserva além do disponível                           | condição no `WHERE` + CHECK `reserved <= on_hand`          | integração + SQL direto              |
+| **Duas saídas simultâneas consumindo o mesmo saldo** | condição no `WHERE` do `UPDATE`; quem perde recebe erro    | **teste concorrente real no banco**  |
+| Reserva liberada durante o consumo                   | `on_hand` e `reserved` caem na mesma instrução             | **consumo × saída avulsa, paralelo** |
+| Retry lançando duas vezes                            | `idempotency_key` UNIQUE + reencontro                      | sequencial **e** simultâneo          |
+| Transferência duplicada por retry                    | `uq_stock_transfer_idempotency`                            | teste de integração                  |
+| Estoque de outra empresa                             | FKs compostas com `tenant_id` em todas as relações         | teste com SQL direto                 |
+| OS da unidade A consumindo estoque da B              | FK composta `(service_order_id, unit_id)`                  | integração + SQL direto              |
+| Prateleira de outra unidade                          | FK composta `(location_id, unit_id)`                       | teste de integração                  |
+| Transferência entre empresas                         | FKs compostas nas duas pontas                              | integração + SQL direto              |
+| Ajuste sem rastro                                    | permissão própria + motivo obrigatório + AuditLog + ledger | teste de integração                  |
+| Alerta de estoque baixo republicado a cada job       | marca no saldo, condição no próprio `WHERE`                | duas varreduras seguidas             |
+| Saldo materializado divergindo do ledger             | `reconcileBalance()` recalcula e compara                   | teste de integração                  |
+| Orçamento movimentando estoque em silêncio           | nenhuma chamada de estoque no módulo de orçamentos         | arquitetural + integração            |
+| Peça alterada mudando proposta aprovada              | o orçamento guarda os próprios números                     | teste de integração                  |
+
+### O que NÃO está protegido porque não existe
+
+Não há fornecedor, pedido de compra, recebimento integrado, contagem de
+inventário, leitor de código de barras, lote, validade nem série de peça. O
+evento `LOW_STOCK_DETECTED` existe **sem consumidor**: nada é notificado e nada
+é comprado — a tela diz isso em texto.
+
 ## Limitações conhecidas
 
 ### Rate limit conta por processo

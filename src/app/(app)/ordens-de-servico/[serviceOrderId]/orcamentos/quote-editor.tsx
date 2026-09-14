@@ -37,6 +37,16 @@ export interface EditableItem {
   quantity: string;
   unitPrice: string;
   discount: string;
+  /** Peca do catalogo, quando houver (Prompt 10, itens 39 e 108). */
+  partId: string;
+}
+
+/** Peca oferecida no seletor. Vazio quando o modulo de Estoque nao esta ativo. */
+export interface PartOption {
+  id: string;
+  code: string;
+  name: string;
+  suggestedPrice: string | null;
 }
 
 interface Row extends EditableItem {
@@ -54,6 +64,7 @@ function newRow(): Row {
     quantity: '1',
     unitPrice: '',
     discount: '',
+    partId: '',
   };
 }
 
@@ -112,6 +123,7 @@ export function QuoteEditor({
   initialCustomerNotes,
   initialInternalNotes,
   action,
+  parts = [],
 }: {
   serviceOrderId: string;
   quoteId: string;
@@ -122,6 +134,12 @@ export function QuoteEditor({
   initialCustomerNotes: string;
   initialInternalNotes: string;
   action: ActionFn;
+  /**
+   * Pecas do catalogo (Prompt 10, item 108). Lista VAZIA quando o modulo de
+   * Estoque esta desligado ou a pessoa nao tem acesso a ele — e o editor
+   * continua inteiro, com linha PART escrita a mao (item 86).
+   */
+  parts?: PartOption[];
 }) {
   const [state, formAction] = useActionState(action, EMPTY_QUOTE_STATE);
 
@@ -170,6 +188,14 @@ export function QuoteEditor({
                 data-testid="item-row"
               >
                 <div className="grid gap-3 sm:grid-cols-12">
+                  {/*
+                    O VINCULO COM A PECA VIAJA EM TODA LINHA, inclusive vazio.
+                    O servidor le os campos por posicao; um campo que so
+                    aparecesse nas linhas de peca desalinharia os indices e
+                    daria a peca da linha 3 para a linha 1.
+                  */}
+                  <input type="hidden" name="itemPartId" value={row.partId} />
+
                   <div className="sm:col-span-3">
                     <FormField id={`kind-${row.key}`} label="Tipo">
                       {(props) => (
@@ -188,6 +214,50 @@ export function QuoteEditor({
                       )}
                     </FormField>
                   </div>
+
+                  {/*
+                    SELETOR DE PECA — conveniencia, nao acoplamento (item 109).
+                    Escolher preenche descricao e valor AGORA; dali em diante o
+                    orcamento guarda os proprios numeros, e mudar a peca depois
+                    nao mexe em proposta nenhuma (itens 41 e 42).
+                  */}
+                  {row.kind === 'part' && parts.length > 0 ? (
+                    <div className="sm:col-span-9">
+                      <FormField
+                        id={`part-${row.key}`}
+                        label="Peca do catalogo"
+                        hint="Opcional. Escolher nao reserva nem movimenta estoque."
+                      >
+                        {(props) => (
+                          <Select
+                            {...props}
+                            value={row.partId}
+                            onChange={(event) => {
+                              const chosen = parts.find((part) => part.id === event.target.value);
+                              update(row.key, {
+                                partId: event.target.value,
+                                ...(chosen
+                                  ? {
+                                      description: `${chosen.code} — ${chosen.name}`,
+                                      ...(chosen.suggestedPrice
+                                        ? { unitPrice: chosen.suggestedPrice }
+                                        : {}),
+                                    }
+                                  : {}),
+                              });
+                            }}
+                          >
+                            <option value="">Linha escrita a mao</option>
+                            {parts.map((part) => (
+                              <option key={part.id} value={part.id}>
+                                {part.code} — {part.name}
+                              </option>
+                            ))}
+                          </Select>
+                        )}
+                      </FormField>
+                    </div>
+                  ) : null}
 
                   <div className="sm:col-span-9">
                     <FormField id={`description-${row.key}`} label="Descricao" required>

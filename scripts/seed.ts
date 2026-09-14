@@ -10,10 +10,48 @@
  */
 import './_bootstrap-env';
 import { randomBytes } from 'node:crypto';
+import { and, eq } from 'drizzle-orm';
 import { runWithContext } from '../src/core/context/request-context';
-import { closeDb } from '../src/core/db/client';
+import { closeDb, getDb } from '../src/core/db/client';
 import { syncCatalog } from '../src/modules/features/application/catalog-sync';
+import { FEATURES } from '../src/modules/features/domain/catalog';
+import { tenantFeatures } from '../src/modules/features/infrastructure/schema';
 import { provisionTenant } from '../src/modules/tenancy/application/provisioning';
+import { tenants } from '../src/modules/tenancy/infrastructure/schema';
+
+/**
+ * Liga uma feature OPCIONAL no tenant de desenvolvimento.
+ *
+ * Idempotente e fora do `if (created)`: quando o Prompt 10 acrescentou
+ * Estoque, o tenant de desenvolvimento ja existia — e uma ativacao que so
+ * roda na criacao deixaria o modulo invisivel para quem ja tinha o banco.
+ */
+async function enableOptionalFeature(tenantId: string, featureKey: string): Promise<void> {
+  const db = getDb();
+  const now = new Date();
+
+  const [existing] = await db
+    .select({ featureKey: tenantFeatures.featureKey })
+    .from(tenantFeatures)
+    .where(and(eq(tenantFeatures.tenantId, tenantId), eq(tenantFeatures.featureKey, featureKey)))
+    .limit(1);
+
+  if (existing) {
+    await db
+      .update(tenantFeatures)
+      .set({ enabled: true, enabledAt: now, disabledAt: null, updatedAt: now })
+      .where(and(eq(tenantFeatures.tenantId, tenantId), eq(tenantFeatures.featureKey, featureKey)));
+    return;
+  }
+
+  await db.insert(tenantFeatures).values({
+    tenantId,
+    featureKey,
+    enabled: true,
+    enabledAt: now,
+    updatedAt: now,
+  });
+}
 
 async function main(): Promise<void> {
   if (process.env.NODE_ENV === 'production') {
@@ -38,8 +76,19 @@ async function main(): Promise<void> {
       adminPassword: password,
     });
 
+    const [devTenant] = await getDb()
+      .select({ id: tenants.id })
+      .from(tenants)
+      .where(eq(tenants.slug, 'exemplo-dev'))
+      .limit(1);
+
+    if (devTenant) {
+      await enableOptionalFeature(devTenant.id, FEATURES.OPERATIONS_INVENTORY);
+      console.log('[seed] modulo Estoque e pecas habilitado no tenant de desenvolvimento.');
+    }
+
     if (!result.created) {
-      console.log('[seed] tenant de desenvolvimento ja existe. Nada alterado.');
+      console.log('[seed] tenant de desenvolvimento ja existe. Catalogo sincronizado.');
       return;
     }
 

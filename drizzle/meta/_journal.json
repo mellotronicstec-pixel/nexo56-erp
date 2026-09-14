@@ -57,6 +57,13 @@
       "when": 1789346050537,
       "tag": "0007_quotes",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "5",
+      "when": 1789360905036,
+      "tag": "0008_inventory",
+      "breakpoints": true
     }
   ]
 }

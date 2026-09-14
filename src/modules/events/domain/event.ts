@@ -69,6 +69,27 @@ export const EVENT_TYPES = {
   QUOTE_EXPIRED: 'QUOTE_EXPIRED',
   QUOTE_CANCELLED: 'QUOTE_CANCELLED',
   QUOTE_REVISED: 'QUOTE_REVISED',
+
+  // --- Prompt 10: estoque e pecas -------------------------------------------
+  PART_CREATED: 'PART_CREATED',
+  PART_UPDATED: 'PART_UPDATED',
+  STOCK_RECEIVED: 'STOCK_RECEIVED',
+  STOCK_ISSUED: 'STOCK_ISSUED',
+  STOCK_ADJUSTED: 'STOCK_ADJUSTED',
+  STOCK_TRANSFERRED: 'STOCK_TRANSFERRED',
+  STOCK_RESERVED: 'STOCK_RESERVED',
+  STOCK_RESERVATION_RELEASED: 'STOCK_RESERVATION_RELEASED',
+  /** Reserva virou consumo fisico, numa unica operacao (item 105). */
+  STOCK_RESERVATION_CONSUMED: 'STOCK_RESERVATION_CONSUMED',
+  /**
+   * Disponivel caiu abaixo do minimo da unidade (itens 60 a 63).
+   *
+   * NAO HA CONSUMIDOR. Nao existe Rule Engine (item 171), nao existe canal de
+   * comunicacao (item 170) e nao existe compra (item 61). O evento e o gancho
+   * de que esses modulos vao precisar — e dizer que "o estoque baixo e
+   * notificado" seria mentira enquanto so existir isto.
+   */
+  LOW_STOCK_DETECTED: 'LOW_STOCK_DETECTED',
 } as const;
 
 export type EventType = (typeof EVENT_TYPES)[keyof typeof EVENT_TYPES];

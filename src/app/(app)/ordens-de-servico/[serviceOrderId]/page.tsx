@@ -60,6 +60,16 @@ import {
   WorkflowPanel,
   type TransitionOption,
 } from './workflow-panel';
+import {
+  listReservationsForServiceOrder,
+  searchPartsForPicker,
+} from '@/modules/inventory/application/inventory-queries';
+import {
+  consumeReservationAction,
+  releaseReservationAction,
+  reservePartAction,
+} from '../../estoque/actions';
+import { PartsSection } from './parts-section';
 import { QuoteSection } from './orcamentos/quote-section';
 
 export const metadata: Metadata = { title: 'Ordem de Servico' };
@@ -177,18 +187,50 @@ export default async function ServiceOrderDetailPage({
    * condicao da acao "Informar Ordem Disponivel" so e consultada no estado em
    * que ela existe — nao ha consulta paga para desenhar o que nao aparece.
    */
-  const [members, preparationDone, quoteList, quoteNumberFormat] = await Promise.all([
-    canAssignDecision.allowed ? listUnitMembers(context, order.unitId) : Promise.resolve([]),
-    order.status === 'awaiting_delivery_preparation'
-      ? isDeliveryPreparationDone(context, order.id)
-      : Promise.resolve(false),
-    canViewQuotesDecision.allowed
-      ? listQuotesForServiceOrder(context, order.id)
-      : Promise.resolve([]),
-    canViewQuotesDecision.allowed
-      ? getQuoteNumberFormat(context.tenantId)
-      : Promise.resolve({ prefix: 'ORC', padding: 6 }),
-  ]);
+  /**
+   * O modulo de Estoque e OPCIONAL (Prompt 10, itens 84 a 87). Quando ele esta
+   * desligado — ou a pessoa nao tem `inventory.view` — a secao de pecas
+   * simplesmente nao existe nesta pagina, e a OS continua inteira.
+   */
+  const canViewInventoryDecision = await can(context, {
+    permission: PERMISSIONS.INVENTORY_VIEW,
+    featureKey: FEATURES.OPERATIONS_INVENTORY,
+    unitId: order.unitId,
+  });
+
+  const canReserveDecision = canViewInventoryDecision.allowed
+    ? await can(context, {
+        permission: PERMISSIONS.INVENTORY_RESERVE,
+        featureKey: FEATURES.OPERATIONS_INVENTORY,
+        unitId: order.unitId,
+      })
+    : { allowed: false };
+
+  const canConsumeDecision = canViewInventoryDecision.allowed
+    ? await can(context, {
+        permission: PERMISSIONS.INVENTORY_ISSUE,
+        featureKey: FEATURES.OPERATIONS_INVENTORY,
+        unitId: order.unitId,
+      })
+    : { allowed: false };
+
+  const [members, preparationDone, quoteList, quoteNumberFormat, reservationList, partChoices] =
+    await Promise.all([
+      canAssignDecision.allowed ? listUnitMembers(context, order.unitId) : Promise.resolve([]),
+      order.status === 'awaiting_delivery_preparation'
+        ? isDeliveryPreparationDone(context, order.id)
+        : Promise.resolve(false),
+      canViewQuotesDecision.allowed
+        ? listQuotesForServiceOrder(context, order.id)
+        : Promise.resolve([]),
+      canViewQuotesDecision.allowed
+        ? getQuoteNumberFormat(context.tenantId)
+        : Promise.resolve({ prefix: 'ORC', padding: 6 }),
+      canViewInventoryDecision.allowed
+        ? listReservationsForServiceOrder(context, order.id)
+        : Promise.resolve([]),
+      canReserveDecision.allowed ? searchPartsForPicker(context, '', 50) : Promise.resolve([]),
+    ]);
 
   const formatter = new Intl.DateTimeFormat('pt-BR', {
     dateStyle: 'short',
@@ -426,6 +468,35 @@ export default async function ServiceOrderDetailPage({
             canCreate={canCreateQuoteDecision.allowed}
             timeZone={context.tenantTimezone}
             idempotencyKey={`os-${order.id}-orc-${quoteList.length}`}
+          />
+        </Section>
+      ) : null}
+
+      {/*
+        PECAS — reserva e consumo (Prompt 10, itens 69 e 103 a 105).
+        Fica DEPOIS do orcamento de proposito: a ordem na tela conta a historia
+        do atendimento, e a peca so vira compromisso quando alguem decide
+        reserva-la. Aprovar orcamento nao reserva nada.
+      */}
+      {canViewInventoryDecision.allowed ? (
+        <Section
+          id="pecas"
+          title="Pecas"
+          description="Pecas reservadas e consumidas neste atendimento. Reservar e consumir nao mudam a situacao da Ordem de Servico."
+        >
+          <PartsSection
+            serviceOrderId={order.id}
+            reservations={reservationList}
+            parts={partChoices.map((part) => ({
+              id: part.id,
+              code: part.code,
+              name: part.name,
+            }))}
+            canReserve={canReserveDecision.allowed}
+            canConsume={canConsumeDecision.allowed}
+            reserveAction={reservePartAction}
+            releaseAction={releaseReservationAction}
+            consumeAction={consumeReservationAction}
           />
         </Section>
       ) : null}

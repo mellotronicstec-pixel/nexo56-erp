@@ -948,6 +948,270 @@ describe('upgrade incremental entre prompts', () => {
     }
   });
 
+  it('leva um banco do Prompt 09, com orcamentos, ate o Prompt 10 sem perda', async () => {
+    const stepDb = 'nexo56_migration_step10_test';
+    await adminConnection.query(`DROP DATABASE IF EXISTS \`${stepDb}\``);
+    await adminConnection.query(
+      `CREATE DATABASE \`${stepDb}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`,
+    );
+
+    const folder = buildFolderUpTo('0007');
+    const connection = await mysql.createConnection({
+      uri: urlForDatabase(stepDb),
+      timezone: 'Z',
+      multipleStatements: true,
+    });
+
+    try {
+      // --- banco no estado do Prompt 09 --------------------------------------
+      await migrate(drizzle(connection), { migrationsFolder: folder });
+
+      const [beforeTables] = await connection.query<mysql.RowDataPacket[]>('SHOW TABLES');
+      const beforeNames = beforeTables.map((row) => Object.values(row)[0] as string);
+      expect(beforeNames).toContain('quotes');
+      expect(beforeNames).not.toContain('parts');
+      expect(beforeNames).not.toContain('stock_balances');
+
+      await connection.query(`
+        INSERT INTO plans (id, \`key\`, name, description, is_internal, created_at, updated_at)
+        VALUES ('plan-p9', 'internal', 'Plano interno', '', 1, NOW(3), NOW(3));
+
+        INSERT INTO tenants (id, slug, name, status, timezone, plan_id, created_at, updated_at)
+        VALUES ('tenant-p9', 'empresa-p9', 'Empresa P9', 'active', 'America/Sao_Paulo', 'plan-p9', NOW(3), NOW(3)),
+               ('tenant-p9b', 'empresa-p9b', 'Empresa P9B', 'active', 'UTC', 'plan-p9', NOW(3), NOW(3));
+
+        INSERT INTO units (id, tenant_id, name, status, created_at, updated_at)
+        VALUES ('unit-p9', 'tenant-p9', 'Unidade P9', 'active', NOW(3), NOW(3)),
+               ('unit-p9b', 'tenant-p9', 'Unidade P9 Norte', 'active', NOW(3), NOW(3)),
+               ('unit-p9x', 'tenant-p9b', 'Unidade de outra empresa', 'active', NOW(3), NOW(3));
+
+        INSERT INTO users (id, tenant_id, email, name, password_hash, status, created_at, updated_at)
+        VALUES ('user-p9', 'tenant-p9', 'p9@empresa.invalid', 'Usuario P9', 'scrypt$65536$8$2$c2FsdA==$aGFzaA==', 'active', NOW(3), NOW(3));
+
+        INSERT INTO customers
+          (id, tenant_id, kind, name, name_normalized, status, created_at, updated_at, created_by)
+        VALUES ('cli-p9', 'tenant-p9', 'individual', 'Ana Prado', 'ana prado', 'active', NOW(3), NOW(3), 'user-p9');
+
+        INSERT INTO equipment
+          (id, tenant_id, customer_id, kind, kind_normalized, voltage, status,
+           created_at, updated_at, created_by)
+        VALUES ('eq-p9', 'tenant-p9', 'cli-p9', 'Televisor', 'televisor', 'bivolt', 'active',
+                NOW(3), NOW(3), 'user-p9');
+
+        INSERT INTO service_orders
+          (id, tenant_id, unit_id, number, customer_id, equipment_id, status, customer_report,
+           opened_at, version, follow_up_at, status_changed_at, created_by, created_at, updated_at)
+        VALUES
+          ('so-p9-a', 'tenant-p9', 'unit-p9', 1, 'cli-p9', 'eq-p9', 'awaiting_repair',
+           'Imagem piscando.', NOW(3), 6, '2026-11-05', NOW(3), 'user-p9', NOW(3), NOW(3)),
+          ('so-p9-b', 'tenant-p9', 'unit-p9b', 2, 'cli-p9', 'eq-p9', 'in_repair',
+           'Sem som.', NOW(3), 3, NULL, NOW(3), 'user-p9', NOW(3), NOW(3));
+
+        INSERT INTO service_order_tasks
+          (id, tenant_id, unit_id, service_order_id, kind, title, status, open_marker,
+           created_at, updated_at)
+        VALUES ('task-p9', 'tenant-p9', 'unit-p9', 'so-p9-a', 'part_pickup', 'Buscar peca',
+                'open', 1, NOW(3), NOW(3));
+
+        INSERT INTO service_order_timeline
+          (id, tenant_id, service_order_id, kind, summary, actor_id, occurred_at)
+        VALUES ('tl-p9', 'tenant-p9', 'so-p9-a', 'status_changed', 'Situacao alterada',
+                'user-p9', NOW(3));
+
+        INSERT INTO quotes
+          (id, tenant_id, unit_id, service_order_id, number, revision, status, approved_marker,
+           subtotal, discount, total, currency, version, created_by, created_at, updated_at)
+        VALUES ('orc-p9-v1', 'tenant-p9', 'unit-p9', 'so-p9-a', 7, 1, 'superseded', NULL,
+                '300.00', '0.00', '300.00', 'BRL', 2, 'user-p9', NOW(3), NOW(3)),
+               ('orc-p9-v2', 'tenant-p9', 'unit-p9', 'so-p9-a', 7, 2, 'approved', 1,
+                '450.00', '50.00', '400.00', 'BRL', 3, 'user-p9', NOW(3), NOW(3));
+
+        INSERT INTO quote_items
+          (id, tenant_id, quote_id, kind, description, quantity, unit_price, discount, total,
+           position, created_at, updated_at)
+        VALUES ('qi-p9-1', 'tenant-p9', 'orc-p9-v2', 'part', 'Tela LCD escrita a mao',
+                '2.0000', '200.00', '0.00', '400.00', 0, NOW(3), NOW(3)),
+               ('qi-p9-2', 'tenant-p9', 'orc-p9-v2', 'service', 'Bancada',
+                '1.0000', '50.00', '0.00', '50.00', 1, NOW(3), NOW(3));
+
+        INSERT INTO quote_timeline
+          (id, tenant_id, quote_id, kind, summary, actor_id, occurred_at)
+        VALUES ('qt-p9', 'tenant-p9', 'orc-p9-v2', 'approved', 'Orcamento aprovado',
+                'user-p9', NOW(3));
+
+        INSERT INTO tenant_sequences (tenant_id, sequence_type, current_value, prefix, padding, updated_at)
+        VALUES ('tenant-p9', 'service_order', 2, 'OS', 6, NOW(3)),
+               ('tenant-p9', 'quote', 7, 'ORC', 6, NOW(3));
+
+        INSERT INTO domain_events (id, type, tenant_id, payload, occurred_at)
+        VALUES ('ev-p9', 'QUOTE_APPROVED', 'tenant-p9', '{}', NOW(3));
+      `);
+
+      // --- aplica o Prompt 10 -------------------------------------------------
+      await migrate(drizzle(connection), { migrationsFolder: './drizzle' });
+
+      const [rows] = await connection.query<mysql.RowDataPacket[]>(`
+        SELECT
+          (SELECT COUNT(*) FROM service_orders)         AS ordens,
+          (SELECT COUNT(*) FROM service_order_tasks)    AS tarefas,
+          (SELECT COUNT(*) FROM service_order_timeline) AS linha_do_tempo,
+          (SELECT COUNT(*) FROM quotes)                 AS orcamentos,
+          (SELECT COUNT(*) FROM quote_items)            AS itens,
+          (SELECT COUNT(*) FROM quote_timeline)         AS historico,
+          (SELECT COUNT(*) FROM domain_events)          AS eventos,
+          (SELECT COUNT(part_id) FROM quote_items)      AS itens_com_peca,
+          (SELECT status  FROM service_orders WHERE id='so-p9-a') AS situacao_a,
+          (SELECT version FROM service_orders WHERE id='so-p9-a') AS versao_a,
+          (SELECT follow_up_at FROM service_orders WHERE id='so-p9-a') AS prazo_a,
+          (SELECT status  FROM quotes WHERE id='orc-p9-v2')       AS situacao_orc,
+          (SELECT revision FROM quotes WHERE id='orc-p9-v2')      AS revisao_orc,
+          (SELECT total   FROM quotes WHERE id='orc-p9-v2')       AS total_orc,
+          (SELECT description FROM quote_items WHERE id='qi-p9-1') AS descricao_item,
+          (SELECT current_value FROM tenant_sequences
+            WHERE tenant_id='tenant-p9' AND sequence_type='quote') AS sequencia_orc
+      `);
+
+      /**
+       * NADA DO PROMPT 09 FOI TOCADO (itens 129 e 130). A migration e aditiva:
+       * nenhuma OS muda de situacao, nenhum orcamento muda de total, e TODAS as
+       * linhas PART existentes continuam validas com vinculo NULO.
+       */
+      expect(rows[0]).toMatchObject({
+        ordens: 2,
+        tarefas: 1,
+        linha_do_tempo: 1,
+        orcamentos: 2,
+        itens: 2,
+        historico: 1,
+        eventos: 1,
+        itens_com_peca: 0,
+        situacao_a: 'awaiting_repair',
+        versao_a: 6,
+        prazo_a: '2026-11-05',
+        situacao_orc: 'approved',
+        revisao_orc: 2,
+        total_orc: '400.00',
+        descricao_item: 'Tela LCD escrita a mao',
+        sequencia_orc: 7,
+      });
+
+      const [afterTables] = await connection.query<mysql.RowDataPacket[]>('SHOW TABLES');
+      const afterNames = afterTables.map((row) => Object.values(row)[0] as string);
+      expect(afterNames).toEqual(
+        expect.arrayContaining([
+          'parts',
+          'stock_locations',
+          'stock_balances',
+          'stock_movements',
+          'stock_reservations',
+          'stock_transfers',
+        ]),
+      );
+
+      // --- as invariantes novas, provadas no banco ----------------------------
+      await connection.query(`
+        INSERT INTO parts
+          (id, tenant_id, code, code_normalized, name, name_search, unit_of_measure,
+           status, version, created_by, created_at, updated_at)
+        VALUES ('peca-p9', 'tenant-p9', 'TELA-01', 'TELA01', 'Tela LCD', 'tela lcd', 'unit',
+                'active', 1, 'user-p9', NOW(3), NOW(3))
+      `);
+
+      // Codigo interno unico por empresa (item 12).
+      await expect(
+        connection.query(`
+          INSERT INTO parts
+            (id, tenant_id, code, code_normalized, name, name_search, unit_of_measure,
+             status, version, created_at, updated_at)
+          VALUES ('peca-p9-dup', 'tenant-p9', 'tela 01', 'TELA01', 'Outra tela', 'outra tela',
+                  'unit', 'active', 1, NOW(3), NOW(3))
+        `),
+      ).rejects.toThrow();
+
+      // Peca de outra empresa nao entra numa linha de orcamento desta (item 124).
+      await connection.query(`
+        INSERT INTO parts
+          (id, tenant_id, code, code_normalized, name, name_search, unit_of_measure,
+           status, version, created_at, updated_at)
+        VALUES ('peca-p9x', 'tenant-p9b', 'TELA-01', 'TELA01', 'Tela de outra empresa',
+                'tela de outra empresa', 'unit', 'active', 1, NOW(3), NOW(3))
+      `);
+      await expect(
+        connection.query("UPDATE quote_items SET part_id = 'peca-p9x' WHERE id = 'qi-p9-1'"),
+      ).rejects.toThrow();
+
+      // Vincular peca da MESMA empresa e legitimo, e nao muda o snapshot.
+      await connection.query("UPDATE quote_items SET part_id = 'peca-p9' WHERE id = 'qi-p9-1'");
+      const [snapshot] = await connection.query<mysql.RowDataPacket[]>(
+        "SELECT description, unit_price, total FROM quote_items WHERE id = 'qi-p9-1'",
+      );
+      expect(snapshot[0]).toMatchObject({
+        description: 'Tela LCD escrita a mao',
+        unit_price: '200.00',
+        total: '400.00',
+      });
+
+      // Saldo negativo e recusado pela CHECK (item 123).
+      await expect(
+        connection.query(`
+          INSERT INTO stock_balances
+            (id, tenant_id, unit_id, part_id, on_hand, reserved, minimum_quantity,
+             version, created_at, updated_at)
+          VALUES ('saldo-neg', 'tenant-p9', 'unit-p9', 'peca-p9', '-1.0000', '0.0000', '0.0000',
+                  1, NOW(3), NOW(3))
+        `),
+      ).rejects.toThrow();
+
+      // Reservado maior que o fisico tambem (item 123).
+      await expect(
+        connection.query(`
+          INSERT INTO stock_balances
+            (id, tenant_id, unit_id, part_id, on_hand, reserved, minimum_quantity,
+             version, created_at, updated_at)
+          VALUES ('saldo-res', 'tenant-p9', 'unit-p9', 'peca-p9', '1.0000', '2.0000', '0.0000',
+                  1, NOW(3), NOW(3))
+        `),
+      ).rejects.toThrow();
+
+      // Movimento apontando para OS de OUTRA unidade e recusado (item 127).
+      await expect(
+        connection.query(`
+          INSERT INTO stock_movements
+            (id, tenant_id, unit_id, part_id, type, quantity, resulting_on_hand,
+             origin_kind, service_order_id, occurred_at, created_at)
+          VALUES ('mov-x', 'tenant-p9', 'unit-p9', 'peca-p9', 'issue', '-1.0000', '0.0000',
+                  'service_order', 'so-p9-b', NOW(3), NOW(3))
+        `),
+      ).rejects.toThrow();
+
+      // Transferencia cruzando empresas e recusada (item 54).
+      await expect(
+        connection.query(`
+          INSERT INTO stock_transfers
+            (id, tenant_id, number, from_unit_id, to_unit_id, part_id, quantity, status,
+             created_at, updated_at)
+          VALUES ('trf-x', 'tenant-p9', 1, 'unit-p9', 'unit-p9x', 'peca-p9', '1.0000',
+                  'completed', NOW(3), NOW(3))
+        `),
+      ).rejects.toThrow();
+
+      // Reserva consumindo mais do que reservou e recusada (item 105).
+      await expect(
+        connection.query(`
+          INSERT INTO stock_reservations
+            (id, tenant_id, unit_id, part_id, service_order_id, quantity,
+             consumed_quantity, released_quantity, status, version, created_at, updated_at)
+          VALUES ('res-x', 'tenant-p9', 'unit-p9', 'peca-p9', 'so-p9-a', '2.0000',
+                  '3.0000', '0.0000', 'open', 1, NOW(3), NOW(3))
+        `),
+      ).rejects.toThrow();
+    } finally {
+      await connection.end();
+      rmSync(folder, { recursive: true, force: true });
+      await adminConnection.query(`DROP DATABASE IF EXISTS \`${stepDb}\``);
+    }
+  });
+
   it('cria um banco vazio do zero com todas as migrations', async () => {
     const freshDb = 'nexo56_migration_fresh_test';
     await adminConnection.query(`DROP DATABASE IF EXISTS \`${freshDb}\``);
@@ -1012,6 +1276,13 @@ describe('upgrade incremental entre prompts', () => {
           'quotes',
           'quote_items',
           'quote_timeline',
+          // Prompt 10
+          'parts',
+          'stock_locations',
+          'stock_balances',
+          'stock_movements',
+          'stock_reservations',
+          'stock_transfers',
         ]),
       );
     } finally {

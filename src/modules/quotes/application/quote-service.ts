@@ -157,11 +157,14 @@ async function loadServiceOrderForQuote(
   return row;
 }
 
+/** Linha lida do banco: o snapshot comercial mais o vinculo opcional. */
+type StoredQuoteItem = QuoteItemInput & { partId: string | null };
+
 async function readItems(
   tx: TransactionExecutor | ReturnType<typeof getDb>,
   tenantId: string,
   quoteId: string,
-): Promise<QuoteItemInput[]> {
+): Promise<StoredQuoteItem[]> {
   const rows = await tx
     .select({
       kind: quoteItems.kind,
@@ -169,6 +172,7 @@ async function readItems(
       quantity: quoteItems.quantity,
       unitPrice: quoteItems.unitPrice,
       discount: quoteItems.discount,
+      partId: quoteItems.partId,
     })
     .from(quoteItems)
     .where(and(eq(quoteItems.tenantId, tenantId), eq(quoteItems.quoteId, quoteId)))
@@ -180,6 +184,7 @@ async function readItems(
     quantity: row.quantity,
     unitPrice: row.unitPrice,
     discount: row.discount,
+    partId: row.partId,
   }));
 }
 
@@ -384,6 +389,19 @@ const itemSchema = z.object({
   quantity: z.string().trim().min(1, 'Informe a quantidade.'),
   unitPrice: z.string().trim().min(1, 'Informe o valor unitario.'),
   discount: z.string().trim().optional(),
+  /**
+   * VINCULO OPCIONAL COM UMA PECA DO CATALOGO (Prompt 10, itens 39 a 42).
+   *
+   * Chega como texto opaco, e de propósito: este modulo NAO conhece estoque.
+   * Quem resolve a peca — e quem copia descricao e preco como conveniencia —
+   * e a camada de acao, que pode compor os dois modulos. Aqui o id so e
+   * gravado, e a FK composta `(part_id, tenant_id)` garante que ele e da mesma
+   * empresa.
+   *
+   * Vazio continua sendo o normal: linha PART escrita a mao vale para sempre
+   * (item 40), inclusive quando o modulo de Estoque estiver desligado.
+   */
+  partId: z.string().trim().max(36).optional(),
 });
 
 export const saveDraftSchema = z.object({
@@ -479,6 +497,7 @@ export async function saveQuoteDraft(
         discount: line.discount.toString(),
         total: line.total.toString(),
         position: index,
+        partId: item.partId || null,
         createdAt: now,
         updatedAt: now,
       });
@@ -1003,6 +1022,8 @@ export async function reviseQuote(
         discount: line.discount.toString(),
         total: line.total.toString(),
         position: index,
+        /** A revisao herda o vinculo, como herda tudo o mais da versao anterior. */
+        partId: item.partId,
         createdAt: now,
         updatedAt: now,
       });

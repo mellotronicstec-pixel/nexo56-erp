@@ -87,6 +87,28 @@ export const AUDIT_ACTIONS = {
   QUOTE_EXPIRED: 'quote.expired',
   QUOTE_CANCELLED: 'quote.cancelled',
   QUOTE_SUPERSEDED: 'quote.superseded',
+
+  // --- Prompt 10: estoque e pecas -------------------------------------------
+  /**
+   * AUDITLOG != LEDGER (item 67).
+   *
+   * O ledger e historia de NEGOCIO: quanto entrou, quanto saiu, para qual OS.
+   * O AuditLog e historia de ACESSO: quem executou uma acao sensivel, de onde,
+   * com qual permissao. Auditar aqui o que ja esta no ledger duplicaria o
+   * dado e faria as duas trilhas divergirem na primeira correcao.
+   *
+   * Por isso so o que e administrativo ou sensivel entra: catalogo,
+   * localizacao, AJUSTE (que reescreve saldo) e transferencia (que move valor
+   * entre unidades). Entrada e saida comuns vivem no ledger.
+   */
+  PART_CREATED: 'part.created',
+  PART_UPDATED: 'part.updated',
+  PART_STATUS_CHANGED: 'part.status_changed',
+  STOCK_LOCATION_CREATED: 'stock_location.created',
+  STOCK_LOCATION_UPDATED: 'stock_location.updated',
+  STOCK_ADJUSTED: 'stock.adjusted',
+  STOCK_TRANSFERRED: 'stock.transferred',
+  STOCK_MINIMUM_CHANGED: 'stock.minimum_changed',
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];

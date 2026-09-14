@@ -37,8 +37,18 @@ runInTransaction(async (tx, emit) => {
 - Handler que falha → operação **permanece confirmada**, o erro é registrado e o
   evento fica com `published_at` nulo para reprocessamento (formato outbox).
 
-Tipos emitidos hoje: `USER_LOGGED_IN`, `TENANT_CREATED`, `UNIT_CREATED`,
-`USER_CREATED`, `FEATURE_ENABLED`, `FEATURE_DISABLED`.
+Tipos emitidos hoje: os da fundação (`USER_LOGGED_IN`, `TENANT_CREATED`,
+`UNIT_CREATED`, `USER_CREATED`, `FEATURE_ENABLED`, `FEATURE_DISABLED`) mais os
+dos módulos de negócio — Clientes, Equipamentos, Ordem de Serviço, workflow,
+Orçamentos e, no Prompt 10, `PART_CREATED`, `PART_UPDATED`, `STOCK_RECEIVED`,
+`STOCK_ISSUED`, `STOCK_ADJUSTED`, `STOCK_TRANSFERRED`, `STOCK_RESERVED`,
+`STOCK_RESERVATION_RELEASED`, `STOCK_RESERVATION_CONSUMED` e
+`LOW_STOCK_DETECTED`.
+
+**Nenhum evento é consumido.** Não há handler de negócio, automação nem Rule
+Engine (Prompt 19). O outbox existe para que esses módulos encontrem o gancho
+pronto — e é por isso que "estoque baixo" **não notifica ninguém** e **não cria
+pedido de compra**.
 
 ## Jobs
 
@@ -68,10 +78,22 @@ janela não duplica execução.
 
 ### Handlers registrados
 
-| Job                     | O que faz                          | Periodicidade |
-| ----------------------- | ---------------------------------- | ------------- |
-| `session.prune-expired` | remove sessões expiradas/revogadas | 60 min        |
-| `jobs.requeue-stale`    | devolve à fila jobs travados       | 15 min        |
+| Job                             | O que faz                                | Periodicidade |
+| ------------------------------- | ---------------------------------------- | ------------- |
+| `session.prune-expired`         | remove sessões expiradas/revogadas       | 60 min        |
+| `jobs.requeue-stale`            | devolve à fila jobs travados             | 15 min        |
+| `service-order.follow-up-sweep` | marca acompanhamento vencido (Prompt 08) | 60 min        |
+| `quote.expire-overdue`          | expira orçamentos vencidos (Prompt 09)   | 60 min        |
+| `inventory.low-stock-sweep`     | marca saldo abaixo do mínimo (Prompt 10) | 60 min        |
+
+Os três últimos são idempotentes **por construção**: a condição vai no `WHERE`
+do próprio `UPDATE` e a marca fica na linha (`follow_up_alerted_for`,
+`status = 'sent'`, `low_stock_alerted_at`). Duas execuções simultâneas não
+emitem dois eventos, e rodar de hora em hora não enche o outbox.
+
+De hora em hora, e não uma vez por dia: empresas em fusos diferentes viram a
+data em horas diferentes, e o job precisa alcançar cada uma logo depois da
+virada dela.
 
 A expressão cron **não** vive na regra de negócio: o hPanel chama um comando só
 (`npm run jobs:run`) e a periodicidade lógica fica em `RECURRING_JOBS`.

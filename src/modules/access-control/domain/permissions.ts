@@ -92,6 +92,32 @@ export const PERMISSIONS = {
   QUOTES_APPROVE: 'quotes.approve',
   QUOTES_REJECT: 'quotes.reject',
   QUOTES_CANCEL: 'quotes.cancel',
+
+  // --- Prompt 10: estoque e pecas -------------------------------------------
+  /**
+   * O CORTE AQUI E POR CONSEQUENCIA, nao por botao (itens 78 e 79).
+   *
+   * Consultar saldo e uma coisa; mexer no catalogo da empresa inteira e outra;
+   * e AJUSTAR saldo — reescrever quanto o sistema acredita existir — e a acao
+   * que uma assistencia quer nas maos de pouca gente. Entrada, saida, reserva
+   * e transferencia sao separadas porque, numa loja, sao papeis diferentes:
+   * quem recebe mercadoria nao e necessariamente quem entrega peca ao tecnico.
+   *
+   * NAO existe `inventory.count`: contagem de inventario nao foi implementada
+   * (item 57), e declarar a permissao faria o catalogo prometer capacidade
+   * inexistente.
+   */
+  INVENTORY_VIEW: 'inventory.view',
+  /** Cadastro da peca. TENANT: vale para todas as unidades (item 81). */
+  INVENTORY_CATALOG_MANAGE: 'inventory.catalog_manage',
+  /** Prateleiras e gavetas da unidade. Configuracao fisica, nao catalogo. */
+  INVENTORY_LOCATIONS_MANAGE: 'inventory.locations_manage',
+  INVENTORY_RECEIVE: 'inventory.receive',
+  INVENTORY_ISSUE: 'inventory.issue',
+  INVENTORY_RESERVE: 'inventory.reserve',
+  INVENTORY_TRANSFER: 'inventory.transfer',
+  /** Separada e sensivel: reescreve o saldo e exige motivo (itens 55 e 107). */
+  INVENTORY_ADJUST: 'inventory.adjust',
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -335,6 +361,54 @@ export const PERMISSION_CATALOG: readonly PermissionDefinition[] = [
     description: 'Descarta um rascunho ou retira uma proposta antes da decisao do cliente.',
     featureKey: 'core.quotes',
   },
+  {
+    key: PERMISSIONS.INVENTORY_VIEW,
+    name: 'Visualizar estoque',
+    description: 'Consulta pecas, saldos, reservas, localizacoes e movimentacoes.',
+    featureKey: 'operations.inventory',
+  },
+  {
+    key: PERMISSIONS.INVENTORY_CATALOG_MANAGE,
+    name: 'Administrar catalogo de pecas',
+    description: 'Cria, edita e inativa pecas do catalogo da empresa.',
+    featureKey: 'operations.inventory',
+  },
+  {
+    key: PERMISSIONS.INVENTORY_LOCATIONS_MANAGE,
+    name: 'Administrar localizacoes de estoque',
+    description: 'Cria, edita e inativa as localizacoes fisicas da unidade.',
+    featureKey: 'operations.inventory',
+  },
+  {
+    key: PERMISSIONS.INVENTORY_RECEIVE,
+    name: 'Registrar entrada de estoque',
+    description: 'Registra entrada de pecas no estoque da unidade.',
+    featureKey: 'operations.inventory',
+  },
+  {
+    key: PERMISSIONS.INVENTORY_ISSUE,
+    name: 'Registrar saida de estoque',
+    description: 'Registra saida de pecas, com ou sem vinculo a uma Ordem de Servico.',
+    featureKey: 'operations.inventory',
+  },
+  {
+    key: PERMISSIONS.INVENTORY_RESERVE,
+    name: 'Reservar e liberar pecas',
+    description: 'Reserva pecas para uma Ordem de Servico e libera o que nao foi consumido.',
+    featureKey: 'operations.inventory',
+  },
+  {
+    key: PERMISSIONS.INVENTORY_TRANSFER,
+    name: 'Transferir estoque entre unidades',
+    description: 'Move pecas de uma unidade para outra da mesma empresa.',
+    featureKey: 'operations.inventory',
+  },
+  {
+    key: PERMISSIONS.INVENTORY_ADJUST,
+    name: 'Ajustar saldo de estoque',
+    description: 'Corrige o saldo fisico mediante motivo obrigatorio. Acao sensivel.',
+    featureKey: 'operations.inventory',
+  },
 ];
 
 /** Papeis estruturais criados no bootstrap de cada tenant. */
@@ -501,6 +575,21 @@ export const PERMISSION_GROUPS = [
       PERMISSIONS.QUOTES_APPROVE,
       PERMISSIONS.QUOTES_REJECT,
       PERMISSIONS.QUOTES_CANCEL,
+    ],
+  },
+  {
+    key: 'estoque',
+    name: 'Estoque e pecas',
+    description: 'Catalogo, saldos, movimentacoes, reservas e transferencias.',
+    permissions: [
+      PERMISSIONS.INVENTORY_VIEW,
+      PERMISSIONS.INVENTORY_CATALOG_MANAGE,
+      PERMISSIONS.INVENTORY_LOCATIONS_MANAGE,
+      PERMISSIONS.INVENTORY_RECEIVE,
+      PERMISSIONS.INVENTORY_ISSUE,
+      PERMISSIONS.INVENTORY_RESERVE,
+      PERMISSIONS.INVENTORY_TRANSFER,
+      PERMISSIONS.INVENTORY_ADJUST,
     ],
   },
   {

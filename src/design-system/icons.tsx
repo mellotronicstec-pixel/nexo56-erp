@@ -264,6 +264,15 @@ export const IconCamera = (props: IconProps) => (
  * O desenho evita a metafora de "ticket" ou "chamado" — a OS do Nexo56 e um
  * documento operacional da assistencia, e o icone diz isso antes do rotulo.
  */
+/** Caixa de estoque: tampa, corpo e o vinco central. */
+export const IconInventory = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="M3.5 7.5l8.5-4 8.5 4v9l-8.5 4-8.5-4z" />
+    <path d="M3.5 7.5l8.5 4 8.5-4" />
+    <path d="M12 11.5v9" />
+  </Icon>
+);
+
 export const IconServiceOrder = (props: IconProps) => (
   <Icon {...props}>
     <path d="M14 3.5H6.8a.8.8 0 00-.8.8v15.4a.8.8 0 00.8.8h10.4a.8.8 0 00.8-.8V7.5z" />

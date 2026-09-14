@@ -81,6 +81,14 @@ function readItems(formData: FormData) {
   const quantities = formData.getAll('itemQuantity').map(String);
   const prices = formData.getAll('itemUnitPrice').map(String);
   const discounts = formData.getAll('itemDiscount').map(String);
+  /**
+   * Vinculo opcional com o catalogo de pecas (Prompt 10, itens 39 e 108).
+   *
+   * O id chega OPACO: este modulo nao conhece estoque, e a coerencia de
+   * empresa e garantida pela FK composta `(part_id, tenant_id)` no banco. Vazio
+   * e o normal — linha escrita a mao continua valida para sempre (item 40).
+   */
+  const partIds = formData.getAll('itemPartId').map(String);
 
   return (
     kinds
@@ -90,6 +98,7 @@ function readItems(formData: FormData) {
         quantity: normalizeQuantityInput(quantities[index] ?? '') ?? '',
         unitPrice: normalizeAmountInput(prices[index] ?? '') ?? '0',
         discount: normalizeAmountInput(discounts[index] ?? '') ?? '0',
+        partId: (partIds[index] ?? '').trim(),
       }))
       // Linha em branco deixada pelo editor nao e erro: e linha que a pessoa
       // abriu e nao usou.

@@ -1,6 +1,7 @@
 import 'server-only';
 import { pruneExpiredSessions } from '@/modules/auth/application/session-service';
 import { requeueStaleJobs } from '@/modules/jobs/application/job-queue';
+import { sweepLowStock } from '@/modules/inventory/application/low-stock-job';
 import { expireOverdueQuotes } from '@/modules/quotes/application/quote-expiry-job';
 import { sweepOverdueFollowUps } from '@/modules/service-orders/application/follow-up-job';
 import type { JobHandler } from '@/modules/jobs/domain/job';
@@ -65,11 +66,27 @@ const quoteExpiryJob: JobHandler<Record<string, never>> = {
   },
 };
 
+/**
+ * Marca os saldos abaixo do minimo (Prompt 10).
+ *
+ * Idempotente por construcao: a marca fica no proprio saldo e a condicao vai
+ * no `WHERE` do UPDATE. NAO notifica e NAO compra — publica evento, que e o
+ * que existe hoje.
+ */
+const lowStockSweepJob: JobHandler<Record<string, never>> = {
+  name: 'inventory.low-stock-sweep',
+  async handle() {
+    const result = await sweepLowStock();
+    return { summary: 'saldos abaixo do minimo marcados', affected: result.flagged };
+  },
+};
+
 const HANDLERS: readonly JobHandler<never>[] = [
   pruneSessionsJob as JobHandler<never>,
   requeueStaleJobsJob as JobHandler<never>,
   followUpSweepJob as JobHandler<never>,
   quoteExpiryJob as JobHandler<never>,
+  lowStockSweepJob as JobHandler<never>,
 ];
 
 const BY_NAME = new Map(HANDLERS.map((handler) => [handler.name, handler]));
@@ -100,4 +117,10 @@ export const RECURRING_JOBS = [
   { name: 'service-order.follow-up-sweep', everyMinutes: 60 },
   /** Mesma razao da varredura de follow-up: cada empresa vira a data na sua hora. */
   { name: 'quote.expire-overdue', everyMinutes: 60 },
+  /**
+   * De hora em hora e suficiente: estoque baixo e um aviso de reposicao, nao
+   * um alarme. Rodar a cada minuto so encheria a fila com execucoes que nao
+   * encontram nada — e, como o alerta e marcado no saldo, nao adiantaria nada.
+   */
+  { name: 'inventory.low-stock-sweep', everyMinutes: 60 },
 ] as const;

@@ -108,12 +108,10 @@ describe('o modulo de orcamentos nao antecipa outros modulos', () => {
    * falha por prosa ensina a equipe a afrouxa-lo. O que importa e: o modulo
    * importa outro dominio? escreve na tabela dele? chama biblioteca de envio?
    */
-  it('nao importa modulo de estoque, compras, financeiro, garantia nem Portal', () => {
+  it('nao importa compras, financeiro, garantia, Portal nem automacoes', () => {
     const proibidos = [
-      'modules/stock',
-      'modules/inventory',
-      'modules/parts',
       'modules/purchases',
+      'modules/suppliers',
       'modules/finance',
       'modules/financial',
       'modules/warranty',
@@ -133,12 +131,43 @@ describe('o modulo de orcamentos nao antecipa outros modulos', () => {
     }
   });
 
-  it('nao escreve em tabela de estoque, compra, financeiro ou garantia', () => {
+  /**
+   * O PROMPT 10 MUDOU ESTA REGRA, E DE PROPOSITO (item 39).
+   *
+   * Ate o Prompt 09 o orcamento nao podia conhecer estoque nenhum — porque
+   * estoque nao existia, e uma referencia a catalogo teria sido invencao. Com
+   * o catalogo real, `quote_items.part_id` passou a ser exatamente o que o
+   * comentario do schema do Prompt 09 previa: coluna aditiva e opcional.
+   *
+   * O que continua proibido e o que sempre importou: a CAMADA DE APLICACAO do
+   * orcamento nao conhece estoque. Salvar, enviar e aprovar seguem sem
+   * movimentar nada. A unica ponte e a FK da tabela, verificada abaixo.
+   */
+  it('so o SCHEMA conhece o catalogo de pecas; a aplicacao do orcamento nao', () => {
+    const naoSchema = quoteFiles.filter(
+      ({ path }) => !path.endsWith(join('quotes', 'infrastructure', 'schema.ts')),
+    );
+    expect(naoSchema.length).toBeGreaterThan(0);
+
+    for (const { path, code } of naoSchema) {
+      const imports = [...code.matchAll(/from\s+'([^']+)'/g)].map((match) => match[1] ?? '');
+      expect(
+        imports.some((entry) => entry.includes('modules/inventory')),
+        `${path} -> modules/inventory`,
+      ).toBe(false);
+    }
+  });
+
+  it('nao escreve em saldo, movimentacao, reserva, compra, financeiro ou garantia', () => {
     const tabelas = [
-      'stock_items',
+      'stock_balances',
+      'stockBalances',
       'stock_movements',
-      'inventory',
-      'parts',
+      'stockMovements',
+      'stock_reservations',
+      'stockReservations',
+      'stock_transfers',
+      'stockTransfers',
       'purchase_orders',
       'suppliers',
       'accounts_receivable',
@@ -166,14 +195,20 @@ describe('o modulo de orcamentos nao antecipa outros modulos', () => {
     }
   });
 
-  it('a linha de PECA nao aponta para catalogo nenhum (item 31)', () => {
+  it('a linha de PECA guarda o proprio texto, e o vinculo com peca e OPCIONAL', () => {
     const schema = FILES.find(({ path }) =>
       path.endsWith(join('quotes', 'infrastructure', 'schema.ts')),
     );
     expect(schema).toBeDefined();
 
-    // `quote_items` guarda descricao escrita a mao, nao referencia de produto.
-    expect(schema!.code).not.toMatch(/productId|product_id|partId|part_id|sku/i);
+    // O que a proposta diz ao cliente continua escrito nela.
     expect(schema!.raw).toContain("description: varchar('description'");
+
+    // O vinculo do Prompt 10 existe e e NULAVEL: linha manual continua valida.
+    expect(schema!.code).toContain("partId: idRef('part_id')");
+    expect(schema!.code).not.toMatch(/partId: idRef\('part_id'\)\s*\.notNull\(\)/);
+
+    // E nao ha `product_id` nem `sku`: o catalogo e de PECAS, nao de produtos.
+    expect(schema!.code).not.toMatch(/productId|product_id|\bsku\b/i);
   });
 });

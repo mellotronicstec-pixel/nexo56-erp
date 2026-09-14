@@ -45,6 +45,12 @@ Escopo de cada entidade (Prompt 02, itens 6 a 14 e 85).
 | `quotes`                       | **tenant + unidade**⁹ | obrigatório    | **obrigatório**        | **sim**   | **nunca**                    |
 | `quote_items`                  | via orçamento         | obrigatório    | herdado                | não       | cascata do orçamento         |
 | `quote_timeline`               | via orçamento         | obrigatório    | herdado                | **sim**   | cascata do orçamento         |
+| `parts`                        | tenant                | obrigatório    | **não**¹⁰              | não       | não — `status`               |
+| `stock_locations`              | **tenant + unidade**  | obrigatório    | **obrigatório**        | não       | não — `status`               |
+| `stock_balances`               | **tenant + unidade**  | obrigatório    | **obrigatório**        | não¹¹     | não — saldo não se apaga     |
+| `stock_movements`              | **tenant + unidade**  | obrigatório    | **obrigatório**        | **sim**   | **nunca — append-only**      |
+| `stock_reservations`           | **tenant + unidade**  | obrigatório    | **obrigatório**        | não       | não — `status`               |
+| `stock_transfers`              | tenant¹²              | obrigatório    | origem e destino       | **sim**   | **nunca**                    |
 
 ¹ Nulo em evento de plataforma anterior ao tenant existir.
 ² Nulo em job técnico global (ex.: limpeza de sessões expiradas).
@@ -87,9 +93,6 @@ Decisões de ownership já fixadas, para evitar retrabalho estrutural:
 | `service_order_timeline` | tenant + unidade | obrigatório | herdado           | **sim**   | **nunca**   |
 | `quotes`                 | tenant + unidade | obrigatório | herdado da OS     | não⁵      | **não**     |
 | `quote_items`            | tenant           | obrigatório | herdado           | não       | não         |
-| `parts`                  | tenant           | obrigatório | não⁶              | não       | sim         |
-| `inventory`              | tenant + unidade | obrigatório | **obrigatório**   | não       | não         |
-| `inventory_movements`    | tenant + unidade | obrigatório | **obrigatório**   | **sim**   | **nunca**   |
 | `suppliers`              | tenant           | obrigatório | não               | não       | sim         |
 | `purchase_requests`      | tenant + unidade | obrigatório | obrigatório       | não       | não         |
 | `purchase_orders`        | tenant + unidade | obrigatório | obrigatório       | não       | não         |
@@ -104,12 +107,30 @@ Decisões de ownership já fixadas, para evitar retrabalho estrutural:
 > saíram desta lista: foram implementados como `customers`, `customer_contacts`,
 > `customer_addresses` (Prompt 05), `equipment` (Prompt 06) e `service_orders`
 > (Prompt 07), com o ownership que estava previsto aqui.
+>
+> `parts`, `inventory` e `inventory_movements` também saíram: foram
+> implementados no Prompt 10 como `parts` (tenant), `stock_balances`,
+> `stock_movements`, `stock_locations`, `stock_reservations` (unidade) e
+> `stock_transfers` (tenant, com origem e destino unidade). O ownership é
+> exatamente o que estava previsto: cadastro do tenant, estoque físico por
+> unidade.
 
 ⁵ O documento em si não é histórico, mas suas mudanças de estado alimentam uma
 timeline própria.
 
+¹⁰ O catálogo é um vocabulário da EMPRESA: a mesma peça é usada por qualquer
+unidade. Quem tem quantidade é `stock_balances` (Prompt 10, itens 6 e 7).
+
+¹¹ `stock_balances` é saldo materializado, não histórico. O histórico é
+`stock_movements`, e o saldo é reconciliável contra ele (ADR-043).
+
+¹² A transferência não pertence a nenhuma das duas lojas — ela atravessa as
+duas. Origem e destino são unidades, amarradas ao mesmo tenant por FK composta
+(ADR-046).
+
 ⁶ O **cadastro** da peça é do tenant; o **estoque físico** dela é por unidade
-(`inventory`). São coisas diferentes (item 64).
+(`stock_balances`). São coisas diferentes (item 64), e foi assim que o Prompt 10
+as implementou.
 
 ---
 

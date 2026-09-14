@@ -1,3 +1,8 @@
+import {
+  normalizeCompactCode,
+  normalizeSearchable as normalizeSearchableText,
+} from '@/core/text/normalize';
+
 /**
  * Dominio de Equipamentos (Prompt 06, itens 4 a 14).
  *
@@ -160,14 +165,7 @@ export const MEDIA_KIND_LABEL: Record<MediaKind, string> = {
  * "samsung" deixam de virar tres marcas diferentes no mesmo tenant, sem que
  * ninguem perca a grafia que escolheu.
  */
-export function normalizeSearchable(value: string): string {
-  return value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .trim()
-    .replace(/\s+/g, ' ');
-}
+export const normalizeSearchable = normalizeSearchableText;
 
 /**
  * Normalizacao de numero de serie (item 13).
@@ -181,9 +179,7 @@ export function normalizeSearchable(value: string): string {
  * formatos, e dois aparelhos podem legitimamente ter o mesmo codigo curto. O
  * serial repetido vira AVISO de possivel duplicidade (item 55), nunca bloqueio.
  */
-export function normalizeSerial(value: string): string {
-  return value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-}
+export const normalizeSerial = normalizeCompactCode;
 
 /** Nome do equipamento na interface: "Marca Modelo" com o que houver. */
 export function equipmentTitle(equipment: {

@@ -175,16 +175,19 @@ describe('etiqueta fisica (itens 81 a 85)', () => {
 
 describe('linha do tempo (itens 37 e 38)', () => {
   it('so declara fatos que acontecem de verdade', () => {
-    // Cresceu com o Prompt 08, que trouxe os fatos de workflow. Cada entrada
-    // aqui corresponde a algo que o codigo escreve — nao ha tipo reservado
-    // para o futuro.
+    // Cresceu com o Prompt 08 (fatos de workflow) e com o Prompt 10 (reserva
+    // e consumo de peca). Cada entrada aqui corresponde a algo que o codigo
+    // escreve — nao ha tipo reservado para o futuro.
     expect(Object.values(TIMELINE_KINDS).sort()).toEqual([
       'created',
       'customer_notification_requested',
       'customer_report_updated',
       'details_updated',
       'follow_up_rescheduled',
+      'part_consumed',
       'part_pickup_requested',
+      'part_reservation_released',
+      'part_reserved',
       'status_changed',
       'task_completed',
       'technician_assigned',

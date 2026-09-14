@@ -112,11 +112,20 @@ orçamento, porque a linha não tem vida própria sem ele.
 `quantity DECIMAL(14,4)`, `unit_price`, `discount` e `total DECIMAL(14,2)`, e
 `position` para a ordem de exibição.
 
-**`part` aqui não é estoque.** A tabela **não tem** referência a produto,
-fornecedor ou SKU: guarda o que foi proposto ao cliente, em texto escrito por
-quem orçou. O catálogo real chega no Prompt 10 e entrará como coluna aditiva
-opcional — o que já foi proposto continua valendo como está. Há teste
-arquitetural que falha se uma referência de catálogo aparecer aqui.
+**`part` aqui continua não sendo estoque.** A linha guarda o que foi
+**proposto** ao cliente: descrição, quantidade e valor escritos por quem orçou.
+Salvar, enviar ou aprovar não reserva e não movimenta nada.
+
+O Prompt 10 acrescentou `part_id` — **aditiva e anulável**, exatamente como este
+documento previa. Nulo é o estado normal e permanente de uma linha escrita à
+mão, e todas as linhas anteriores continuam válidas assim. Escolher a peça
+preenche descrição e valor **como conveniência, no momento da escolha**; dali em
+diante o orçamento guarda os próprios números, e renomear ou reprecificar a peça
+não muda proposta nenhuma (ADR-047).
+
+Continua não havendo referência a fornecedor nem a SKU. O teste arquitetural
+mudou de alvo: agora garante que a **camada de aplicação** do orçamento não
+conhece estoque, e que nenhum arquivo do módulo chama caso de uso de estoque.
 
 ## Upgrade
 

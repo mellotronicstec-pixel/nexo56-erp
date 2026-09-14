@@ -21,6 +21,7 @@ import {
   timestamps,
   unitId,
 } from '@/core/db/columns';
+import { parts } from '@/modules/inventory/infrastructure/schema';
 import { QUOTE_INITIAL_STATUS } from '@/modules/quotes/domain/quote';
 import { serviceOrders } from '@/modules/service-orders/infrastructure/schema';
 import { tenants, units } from '@/modules/tenancy/infrastructure/schema';
@@ -239,13 +240,16 @@ export const quotes = mysqlTable(
 );
 
 /**
- * Linha comercial do orcamento (item 29).
+ * Linha comercial do orcamento (Prompt 09, item 29).
  *
- * PECA AQUI NAO E ESTOQUE (itens 31, 104 e 105). Esta tabela nao tem
- * `product_id`, nao reserva nada e nao movimenta nada: ela guarda o que foi
- * PROPOSTO ao cliente, em texto escrito por quem orcou. O catalogo real chega
- * no Prompt 10, e entrara como coluna aditiva opcional — o que ja foi proposto
- * continua valendo como esta.
+ * PECA AQUI CONTINUA NAO SENDO ESTOQUE (Prompt 09 itens 31, 104 e 105; Prompt
+ * 10 itens 36 a 44). A linha guarda o que foi PROPOSTO ao cliente. Salvar,
+ * enviar ou aprovar nao reserva e nao movimenta nada — reservar e consumir sao
+ * acoes explicitas do modulo de Estoque, feitas por uma pessoa com permissao.
+ *
+ * O Prompt 10 acrescentou `part_id`, exatamente como este comentario previa:
+ * coluna ADITIVA e OPCIONAL. Linha escrita a mao continua valida para sempre
+ * (Prompt 10, item 40).
  */
 export const quoteItems = mysqlTable(
   'quote_items',
@@ -270,6 +274,26 @@ export const quoteItems = mysqlTable(
     /** Ordem de exibicao (item 86). Inteiro simples: a lista e curta. */
     position: int('position', { unsigned: true }).notNull(),
 
+    /**
+     * VINCULO OPCIONAL COM O CATALOGO DE PECAS (Prompt 10, itens 39 a 42).
+     *
+     * NULO e o estado normal e permanente de uma linha escrita a mao. Quando
+     * preenchido, serve para abrir a ficha da peca e para oferecer o botao de
+     * reservar — NUNCA para recalcular a proposta: descricao, quantidade e
+     * valor aprovados sao snapshot comercial e nao mudam quando a peca muda
+     * de nome, de codigo ou de preco (item 42).
+     *
+     * A FK e `restrict`: peca do catalogo nao e apagada pela aplicacao — ela
+     * se inativa. E como a FK e composta com `tenant_id`, que e NOT NULL, o
+     * InnoDB nem aceitaria `SET NULL` aqui. O orcamento historico continua
+     * legivel de qualquer forma, porque guarda os proprios numeros (item 110).
+     *
+     * ISTO NAO E DEPENDENCIA DE MODULO (item 85). O Orcamento nao exige que a
+     * feature de Estoque esteja ativa; o Estoque nunca importa o Orcamento. O
+     * grafo continua aciclico.
+     */
+    partId: idRef('part_id'),
+
     ...timestamps(),
   },
   (table) => [
@@ -286,8 +310,19 @@ export const quoteItems = mysqlTable(
       .onDelete('cascade')
       .onUpdate('cascade'),
 
+    /** A peca vinculada e da MESMA empresa (Prompt 10, itens 124 e 137). */
+    foreignKey({
+      name: 'fk_quote_item_part_tenant',
+      columns: [table.partId, table.tenantId],
+      foreignColumns: [parts.id, parts.tenantId],
+    })
+      .onDelete('restrict')
+      .onUpdate('cascade'),
+
     /** Itens de um orcamento, na ordem de exibicao. Evita N+1 na listagem. */
     index('ix_quote_item_quote').on(table.quoteId, table.position),
+    /** "Quais orcamentos citaram esta peca?" — usado na ficha da peca. */
+    index('ix_quote_item_part').on(table.tenantId, table.partId),
   ],
 );
 

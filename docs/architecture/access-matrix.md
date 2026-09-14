@@ -17,46 +17,54 @@ Conceitos e implementação: [access-control.md](access-control.md).
 Legenda de escopo: **T** = ação de nível tenant (papel TENANT);
 **U** = ação de unidade (papel TENANT ou papel UNIT daquela unidade).
 
-| Permissão                          | Permite                                          | Escopo | Risco |
-| ---------------------------------- | ------------------------------------------------ | ------ | ----- |
-| `admin.access`                     | abrir a área de administração                    | T      | —     |
-| `users.view`                       | listar e abrir usuários da empresa               | T      | —     |
-| `users.manage`                     | criar, editar, ativar e desativar usuários       | T      | alto  |
-| `users.manage_access`              | vincular unidades e atribuir/revogar perfis      | T      | alto  |
-| `users.reset_password`             | gerar código de redefinição de senha de terceiro | T      | alto  |
-| `sessions.revoke`                  | encerrar sessões de outro usuário                | T      | alto  |
-| `roles.view`                       | consultar perfis e suas permissões               | T      | —     |
-| `roles.manage`                     | criar, renomear e excluir perfis                 | T      | alto  |
-| `roles.manage_permissions`         | alterar **quais** permissões um perfil concede   | T      | alto  |
-| `units.view`                       | consultar unidades                               | T      | —     |
-| `units.manage`                     | criar e alterar unidades                         | T      | alto  |
-| `features.view`                    | consultar módulos disponíveis                    | T      | —     |
-| `features.manage`                  | ativar e desativar módulos da empresa            | T      | alto  |
-| `audit.view`                       | consultar a trilha de auditoria                  | T      | —     |
-| `customers.view`                   | listar e abrir clientes                          | T      | —     |
-| `customers.manage`                 | cadastrar e corrigir clientes                    | T      | médio |
-| `customers.change_status`          | ativar e inativar cliente                        | T      | médio |
-| `equipment.view`                   | consultar equipamentos e suas fotos              | T      | —     |
-| `equipment.manage`                 | cadastrar e corrigir a identificação do aparelho | T      | médio |
-| `equipment_intake.view`            | consultar os recebimentos **da unidade**         | **U**  | —     |
-| `equipment_intake.create`          | registrar a entrada de um aparelho na unidade    | **U**  | médio |
-| `equipment_intake.manage_media`    | anexar e remover fotos                           | **U**  | médio |
-| `service_orders.view`              | consultar Ordens de Servico da unidade           | **U**  | —     |
-| `service_orders.create`            | abrir uma Ordem de Servico                       | **U**  | médio |
-| `service_orders.update`            | corrigir o relato e as observacoes de abertura   | **U**  | médio |
-| `service_orders.transition`        | mover a Ordem de Servico pelo fluxo              | **U**  | médio |
-| `service_orders.complete`          | finalizar a Ordem de Servico                     | **U**  | alto  |
-| `service_orders.cancel`            | cancelar a Ordem de Servico                      | **U**  | alto  |
-| `service_orders.assign_technician` | definir o tecnico responsavel                    | **U**  | médio |
-| `service_orders.manage_follow_up`  | reagendar o acompanhamento                       | **U**  | médio |
-| `service_orders.manage_tasks`      | criar e concluir tarefas do fluxo                | **U**  | médio |
-| `quotes.view`                      | consultar orcamentos da unidade                  | **U**  | —     |
-| `quotes.create`                    | abrir orcamento ou revisao                       | **U**  | médio |
-| `quotes.update_draft`              | alterar itens e valores do rascunho              | **U**  | médio |
-| `quotes.send`                      | formalizar a proposta e mover a OS               | **U**  | alto  |
-| `quotes.approve`                   | registrar a aprovacao do cliente                 | **U**  | alto  |
-| `quotes.reject`                    | registrar a recusa do cliente                    | **U**  | alto  |
-| `quotes.cancel`                    | descartar rascunho ou retirar proposta           | **U**  | médio |
+| Permissão                          | Permite                                           | Escopo | Risco |
+| ---------------------------------- | ------------------------------------------------- | ------ | ----- |
+| `admin.access`                     | abrir a área de administração                     | T      | —     |
+| `users.view`                       | listar e abrir usuários da empresa                | T      | —     |
+| `users.manage`                     | criar, editar, ativar e desativar usuários        | T      | alto  |
+| `users.manage_access`              | vincular unidades e atribuir/revogar perfis       | T      | alto  |
+| `users.reset_password`             | gerar código de redefinição de senha de terceiro  | T      | alto  |
+| `sessions.revoke`                  | encerrar sessões de outro usuário                 | T      | alto  |
+| `roles.view`                       | consultar perfis e suas permissões                | T      | —     |
+| `roles.manage`                     | criar, renomear e excluir perfis                  | T      | alto  |
+| `roles.manage_permissions`         | alterar **quais** permissões um perfil concede    | T      | alto  |
+| `units.view`                       | consultar unidades                                | T      | —     |
+| `units.manage`                     | criar e alterar unidades                          | T      | alto  |
+| `features.view`                    | consultar módulos disponíveis                     | T      | —     |
+| `features.manage`                  | ativar e desativar módulos da empresa             | T      | alto  |
+| `audit.view`                       | consultar a trilha de auditoria                   | T      | —     |
+| `customers.view`                   | listar e abrir clientes                           | T      | —     |
+| `customers.manage`                 | cadastrar e corrigir clientes                     | T      | médio |
+| `customers.change_status`          | ativar e inativar cliente                         | T      | médio |
+| `equipment.view`                   | consultar equipamentos e suas fotos               | T      | —     |
+| `equipment.manage`                 | cadastrar e corrigir a identificação do aparelho  | T      | médio |
+| `equipment_intake.view`            | consultar os recebimentos **da unidade**          | **U**  | —     |
+| `equipment_intake.create`          | registrar a entrada de um aparelho na unidade     | **U**  | médio |
+| `equipment_intake.manage_media`    | anexar e remover fotos                            | **U**  | médio |
+| `service_orders.view`              | consultar Ordens de Servico da unidade            | **U**  | —     |
+| `service_orders.create`            | abrir uma Ordem de Servico                        | **U**  | médio |
+| `service_orders.update`            | corrigir o relato e as observacoes de abertura    | **U**  | médio |
+| `service_orders.transition`        | mover a Ordem de Servico pelo fluxo               | **U**  | médio |
+| `service_orders.complete`          | finalizar a Ordem de Servico                      | **U**  | alto  |
+| `service_orders.cancel`            | cancelar a Ordem de Servico                       | **U**  | alto  |
+| `service_orders.assign_technician` | definir o tecnico responsavel                     | **U**  | médio |
+| `service_orders.manage_follow_up`  | reagendar o acompanhamento                        | **U**  | médio |
+| `service_orders.manage_tasks`      | criar e concluir tarefas do fluxo                 | **U**  | médio |
+| `quotes.view`                      | consultar orcamentos da unidade                   | **U**  | —     |
+| `quotes.create`                    | abrir orcamento ou revisao                        | **U**  | médio |
+| `quotes.update_draft`              | alterar itens e valores do rascunho               | **U**  | médio |
+| `quotes.send`                      | formalizar a proposta e mover a OS                | **U**  | alto  |
+| `quotes.approve`                   | registrar a aprovacao do cliente                  | **U**  | alto  |
+| `quotes.reject`                    | registrar a recusa do cliente                     | **U**  | alto  |
+| `quotes.cancel`                    | descartar rascunho ou retirar proposta            | **U**  | médio |
+| `inventory.view`                   | consultar pecas, saldos, reservas e movimentacoes | **U**  | —     |
+| `inventory.catalog_manage`         | criar, editar e inativar pecas; estoque minimo    | **T**  | médio |
+| `inventory.locations_manage`       | criar, editar e inativar localizacoes da unidade  | **U**  | baixo |
+| `inventory.receive`                | registrar entrada de estoque                      | **U**  | médio |
+| `inventory.issue`                  | registrar saida e consumir reserva                | **U**  | médio |
+| `inventory.reserve`                | reservar peca para OS e liberar reserva           | **U**  | médio |
+| `inventory.transfer`               | transferir entre unidades (autoriza nas DUAS)     | **U**  | alto  |
+| `inventory.adjust`                 | reescrever o saldo mediante motivo                | **U**  | alto  |
 
 Até o Prompt 04 todas as capacidades eram de nível **tenant** — o catálogo
 continha apenas administração estrutural. O Prompt 06 trouxe as primeiras de
@@ -134,6 +142,10 @@ módulos seguintes.
 | `/ordens-de-servico/[id]`                      | `service_orders.view` + alvo na unidade autorizada                    |
 | `/ordens-de-servico/[id]/editar`               | `service_orders.update` + alvo na unidade autorizada                  |
 | `/ordens-de-servico/[id]/orcamentos/[quoteId]` | `quotes.view` + feature `core.quotes` + alvo na unidade autorizada    |
+| `/estoque`                                     | `inventory.view` + feature `operations.inventory` + unidade ativa     |
+| `/estoque/nova-peca`                           | `inventory.catalog_manage` (escopo TENANT)                            |
+| `/estoque/[partId]`                            | `inventory.view` + peça do mesmo tenant                               |
+| `/estoque/localizacoes`                        | `inventory.view`; gerenciar exige `inventory.locations_manage`        |
 | `/acesso-negado`                               | — (página de explicação)                                              |
 
 Cada Server Action revalida a permissão **de escrita** correspondente, que é

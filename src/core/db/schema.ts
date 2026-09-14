@@ -17,4 +17,5 @@ export * from '@/modules/jobs/infrastructure/schema';
 export * from '@/modules/customers/infrastructure/schema';
 export * from '@/modules/equipment/infrastructure/schema';
 export * from '@/modules/service-orders/infrastructure/schema';
+export * from '@/modules/inventory/infrastructure/schema';
 export * from '@/modules/quotes/infrastructure/schema';

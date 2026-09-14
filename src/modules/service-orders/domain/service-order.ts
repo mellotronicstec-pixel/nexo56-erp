@@ -240,6 +240,19 @@ export const TIMELINE_KINDS = {
   PART_PICKUP_REQUESTED: 'part_pickup_requested',
   TASK_COMPLETED: 'task_completed',
   CUSTOMER_NOTIFICATION_REQUESTED: 'customer_notification_requested',
+
+  // --- Prompt 10: estoque ---------------------------------------------------
+  /**
+   * RESUMO, nao copia do ledger (Prompt 10, item 69).
+   *
+   * A ficha da OS mostra "2 un. de Tela LCD reservadas"; quem quer a
+   * movimentacao com custo, localizacao e ator abre a ficha da peca. Espelhar
+   * o ledger inteiro aqui transformaria o historico do atendimento num extrato
+   * de almoxarifado.
+   */
+  PART_RESERVED: 'part_reserved',
+  PART_RESERVATION_RELEASED: 'part_reservation_released',
+  PART_CONSUMED: 'part_consumed',
 } as const;
 
 export type TimelineKind = (typeof TIMELINE_KINDS)[keyof typeof TIMELINE_KINDS];
@@ -254,6 +267,9 @@ export const TIMELINE_LABEL: Readonly<Record<string, string>> = {
   [TIMELINE_KINDS.PART_PICKUP_REQUESTED]: 'Busca de peca registrada',
   [TIMELINE_KINDS.TASK_COMPLETED]: 'Tarefa concluida',
   [TIMELINE_KINDS.CUSTOMER_NOTIFICATION_REQUESTED]: 'Cliente marcado como avisado',
+  [TIMELINE_KINDS.PART_RESERVED]: 'Peca reservada',
+  [TIMELINE_KINDS.PART_RESERVATION_RELEASED]: 'Reserva de peca liberada',
+  [TIMELINE_KINDS.PART_CONSUMED]: 'Peca consumida',
 };
 
 export function timelineLabel(kind: string): string {

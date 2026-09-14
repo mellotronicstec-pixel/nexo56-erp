@@ -150,6 +150,8 @@ export interface QuoteDetail {
     discount: string;
     total: string;
     position: number;
+    /** Peca do catalogo, quando a linha foi escolhida pelo seletor (item 39). */
+    partId: string | null;
   }[];
   timeline: {
     id: string;
@@ -246,6 +248,7 @@ export async function findQuoteDetail(
       discount: item.discount,
       total: item.total,
       position: item.position,
+      partId: item.partId,
     })),
     timeline: timelineRows.map((entry) => ({
       id: entry.id,

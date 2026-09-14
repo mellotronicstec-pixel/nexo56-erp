@@ -4,20 +4,20 @@ O que o Prompt 09 **preparou** e o que deliberadamente **não** fez.
 
 ## O que NÃO foi antecipado
 
-| Não existe                    | Por quê                                                   |
-| ----------------------------- | --------------------------------------------------------- |
-| Peça como item de estoque     | Prompt 10. A linha `part` guarda **texto livre**          |
-| Reserva de peça               | Prompt 10                                                 |
-| Movimentação de estoque       | Prompt 10 — aprovar orçamento **não** movimenta nada      |
-| Fornecedor, pedido de compra  | Prompt 11                                                 |
-| Contas a receber, pagamento   | Prompt 12 — aprovar **não** cria lançamento financeiro    |
-| Regras de garantia            | Prompt 13                                                 |
-| Envio de WhatsApp/e-mail      | Prompt 16 — "enviar" formaliza, não transmite             |
-| Aprovação pelo cliente online | Prompt 17 (Portal) — a origem gravada é sempre `internal` |
-| Automações sobre os eventos   | Prompt 19 — sete eventos publicados, zero consumidores    |
-| PDF do orçamento              | não há infraestrutura documental; ver abaixo              |
-| Tributação / NF-e / NFS-e     | módulo fiscal futuro                                      |
-| Multimoeda                    | BRL apenas; a coluna `currency` existe, a lógica não      |
+| Não existe                    | Por quê                                                           |
+| ----------------------------- | ----------------------------------------------------------------- |
+| Peça como item de estoque     | **Feito no Prompt 10**: `part_id` aditiva e anulável              |
+| Reserva de peça               | **Feito no Prompt 10** — ação explícita, nunca automática         |
+| Movimentação de estoque       | **Feito no Prompt 10** — aprovar orçamento **não** movimenta nada |
+| Fornecedor, pedido de compra  | Prompt 11                                                         |
+| Contas a receber, pagamento   | Prompt 12 — aprovar **não** cria lançamento financeiro            |
+| Regras de garantia            | Prompt 13                                                         |
+| Envio de WhatsApp/e-mail      | Prompt 16 — "enviar" formaliza, não transmite                     |
+| Aprovação pelo cliente online | Prompt 17 (Portal) — a origem gravada é sempre `internal`         |
+| Automações sobre os eventos   | Prompt 19 — sete eventos publicados, zero consumidores            |
+| PDF do orçamento              | não há infraestrutura documental; ver abaixo                      |
+| Tributação / NF-e / NFS-e     | módulo fiscal futuro                                              |
+| Multimoeda                    | BRL apenas; a coluna `currency` existe, a lógica não              |
 
 Verificado em navegador real: a ficha do orçamento não contém "Estoque",
 "Reservar peça", "Fornecedor", "Pedido de compra", "Contas a receber",
@@ -42,7 +42,7 @@ O que já está pronto para quando houver:
 Quando existir, o PDF será **apresentação**, nunca fonte de verdade: o banco e o
 domínio continuam sendo a autoridade.
 
-## O que o Prompt 10 — Estoque e Peças encontra pronto
+## O que o Prompt 10 — Estoque e Peças encontrou pronto (e o que fez com isso)
 
 | Precisa de                               | Já existe                                            |
 | ---------------------------------------- | ---------------------------------------------------- |
@@ -53,9 +53,10 @@ domínio continuam sendo a autoridade.
 | Estado "Aguardando Peça" na OS           | matriz do workflow (Prompt 08)                       |
 | Vínculo tenant/unidade seguro            | FKs compostas, já no padrão                          |
 
-O caminho natural é `quote_items` ganhar uma coluna **aditiva e opcional**
-apontando para o item de catálogo — o que já foi proposto continua valendo como
-está, em texto.
+Foi exatamente o que aconteceu: `quote_items` ganhou `part_id`, **aditiva e
+anulável**, e o que já foi proposto continua valendo como está. O evento
+`QUOTE_APPROVED` **não** ganhou consumidor — reservar continua sendo ação
+explícita de uma pessoa (ADR-045, ADR-047).
 
 ## Pendências declaradas
 

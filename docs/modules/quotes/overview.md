@@ -37,11 +37,11 @@ atendimento.
 
 ## As três coisas que este módulo mantém separadas
 
-| Quem decide        | O quê                          | Onde vive                |
-| ------------------ | ------------------------------ | ------------------------ |
-| **Orçamento**      | valores e a decisão do cliente | `modules/quotes`         |
-| **Workflow da OS** | o estado da Ordem de Serviço   | `modules/service-orders` |
-| **Estoque**        | peça como item real            | não existe — Prompt 10   |
+| Quem decide        | O quê                          | Onde vive                       |
+| ------------------ | ------------------------------ | ------------------------------- |
+| **Orçamento**      | valores e a decisão do cliente | `modules/quotes`                |
+| **Workflow da OS** | o estado da Ordem de Serviço   | `modules/service-orders`        |
+| **Estoque**        | peça como item real            | `modules/inventory` (Prompt 10) |
 
 O orçamento **nunca** escreve `service_orders.status`. Quando precisa mover a
 OS, pede ao workflow do Prompt 08 — e faz isso dentro da mesma transação. Ver

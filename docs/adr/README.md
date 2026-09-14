@@ -9,7 +9,9 @@ Os ADRs 001–012 vêm do Prompt 01 (fundação técnica); 013–018 do Prompt 0
 Prompt 04 (Design System e interface); 026–028 do Prompt 05 (Clientes);
 029–032 do Prompt 06 (Equipamentos, recebimento, mídia e leitura de etiqueta);
 033–036 do Prompt 07 (Ordem de Serviço: ownership, numeração, cardinalidade e
-fronteira com o workflow).
+fronteira com o workflow); 037–039 do Prompt 08 (workflow centralizado,
+concorrência otimista e follow-up); 040–042 do Prompt 09 (Orçamentos); 043–047
+do Prompt 10 (Estoque e Peças).
 
 Um ADR não é reescrito quando a decisão muda: cria-se um novo ADR que o
 substitui, e o antigo passa a `Substituído por ADR-XXX`.
@@ -58,3 +60,8 @@ substitui, e o antigo passa a `Substituído por ADR-XXX`.
 | [040](ADR-040-orcamento-pertence-a-ordem-de-servico.md)  | Orçamento pertence à Ordem de Serviço                 | Aceito |
 | [041](ADR-041-estrategia-de-revisao-de-orcamento.md)     | Revisão de orçamento com mesmo número                 | Aceito |
 | [042](ADR-042-fronteira-orcamento-workflow.md)           | Orçamento move a OS pelo workflow, na mesma transação | Aceito |
+| [043](ADR-043-ledger-e-saldo-materializado.md)           | Ledger append-only com saldo materializado            | Aceito |
+| [044](ADR-044-concorrencia-de-saldo.md)                  | A condição de negócio vai no `WHERE` do `UPDATE`      | Aceito |
+| [045](ADR-045-reserva-e-entidade-propria.md)             | Reserva é entidade própria, não movimentação          | Aceito |
+| [046](ADR-046-transferencia-imediata.md)                 | Transferência entre unidades é imediata na V1         | Aceito |
+| [047](ADR-047-snapshot-do-orcamento-e-catalogo.md)       | Orçamento continua sendo snapshot comercial           | Aceito |

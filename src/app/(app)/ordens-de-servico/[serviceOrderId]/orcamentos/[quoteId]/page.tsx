@@ -22,6 +22,7 @@ import { can } from '@/modules/access-control/application/authorization-service'
 import { requireAccessForPage } from '@/modules/access-control/application/guard';
 import { PERMISSIONS } from '@/modules/access-control/domain/permissions';
 import { FEATURES } from '@/modules/features/domain/catalog';
+import { searchPartsForPicker } from '@/modules/inventory/application/inventory-queries';
 import { findQuoteDetail } from '@/modules/quotes/application/quote-queries';
 import {
   approvalSourceLabel,
@@ -85,6 +86,29 @@ export default async function QuotePage({
       can(context, { ...unitScope, permission: PERMISSIONS.QUOTES_CANCEL }),
       can(context, { ...unitScope, permission: PERMISSIONS.QUOTES_CREATE }),
     ]);
+
+  /**
+   * PECAS DO CATALOGO, SO SE HOUVER CATALOGO (Prompt 10, itens 86 e 108).
+   *
+   * Estoque e modulo OPCIONAL: quando esta desligado — ou quando a pessoa nao
+   * tem `inventory.view` — a lista vem vazia e o editor continua inteiro, com
+   * linha PART escrita a mao. Essa e a razao de a consulta ser condicional e
+   * de o editor aceitar `parts` vazio sem mudar de comportamento.
+   */
+  const podeVerEstoque = await can(context, {
+    permission: PERMISSIONS.INVENTORY_VIEW,
+    featureKey: FEATURES.OPERATIONS_INVENTORY,
+    unitId: quote.unitId,
+  });
+
+  const partOptions = podeVerEstoque.allowed
+    ? (await searchPartsForPicker(context, '', 50)).map((part) => ({
+        id: part.id,
+        code: part.code,
+        name: part.name,
+        suggestedPrice: part.suggestedPrice,
+      }))
+    : [];
 
   const editavel = isQuoteEditable(quote.status);
   const enviado = quote.status === 'sent';
@@ -308,12 +332,14 @@ export default async function QuotePage({
             quantity: formatQuantity(item.quantity),
             unitPrice: item.unitPrice,
             discount: item.discount === '0.00' ? '' : item.discount,
+            partId: item.partId ?? '',
           }))}
           initialDiscount={quote.discount}
           initialValidUntil={quote.validUntil ?? ''}
           initialCustomerNotes={quote.customerNotes ?? ''}
           initialInternalNotes={quote.internalNotes ?? ''}
           action={saveQuoteDraftAction}
+          parts={partOptions}
         />
       ) : (
         <Section id="itens" title="Itens" description="Os valores desta proposta, como ficaram.">

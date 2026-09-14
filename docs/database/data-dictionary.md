@@ -337,7 +337,118 @@ resumido ("Orçamento ORC #45 enviado"), e o detalhe vive aqui.
 
 ---
 
-## Tipos monetários e de quantidade (ainda sem uso físico)
+## `parts` (Prompt 10)
+
+Catálogo de peças. **TENANT-owned**: não há `unit_id`, e isso é a regra — a peça
+é o vocabulário da empresa, e quem tem quantidade é o saldo.
+
+| Coluna                                   | Observação                                                                              |
+| ---------------------------------------- | --------------------------------------------------------------------------------------- |
+| `code` / `code_normalized`               | código interno; a forma normalizada carrega a **UNIQUE por tenant**                     |
+| `name` / `name_search`                   | `name_search` sem acento e minúsculo, para busca                                        |
+| `brand` / `brand_search`                 | texto livre; não há catálogo de marcas                                                  |
+| `part_number` / `part_number_normalized` | **sem unicidade**: fabricantes reusam a mesma referência                                |
+| `barcode` / `barcode_normalized`         | qualquer formato; **não** presume EAN. Não há leitor de câmera                          |
+| `unit_of_measure`                        | `unit` `package` `meter` `gram` `kilogram` `liter`. `unit`/`package` não aceitam fração |
+| `suggested_price`                        | `DECIMAL(14,2)`. Informação comercial; o preço que vale é o aprovado no orçamento       |
+| `status`                                 | `active` / `inactive`. Inativar **não apaga nada**                                      |
+| `version`                                | concorrência otimista                                                                   |
+
+---
+
+## `stock_locations` (Prompt 10)
+
+Posição física **dentro da unidade**. Não é a unidade.
+
+`name` (obrigatório), `code` / `code_normalized` (**único dentro da unidade**),
+`description`, `status`. Não há enum de tipo: a loja nomeia o próprio espaço.
+
+`uq_stock_location_id_unit` é alvo da FK composta que impede uma movimentação da
+unidade A apontar para a prateleira da unidade B.
+
+---
+
+## `stock_balances` (Prompt 10)
+
+Saldo **materializado** por (unidade, peça). O histórico é `stock_movements`
+(ADR-043).
+
+| Coluna                 | Observação                                                                                                |
+| ---------------------- | --------------------------------------------------------------------------------------------------------- |
+| `on_hand`              | físico, **incluindo o que já tem dono**. `CHECK >= 0`                                                     |
+| `reserved`             | comprometido com alguma OS. `CHECK >= 0` e `CHECK <= on_hand`                                             |
+| `minimum_quantity`     | por peça **e** por unidade. Zero = não acompanhar                                                         |
+| `average_cost`         | média ponderada móvel, calculada dentro do próprio `UPDATE`. Nulo enquanto nenhuma entrada informou custo |
+| `primary_location_id`  | resumo para a listagem; FK composta com `unit_id`                                                         |
+| `low_stock_alerted_at` | marca que impede o job de republicar o mesmo alerta                                                       |
+
+`available` **não é coluna**: é `on_hand − reserved`, calculado no servidor.
+
+---
+
+## `stock_movements` (Prompt 10)
+
+Ledger **append-only**. Não tem `updated_at` nem `version` — a ausência das
+colunas é a primeira barreira contra "corrigir" um lançamento.
+
+| Coluna                           | Observação                                                                                   |
+| -------------------------------- | -------------------------------------------------------------------------------------------- |
+| `type`                           | `receipt` `issue` `adjustment_in` `adjustment_out` `transfer_out` `transfer_in`              |
+| `quantity`                       | **com sinal**: `+5` entrou, `−2` saiu                                                        |
+| `resulting_on_hand`              | saldo da peça na unidade **depois** deste movimento                                          |
+| `unit_cost` / `total_cost`       | congelados; mudar o custo da peça não reescreve o passado                                    |
+| `origin_kind`                    | `manual` `service_order` `transfer`. **Não** existe `purchase_order` — Compras é o Prompt 11 |
+| `reference`                      | nota, fornecedor, quem trouxe. Texto livre                                                   |
+| `reason`                         | **obrigatório** em ajuste                                                                    |
+| `service_order_id`               | FK **composta com `unit_id`**: isola a unidade no banco                                      |
+| `transfer_id` / `reservation_id` | correlação                                                                                   |
+| `idempotency_key`                | UNIQUE por tenant: retry não lança duas vezes                                                |
+
+---
+
+## `stock_reservations` (Prompt 10)
+
+Compromisso com uma OS **da mesma unidade**. Reservar não tira nada da
+prateleira (ADR-045).
+
+`quantity`, `consumed_quantity`, `released_quantity` (`CHECK consumed + released
+<= quantity`), `status` (`open` / `closed` / `cancelled`), `notes`, `version`.
+
+`remaining = quantity − consumed − released`. A situação **deriva do que
+sobrou**, calculada no `CASE` do próprio `UPDATE`.
+
+---
+
+## `stock_transfers` (Prompt 10)
+
+Identidade própria da transferência. **TENANT-owned**, com origem e destino
+UNIDADE — ela atravessa as duas lojas (ADR-046).
+
+`number` (único por tenant, exibido como `TRF 000012`), `from_unit_id`,
+`to_unit_id`, `part_id`, `quantity` (`CHECK > 0`), `status` (sempre `completed`
+na V1 — **não há `in_transit`**), `notes`, `idempotency_key`.
+
+As FKs compostas `(from_unit_id, tenant_id)` e `(to_unit_id, tenant_id)` tornam
+o cruzamento de empresas impossível no banco.
+
+**Não há CHECK de `from_unit_id <> to_unit_id`**: o MariaDB 10.11 recusa (erro 1901) uma FK com `ON UPDATE CASCADE` sobre coluna citada em CHECK que compara
+duas colunas. A regra fica no domínio, testada; as FKs, que protegem o
+isolamento, ficam no banco.
+
+---
+
+## `quote_items.part_id` (acrescentada no Prompt 10)
+
+Coluna **aditiva e anulável**. Nulo é o estado normal e permanente de uma linha
+escrita à mão. FK composta `(part_id, tenant_id) → parts(id, tenant_id)`,
+`ON DELETE RESTRICT`.
+
+Vincular a peça **não** substitui descrição, quantidade nem valor aprovados: o
+orçamento continua sendo snapshot comercial (ADR-047).
+
+---
+
+## Tipos monetários e de quantidade
 
 Definidos como convenção em `src/core/db/columns.ts`, aplicáveis assim que
 existir a primeira entidade financeira:
@@ -350,5 +461,13 @@ existir a primeira entidade financeira:
 | `currency()`     | `CHAR(3)`       | ISO 4217. `BRL` inicial                       |
 | `civilDate()`    | `VARCHAR(10)`   | Data civil ISO, sem fuso                      |
 
-Nenhuma coluna monetária existe ainda — a primeira virá com Orçamentos
-(Prompt 09) ou Financeiro (Prompt 12).
+As primeiras colunas monetárias chegaram com Orçamentos (Prompt 09) e Estoque
+(Prompt 10): `quotes.subtotal/discount/total`, `quote_items.unit_price`,
+`parts.suggested_price`, `stock_balances.average_cost` e
+`stock_movements.unit_cost/total_cost`.
+
+`quantity()` é usada por `quote_items.quantity` e por todo o Estoque. O valor
+exato em TypeScript é a classe `Quantity` (`src/core/quantity/quantity.ts`), que
+guarda décimos de milésimo em `bigint` — quantidade **não é dinheiro**, e um
+saldo que erra na quarta casa recusa reserva legítima sem ninguém entender por
+quê.

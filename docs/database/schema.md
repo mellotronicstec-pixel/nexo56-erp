@@ -247,6 +247,19 @@ Duas decisões estruturais valem registro aqui, porque atravessam o schema:
 - **`equipment_media` não guarda bytes.** Só `storage_key`, `mime_type`,
   `byte_size`, dimensões e `checksum`; o arquivo vive num storage privado, fora
   de `public/` (ADR-030). O backup precisa levar os dois juntos.
+- **O catálogo de peças é do tenant; o estoque físico é da unidade**
+  (Prompt 10). `parts` não tem `unit_id`; `stock_balances`, `stock_movements`,
+  `stock_locations` e `stock_reservations` têm, e as FKs compostas com `unit_id`
+  tornam o isolamento um fato do banco (ADR-043, ADR-045).
+- **`stock_movements` é append-only.** Não tem `updated_at` nem `version`, e
+  nenhum arquivo do projeto executa `UPDATE` ou `DELETE` nela — verificado por
+  teste de arquitetura. Correção se faz com movimentação compensatória.
+
+Documentação dos módulos acrescentados depois:
+
+- [docs/modules/service-orders/](../modules/service-orders/overview.md)
+- [docs/modules/quotes/](../modules/quotes/overview.md)
+- [docs/modules/inventory/](../modules/inventory/overview.md)
 
 ---
 

@@ -21,6 +21,17 @@ export const FEATURES = {
   CORE_EQUIPMENT_INTAKE: 'core.equipment_intake',
   CORE_SERVICE_ORDERS: 'core.service_orders',
   CORE_QUOTES: 'core.quotes',
+  /**
+   * Prefixo `operations.` e nao `core.` (Prompt 10, itens 83 e 84).
+   *
+   * O prefixo nomeia a AREA do produto; `type` decide se o tenant pode
+   * desligar. Estoque e a primeira capacidade de negocio genuinamente
+   * OPCIONAL: assistencia que compra peca por atendimento nao mantem
+   * estoque, e o Orcamento continua inteiro com linha PART manual (item 86).
+   * Chamar de `core.inventory` uma feature OPTIONAL faria a constante
+   * contradizer o tipo.
+   */
+  OPERATIONS_INVENTORY: 'operations.inventory',
   PLATFORM_MULTI_UNIT: 'platform.multi_unit',
   PLATFORM_LABEL_RECOGNITION: 'platform.label_recognition',
 } as const;
@@ -148,6 +159,27 @@ export const FEATURE_CATALOG: readonly FeatureDefinition[] = [
      * (item 76) — nao existe orcamento avulso do tenant.
      */
     type: 'CORE',
+    dependsOn: [FEATURES.CORE_SERVICE_ORDERS],
+  },
+  {
+    key: FEATURES.OPERATIONS_INVENTORY,
+    name: 'Estoque e pecas',
+    description:
+      'Catalogo de pecas, localizacoes, saldo por unidade, movimentacoes, reservas e transferencias.',
+    /**
+     * OPTIONAL de verdade (Prompt 10, itens 84, 86 e 87).
+     *
+     * Desligar NAO apaga peca, movimentacao nem reserva: impede operacao NOVA
+     * e some do menu. O historico continua legivel, o orcamento continua
+     * funcionando com linha PART escrita a mao, e a OS antiga permanece
+     * integra.
+     *
+     * Depende de Ordens de Servico porque reserva e consumo se vinculam a uma
+     * OS da unidade. NAO depende de Orcamentos, e nao pode depender: o vinculo
+     * peca x linha PART e opcional nos dois sentidos, e uma dependencia mutua
+     * Quotes <-> Inventory seria um ciclo (item 85).
+     */
+    type: 'OPTIONAL',
     dependsOn: [FEATURES.CORE_SERVICE_ORDERS],
   },
   {

@@ -344,7 +344,8 @@ erDiagram
         char36 id PK
         char36 tenant_id FK
         char36 quote_id FK "FK composta, ON DELETE CASCADE"
-        varchar kind "service part other - PART NAO E ESTOQUE"
+        varchar kind "service part other"
+        char36 part_id FK "Prompt 10: vinculo OPCIONAL e ANULAVEL com parts"
         varchar description "obrigatoria, texto livre, sem catalogo"
         decimal quantity "DECIMAL(14,4) - meia hora e 0.5"
         decimal unit_price "DECIMAL(14,2) - lido pelo Money, nunca float"
@@ -362,6 +363,102 @@ erDiagram
         varchar reason "motivo escrito, texto livre"
         char36 actor_id
         datetime occurred_at
+    }
+
+    PARTS ||--o{ STOCK_BALANCES : "estocada por unidade"
+    PARTS ||--o{ STOCK_MOVEMENTS : movimenta
+    PARTS ||--o{ STOCK_RESERVATIONS : reservada
+    PARTS ||--o{ STOCK_TRANSFERS : transferida
+    PARTS ||--o{ QUOTE_ITEMS : "vinculo OPCIONAL e anulavel"
+    UNITS ||--o{ STOCK_LOCATIONS : organiza
+    STOCK_LOCATIONS ||--o{ STOCK_MOVEMENTS : "posiciona (opcional)"
+    STOCK_LOCATIONS ||--o{ STOCK_BALANCES : "localizacao preferida"
+    SERVICE_ORDERS ||--o{ STOCK_MOVEMENTS : "consome (FK com unit_id)"
+    SERVICE_ORDERS ||--o{ STOCK_RESERVATIONS : "compromete (FK com unit_id)"
+    STOCK_RESERVATIONS ||--o{ STOCK_MOVEMENTS : "consumo da reserva"
+    STOCK_TRANSFERS ||--o{ STOCK_MOVEMENTS : "duas pontas, mesmo transfer_id"
+
+    PARTS {
+        char36 id PK
+        char36 tenant_id FK "TENANT - a peca e da empresa, nao da loja"
+        varchar code "codigo interno como foi digitado"
+        varchar code_normalized UK "unico por tenant - compacto e maiusculo"
+        varchar name
+        varchar name_search "sem acento, minusculo - chave de busca"
+        varchar brand "texto livre - nao ha catalogo de marcas"
+        varchar part_number "SEM unicidade - fabricantes reusam"
+        varchar barcode "SEM presumir EAN - nao ha leitor ainda"
+        varchar unit_of_measure "unit package meter gram kilogram liter"
+        decimal suggested_price "informacao comercial - nao e o preco aprovado"
+        varchar status "active inactive - inativar NAO apaga nada"
+        int version "concorrencia otimista"
+    }
+    STOCK_LOCATIONS {
+        char36 id PK
+        char36 tenant_id FK
+        char36 unit_id FK "UNIDADE - prateleira nao atravessa loja"
+        varchar name "nome que a loja escolheu - nao ha enum"
+        varchar code_normalized UK "unico DENTRO da unidade"
+        varchar status "active inactive"
+        composite uq_stock_location_id_unit UK "alvo de FK composta"
+    }
+    STOCK_BALANCES {
+        char36 id PK
+        char36 tenant_id FK
+        char36 unit_id FK "UNIDADE - quantidade tem lugar"
+        char36 part_id FK "FK composta com tenant_id"
+        decimal on_hand "fisico, INCLUINDO o que ja tem dono - CHECK >= 0"
+        decimal reserved "comprometido - CHECK >= 0 e <= on_hand"
+        decimal minimum_quantity "por peca E por unidade - zero desliga"
+        decimal average_cost "media ponderada movel - NULL enquanto sem custo"
+        char36 primary_location_id FK "resumo da listagem"
+        datetime low_stock_alerted_at "marca que impede republicar o alerta"
+        int version
+        composite uq_stock_balance_unit_part UK "um saldo por peca por unidade"
+    }
+    STOCK_MOVEMENTS {
+        char36 id PK "APPEND-ONLY - sem updated_at, sem version"
+        char36 tenant_id FK
+        char36 unit_id FK
+        char36 part_id FK
+        char36 location_id FK "opcional - FK composta com unit_id"
+        varchar type "receipt issue adjustment_in adjustment_out transfer_*"
+        decimal quantity "COM SINAL - reconciliacao vira soma"
+        decimal resulting_on_hand "saldo apos - torna a reconciliacao comparacao"
+        decimal unit_cost "congelado - mudar o custo da peca nao reescreve"
+        decimal total_cost
+        varchar origin_kind "manual service_order transfer - NAO purchase_order"
+        varchar reference "nota, fornecedor, quem trouxe - texto livre"
+        varchar reason "OBRIGATORIO em ajuste"
+        char36 service_order_id FK "FK composta com unit_id - isola a unidade"
+        char36 transfer_id FK
+        char36 reservation_id FK
+        varchar idempotency_key UK "retry nao lanca duas vezes"
+        char36 actor_id FK
+        datetime occurred_at
+    }
+    STOCK_RESERVATIONS {
+        char36 id PK
+        char36 tenant_id FK
+        char36 unit_id FK
+        char36 part_id FK
+        char36 service_order_id FK "OBRIGATORIO - FK composta com unit_id"
+        decimal quantity "total reservado"
+        decimal consumed_quantity "CHECK consumed + released <= quantity"
+        decimal released_quantity
+        varchar status "open closed cancelled - deriva do que sobrou"
+        int version
+    }
+    STOCK_TRANSFERS {
+        char36 id PK
+        char36 tenant_id FK "TENANT - atravessa as duas lojas"
+        int number UK "TRF 000012 - unico por tenant"
+        char36 from_unit_id FK "FK composta com tenant_id - cross-tenant impossivel"
+        char36 to_unit_id FK "FK composta com tenant_id"
+        char36 part_id FK
+        decimal quantity "CHECK > 0"
+        varchar status "sempre completed na V1 - nao ha in_transit"
+        varchar idempotency_key UK "retry nao transfere duas vezes"
     }
 ```
 
@@ -405,6 +502,11 @@ erDiagram
 > de ligação**: os três já existem no banco (seção 1), como `customers`,
 > `equipment` e `service_orders`. O mesmo vale para `CLIENT_CONTACT` e
 > `ADDRESS`, hoje `customer_contacts` e `customer_addresses`.
+>
+> `PART`, `STOCK_BALANCE`, `STOCK_MOVEMENT`, `STOCK_LOCATION`,
+> `STOCK_RESERVATION` e `STOCK_TRANSFER` também já existem (Prompt 10) e estão
+> na seção 1. Aparecem abaixo só para mostrar onde Compras e Garantia vão se
+> ligar.
 
 ```mermaid
 erDiagram
@@ -420,15 +522,22 @@ erDiagram
     SERVICE_ORDER ||--o{ ATTACHMENT : anexa
     SERVICE_ORDER ||--o| SERVICE_ORDER : "retorno em garantia"
 
-    PART ||--o{ QUOTE_ITEM : cotada
-    PART ||--o{ INVENTORY : "estocada (por unidade)"
-    UNIT_C ||--o{ INVENTORY : mantem
-    INVENTORY ||--o{ INVENTORY_MOVEMENT : "movimenta (imutavel)"
-    SERVICE_ORDER ||--o{ INVENTORY_MOVEMENT : consome
+    PART ||--o{ QUOTE_ITEM : "vinculo OPCIONAL (Prompt 10)"
+    PART ||--o{ STOCK_BALANCE : "estocada (por unidade)"
+    UNIT_C ||--o{ STOCK_BALANCE : mantem
+    UNIT_C ||--o{ STOCK_LOCATION : organiza
+    STOCK_LOCATION ||--o{ STOCK_MOVEMENT : "posiciona (opcional)"
+    PART ||--o{ STOCK_MOVEMENT : "movimenta (append-only)"
+    SERVICE_ORDER ||--o{ STOCK_MOVEMENT : consome
+    PART ||--o{ STOCK_RESERVATION : reservada
+    SERVICE_ORDER ||--o{ STOCK_RESERVATION : "compromete (mesma unidade)"
+    STOCK_RESERVATION ||--o{ STOCK_MOVEMENT : "consumo da reserva"
+    STOCK_TRANSFER ||--o{ STOCK_MOVEMENT : "duas pontas, mesmo transfer_id"
+    UNIT_C ||--o{ STOCK_TRANSFER : "origem / destino"
 
     SUPPLIER ||--o{ PURCHASE_ORDER : fornece
     PURCHASE_REQUEST ||--o{ PURCHASE_ORDER : origina
-    PURCHASE_ORDER ||--o{ INVENTORY_MOVEMENT : abastece
+    PURCHASE_ORDER ||--o{ STOCK_MOVEMENT : "abastece (Prompt 11)"
     PART ||--o{ WARRANTY : "garantia de peca"
     SUPPLIER ||--o{ WARRANTY : responde_por
 
@@ -445,8 +554,10 @@ erDiagram
 | `equipments` pertence a tenant + cliente   | Não se duplica por passar em outra unidade                                                                 |
 | Número da OS **único por tenant**          | Sem ambiguidade em QR, portal, suporte e garantia                                                          |
 | `warranties` é **entidade própria**        | Nunca um booleano dentro da OS (item 63)                                                                   |
-| `inventory` é **por unidade**              | Estoque é físico (item 64)                                                                                 |
-| `inventory_movements` é **imutável**       | Saldo sem histórico é saldo não auditável                                                                  |
+| `stock_balances` é **por unidade**         | **Implementado no Prompt 10**: estoque é físico (item 64)                                                  |
+| `stock_movements` é **append-only**        | **Implementado no Prompt 10**: saldo sem histórico é saldo não auditável (ADR-043)                         |
+| reserva é **entidade própria**             | **Prompt 10**: reservar não tira nada da prateleira (ADR-045)                                              |
+| `quote_items.part_id` é **anulável**       | **Prompt 10**: linha PART escrita à mão continua válida para sempre (ADR-047)                              |
 | `quotes` guarda **snapshot** de preço      | **Implementado no Prompt 09**: a linha guarda o valor proposto, e a revisão preserva cada versão (ADR-041) |
 | `payments` usa **DECIMAL exato**           | Nunca float (item 65)                                                                                      |
 | `attachments` guarda **chave de storage**  | Binário não vai para tabela de negócio (item 60)                                                           |
