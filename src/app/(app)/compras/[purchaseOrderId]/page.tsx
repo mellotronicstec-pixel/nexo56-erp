@@ -45,6 +45,12 @@ import {
   savePurchaseDraftAction,
   transitionPurchaseOrderAction,
 } from '../actions';
+import { Money } from '@/core/money/money';
+import { todayIn } from '@/core/time/civil-date';
+import { listReceiptsWithPayableStatus } from '@/modules/finance/application/finance-integration-service';
+import { formatTitleNumber } from '@/modules/finance/domain/finance';
+import { createPurchasePayableAction } from '../../financeiro/actions';
+import { PayablesSection } from './payables-section';
 import { PurchaseDraftEditor } from './draft-editor';
 import { PurchaseOrderWorkflow } from './order-workflow';
 import { ReceivePanel } from './receive-panel';
@@ -99,10 +105,21 @@ export default async function PurchaseOrderPage({ params }: PageProps) {
     cancel: hasPermission(context, PERMISSIONS.PURCHASES_CANCEL),
   };
 
-  const [partOptions, openNeeds, locations] = await Promise.all([
+  /**
+   * O FINANCEIRO E OPCIONAL (Prompt 12, itens 69 e 91). Sem a feature ou sem
+   * `finance.view`, a secao nao existe e o pedido continua inteiro — receber
+   * mercadoria nunca dependeu de haver modulo financeiro.
+   */
+  const verFinanceiro = hasPermission(context, PERMISSIONS.FINANCE_VIEW);
+  const gerarContaAPagar = hasPermission(context, PERMISSIONS.FINANCE_PAYABLES_MANAGE);
+
+  const [partOptions, openNeeds, locations, recebimentosComConta] = await Promise.all([
     editavel && can.update ? searchPartsForPicker(context, '', 100) : Promise.resolve([]),
     editavel && can.update ? listOpenNeedsForUnit(context, order.unitId) : Promise.resolve([]),
     recebivel && can.receive ? listLocationsForUnit(context, order.unitId) : Promise.resolve([]),
+    verFinanceiro
+      ? listReceiptsWithPayableStatus(context, order.id)
+      : Promise.resolve([] as Awaited<ReturnType<typeof listReceiptsWithPayableStatus>>),
   ]);
 
   /**
@@ -360,6 +377,48 @@ export default async function PurchaseOrderPage({ params }: PageProps) {
           </CardBody>
         )}
       </Card>
+
+      {/*
+        FINANCEIRO (Prompt 12, itens 33, 34, 37 e 69).
+
+        Fica DEPOIS dos recebimentos porque e essa a ordem dos fatos: a
+        mercadoria chega e so entao existe obrigacao. Gerar ou pagar a conta
+        nao muda a situacao deste pedido, e nada aqui mexe no estoque.
+      */}
+      {verFinanceiro ? (
+        <Card>
+          <CardHeader
+            title="Contas a pagar"
+            description="Uma conta por recebimento. Pagar nao recebe mercadoria, e receber mercadoria nao paga ninguem."
+            headingLevel={2}
+          />
+          <CardBody className="p-0">
+            <PayablesSection
+              purchaseOrderId={order.id}
+              rows={recebimentosComConta.map((linha) => ({
+                receiptId: linha.id,
+                receivedAtLabel: formatador.format(linha.receivedAt),
+                documentNumber: linha.documentNumber,
+                payable: linha.payable
+                  ? {
+                      id: linha.payable.id,
+                      formattedNumber: formatTitleNumber('payable', linha.payable.number),
+                      amount: linha.payable.amount,
+                      settledAmount: linha.payable.settledAmount,
+                      outstanding: Money.parse(linha.payable.amount)
+                        .subtract(Money.parse(linha.payable.settledAmount))
+                        .toString(),
+                      status: linha.payable.status,
+                    }
+                  : null,
+              }))}
+              canCreate={gerarContaAPagar}
+              today={todayIn(context.tenantTimezone)}
+              action={createPurchasePayableAction}
+            />
+          </CardBody>
+        </Card>
+      ) : null}
 
       <Card>
         <CardHeader

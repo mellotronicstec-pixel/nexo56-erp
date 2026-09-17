@@ -83,8 +83,22 @@ async function main(): Promise<void> {
       .limit(1);
 
     if (devTenant) {
+      /**
+       * Os OPCIONAIS ligados no tenant de desenvolvimento, em ordem de
+       * dependencia. Compras depende de Estoque; o Financeiro depende de
+       * Clientes, que e CORE e ja esta ligado.
+       *
+       * A lista e reaplicada a cada seed, fora do `if (created)`: quando um
+       * prompt novo acrescenta um modulo, o tenant de desenvolvimento ja
+       * existe — e uma ativacao que so rodasse na criacao deixaria o modulo
+       * invisivel para quem ja tinha o banco.
+       */
       await enableOptionalFeature(devTenant.id, FEATURES.OPERATIONS_INVENTORY);
-      console.log('[seed] modulo Estoque e pecas habilitado no tenant de desenvolvimento.');
+      await enableOptionalFeature(devTenant.id, FEATURES.OPERATIONS_PURCHASING);
+      await enableOptionalFeature(devTenant.id, FEATURES.FINANCE_CORE);
+      console.log(
+        '[seed] modulos Estoque, Compras e Financeiro habilitados no tenant de desenvolvimento.',
+      );
     }
 
     if (!result.created) {

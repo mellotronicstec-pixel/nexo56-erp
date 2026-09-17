@@ -600,6 +600,136 @@ precise conhecer Compras.
 
 ---
 
+## `financial_accounts` (Prompt 12)
+
+**ONDE** o dinheiro fica. É o único dos três cadastros financeiros que tem saldo
+([ADR-059](../adr/ADR-059-conta-financeira-e-forma-de-pagamento.md)).
+
+| Coluna            | Observação                                                                                 |
+| ----------------- | ------------------------------------------------------------------------------------------ |
+| `unit_id`         | **anulável**. Nulo = compartilhada pela empresa; preenchido = serve só aquela loja         |
+| `kind`            | `cash` \| `bank` \| `digital_wallet` \| `clearing` \| `other`. Congela quando há movimento |
+| `current_balance` | **projeção**, não verdade. A verdade é a soma de `financial_movements`                     |
+| `status`          | `active` \| `inactive`. **Não existe exclusão**                                            |
+
+Nasce **sempre** com saldo zero: saldo não se digita.
+`uq_fin_account_id_tenant UNIQUE (id, tenant_id)` é o alvo composto das FKs.
+
+---
+
+## `payment_methods` (Prompt 12)
+
+**COMO** o dinheiro se moveu. Não tem saldo — é vocabulário de balcão.
+
+`kind`: `cash`, `pix`, `debit_card`, `credit_card`, `bank_transfer`, `boleto`,
+`other`. Pertence ao TENANT: a forma de pagamento é a mesma em todas as lojas.
+
+Registrar "PIX" aqui **não integra com banco nenhum**.
+
+---
+
+## `financial_categories` (Prompt 12)
+
+**POR QUE** entrou ou saiu. `kind`: `revenue` | `expense`.
+Agrupa, nunca bloqueia: título sem categoria é válido.
+
+---
+
+## `financial_titles` (Prompt 12)
+
+A obrigação. Uma tabela para as duas direções
+([ADR-053](../adr/ADR-053-titulo-unico-com-direcao.md)).
+
+| Coluna                                       | Observação                                                                                         |
+| -------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `direction`                                  | `receivable` \| `payable`. Define contraparte, permissão, prefixo e direção no razão               |
+| `number`                                     | de `tenant_sequences`, sequência por direção. `CR 000042` / `CP 000010`                            |
+| `counterparty_kind`                          | `customer` \| `supplier` \| `other`. Existe **para a CHECK ter um alvo que nenhuma FK toca**       |
+| `customer_id` / `supplier_id` / `payee_name` | exatamente um é preenchido, conforme a direção                                                     |
+| `origin` / `origin_key`                      | `manual` \| `service_order` \| `purchase_receipt`. `UNIQUE (tenant_id, origin_key)` = idempotência |
+| `amount` / `settled_amount`                  | `DECIMAL(14,2)`. `settled_amount` é a soma das parcelas                                            |
+| `due_date`                                   | data civil `VARCHAR(10)`, sem fuso                                                                 |
+| `installment_count`                          | ≥ 1 sempre. À vista é 1                                                                            |
+| `status`                                     | `open` \| `partially_settled` \| `settled` \| `cancelled`. **Não existe `overdue`**                |
+| `version`                                    | concorrência otimista (CAS)                                                                        |
+
+CHECKs: `ck_fin_title_counterparty_direction` (compara **apenas colunas
+simples**, para evitar o erro 1901 do MariaDB), `ck_fin_title_amount_positive`,
+`ck_fin_title_settled_non_negative`, `ck_fin_title_no_over_settlement`,
+`ck_fin_title_installments_positive`.
+
+---
+
+## `financial_installments` (Prompt 12)
+
+**Todo título tem ao menos uma** — à vista é 1 de 1
+([ADR-056](../adr/ADR-056-parcelamento-e-parcela-sempre.md)). Isso elimina o
+`if` "se tem parcela..." de toda consulta e toda tela.
+
+A divisão é em centavos (`bigint`) e a sobra vai para as **primeiras** parcelas.
+CHECK `settled_amount <= amount`.
+
+---
+
+## `financial_settlements` (Prompt 12)
+
+Cada recebimento ou pagamento registrado.
+
+| Coluna              | Observação                                                                |
+| ------------------- | ------------------------------------------------------------------------- |
+| `installment_id`    | a liquidação é **sempre** de uma parcela                                  |
+| `status`            | `confirmed` \| `reversed`. Estorno muda o status, **nunca apaga a linha** |
+| `idempotency_key`   | `UNIQUE (tenant_id, …)`. Duplo clique reencontra em vez de duplicar       |
+| `cash_session_id`   | preenchido quando a conta é caixa em espécie                              |
+| `card_installments` | parcelas combinadas na maquininha. **Registro, não integração**           |
+| `reversal_reason`   | obrigatório no estorno, 5 a 300 caracteres                                |
+
+**Nunca armazena** número de cartão, CVV, senha ou token bancário (item 109).
+
+---
+
+## `cash_sessions` (Prompt 12)
+
+A gaveta aberta de uma unidade
+([ADR-060](../adr/ADR-060-caixa-operacional.md)).
+
+| Coluna                               | Observação                                                            |
+| ------------------------------------ | --------------------------------------------------------------------- |
+| `open_marker`                        | `1` enquanto aberta, `NULL` depois. Existe **só** para o índice único |
+| `opening_amount`                     | contado na gaveta, não adivinhado                                     |
+| `expected_amount` / `counted_amount` | o sistema calcula o primeiro; a pessoa conta o segundo **às cegas**   |
+| `difference_amount`                  | sobra ou falta. **Nunca some**: é dita em voz alta                    |
+
+`uq_cash_session_open UNIQUE (financial_account_id, open_marker)` garante **um
+caixa aberto por conta** — o MySQL trata cada `NULL` como distinto, e é por isso
+que a coluna marcadora existe.
+
+---
+
+## `financial_movements` (Prompt 12)
+
+O razão. **A única tabela do sistema sem `updated_at` e sem `version`** — e isso
+é intencional ([ADR-054](../adr/ADR-054-razao-financeiro-append-only.md)).
+
+| Coluna                    | Observação                                                                   |
+| ------------------------- | ---------------------------------------------------------------------------- |
+| `direction`               | `inflow` \| `outflow`. **O `amount` é sempre positivo**; o sinal é aqui      |
+| `resulting_balance`       | o saldo **depois** deste movimento. Torna o extrato conferível linha a linha |
+| `origin_kind`             | `settlement`, `reversal`, `cash_opening`, `cash_supply`, `cash_withdrawal`   |
+| `reversal_of_movement_id` | `UNIQUE`: um movimento só pode ser estornado **uma vez**                     |
+
+Uma linha nasce e nunca muda. Estorno é **contramovimento**, não `DELETE`. Há
+teste de boundary que falha se qualquer arquivo escrever `UPDATE`/`DELETE` aqui.
+
+---
+
+## `financial_title_timeline` (Prompt 12)
+
+A história do título em português, com autor e instante. Não é o log técnico: é
+o que a pessoa lê para entender por que o saldo é esse.
+
+---
+
 ## Tipos monetários e de quantidade
 
 Definidos como convenção em `src/core/db/columns.ts`, aplicáveis assim que

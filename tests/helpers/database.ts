@@ -24,6 +24,15 @@ const TABLES_IN_DELETE_ORDER = [
   // obrigatoria, mas manter a lista coerente evita que um esquecimento aqui
   // vire dado vazando de um teste para outro — foi o que aconteceu com
   // `service_order_tasks`, ausente desde o Prompt 08.
+  'financial_movements',
+  'financial_settlements',
+  'financial_title_timeline',
+  'financial_installments',
+  'financial_titles',
+  'cash_sessions',
+  'financial_accounts',
+  'payment_methods',
+  'financial_categories',
   'quote_timeline',
   'quote_items',
   'quotes',

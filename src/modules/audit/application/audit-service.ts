@@ -128,6 +128,19 @@ export const AUDIT_ACTIONS = {
   PURCHASE_ORDER_PLACED: 'purchase_order.placed',
   PURCHASE_ORDER_CANCELLED: 'purchase_order.cancelled',
   PURCHASE_RECEIPT_CREATED: 'purchase_receipt.created',
+
+  // --- Prompt 12: financeiro ------------------------------------------------
+  FINANCIAL_TITLE_CREATED: 'financial_title.created',
+  FINANCIAL_TITLE_UPDATED: 'financial_title.updated',
+  FINANCIAL_TITLE_CANCELLED: 'financial_title.cancelled',
+  FINANCIAL_SETTLEMENT_CREATED: 'financial_settlement.created',
+  FINANCIAL_SETTLEMENT_REVERSED: 'financial_settlement.reversed',
+  CASH_SESSION_OPENED: 'cash_session.opened',
+  CASH_SESSION_CLOSED: 'cash_session.closed',
+  CASH_ADJUSTMENT_RECORDED: 'cash_adjustment.recorded',
+  FINANCIAL_ACCOUNT_CHANGED: 'financial_account.changed',
+  PAYMENT_METHOD_CHANGED: 'payment_method.changed',
+  FINANCIAL_CATEGORY_CHANGED: 'financial_category.changed',
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];

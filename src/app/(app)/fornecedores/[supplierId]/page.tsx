@@ -37,6 +37,9 @@ import {
 } from '@/modules/purchasing/domain/purchasing';
 import { hasPermission } from '@/modules/tenancy/domain/tenant-context';
 import { changeSupplierStatusAction, updateSupplierAction } from '../../compras/actions';
+import { checkAccess } from '@/modules/features/application/effective-access';
+import { summarizeSupplierFinance } from '@/modules/finance/application/finance-queries';
+import { FinanceSummaryCard } from '../../financeiro/finance-summary';
 import { SupplierForm } from '../supplier-form';
 import { SupplierStatusForm } from './supplier-status';
 
@@ -101,6 +104,26 @@ export default async function SupplierPage({ params }: PageProps) {
   const canManage = hasPermission(context, PERMISSIONS.SUPPLIERS_MANAGE);
   const documentoFormatado = documento(supplier.documentType, supplier.documentDigits);
   const endereco = enderecoEmUmaLinha(supplier);
+
+  /**
+   * Situacao financeira do fornecedor (Prompt 12, item 71).
+   *
+   * ISTO NAO E HISTORICO DE PRECOS. E o que a loja ainda deve a ele: contas a
+   * pagar em aberto e vencidas. Preco de peca continua morando em Compras — e
+   * juntar as duas coisas nesta ficha faria a pessoa negociar desconto olhando
+   * para um numero que e divida, nao custo.
+   *
+   * O Financeiro e OPCIONAL: sem a feature ou sem `finance.view`, a secao nao
+   * existe e a ficha continua inteira.
+   */
+  const financeAccess = await checkAccess(context, {
+    featureKey: FEATURES.FINANCE_CORE,
+    permission: PERMISSIONS.FINANCE_VIEW,
+  });
+
+  const financeSummary = financeAccess.allowed
+    ? await summarizeSupplierFinance(context, supplier.id)
+    : null;
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -313,6 +336,15 @@ export default async function SupplierPage({ params }: PageProps) {
           </CardBody>
         )}
       </Card>
+
+      {financeSummary ? (
+        <FinanceSummaryCard
+          title="Contas a pagar deste fornecedor"
+          description="O que a loja ainda deve a ele. Nao e historico de precos: preco de peca mora em Compras."
+          summary={financeSummary}
+          emptyText="Nenhuma conta a pagar registrada para este fornecedor."
+        />
+      ) : null}
 
       {canManage ? (
         <section className="space-y-4">

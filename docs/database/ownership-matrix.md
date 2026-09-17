@@ -160,6 +160,27 @@ ativa da sessão: quem recebe cria saldo naquela unidade e só naquela
 
 ---
 
+## Financeiro (Prompt 12)
+
+| Entidade                   | Dono                                  | Por quê                                                                                                                         |
+| -------------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `financial_accounts`       | **TENANT** com `unit_id` **anulável** | a conta bancária é da empresa; o caixa da gaveta é da loja ([ADR-059](../adr/ADR-059-conta-financeira-e-forma-de-pagamento.md)) |
+| `payment_methods`          | **TENANT**                            | "PIX" é a mesma coisa em todas as lojas                                                                                         |
+| `financial_categories`     | **TENANT**                            | o plano de categorias é da empresa                                                                                              |
+| `financial_titles`         | **TENANT + UNIT**                     | o financeiro de uma loja não é o da outra; cobrar em qual endereço importa                                                      |
+| `financial_installments`   | **TENANT** (via título)               | a parcela não existe sem o título                                                                                               |
+| `financial_settlements`    | **TENANT** (via título)               | idem                                                                                                                            |
+| `cash_sessions`            | **TENANT + UNIT**                     | a gaveta é física, e fica numa loja                                                                                             |
+| `financial_movements`      | **TENANT + UNIT**                     | o extrato responde "quanto entrou aqui"                                                                                         |
+| `financial_title_timeline` | **TENANT** (via título)               | a história pertence ao título                                                                                                   |
+
+O título pertence à unidade **em que foi criado** — não à unidade ativa da
+sessão de quem o liquida. A autorização de liquidação é conferida **na unidade
+do título**, e a conta usada precisa servir aquela unidade
+([ADR-053](../adr/ADR-053-titulo-unico-com-direcao.md)).
+
+---
+
 ## Regra de `unit_id` obrigatório (item 11)
 
 Entidade cuja operação pertence necessariamente a uma unidade:
@@ -167,7 +188,8 @@ Entidade cuja operação pertence necessariamente a uma unidade:
 - **Ordem de Serviço** (`service_orders`, Prompt 07) e **recebimento de
   equipamento** (`equipment_intakes`, Prompt 06) — ambos implementados
 - Estoque físico e movimentação de estoque
-- Caixa e movimentação operacional por unidade
+- **Caixa, título financeiro e movimento do razão** (`cash_sessions`,
+  `financial_titles`, `financial_movements`, Prompt 12) — implementados
 - **Compra e recebimento** (`purchase_orders`, `purchase_receipts`,
   `purchase_needs`, Prompt 11) — implementados
 - Agenda operacional vinculada a unidade

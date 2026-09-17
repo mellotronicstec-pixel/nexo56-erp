@@ -11,10 +11,9 @@ import { FEATURES } from '@/modules/features/domain/catalog';
  * (Prompt 00, item 118).
  *
  * O menu NAO lista modulos inexistentes (Prompt 01, itens 56 e 82; Prompt 04,
- * item 117): Compras, Financeiro, Garantias, Agenda e BI entrarao AQUI, cada um no seu
- * prompt,
- * com a feature e a permissao correspondentes. A estrutura de secoes ja
- * acomoda esse crescimento sem reescrita.
+ * item 117): Garantias, Agenda e BI entrarao AQUI, cada um no seu prompt, com
+ * a feature e a permissao correspondentes. A estrutura de secoes ja acomoda
+ * esse crescimento sem reescrita.
  */
 
 /**
@@ -37,7 +36,9 @@ export type NavIconKey =
   | 'service-order'
   | 'inventory'
   | 'supplier'
-  | 'purchase';
+  | 'purchase'
+  | 'finance'
+  | 'cash-register';
 
 export interface NavItem {
   href: string;
@@ -117,6 +118,38 @@ export const NAV_SECTIONS: readonly NavSection[] = [
         featureKey: FEATURES.OPERATIONS_PURCHASING,
         permission: PERMISSIONS.PURCHASES_VIEW,
         icon: 'purchase',
+      },
+    ],
+  },
+  {
+    /**
+     * O Financeiro tem SECAO PROPRIA, nao um item dentro de Operacao (Prompt
+     * 12, item 62).
+     *
+     * Nao e capricho de organograma: quem mexe em dinheiro raramente e quem
+     * mexe em bancada. Separar as secoes deixa o menu honesto para o tecnico
+     * que so tem `finance.view` — ele ve o bloco financeiro pequeno e sabe
+     * que o resto nao e com ele — e para o financeiro que nao abre OS.
+     *
+     * Sao DOIS itens porque sao DUAS permissoes: `finance.view` abre as
+     * listas; o Caixa exige `finance.cash.open`, que nem todo mundo que
+     * consulta um titulo precisa ter.
+     */
+    title: 'Financeiro',
+    items: [
+      {
+        href: '/financeiro',
+        label: 'Financeiro',
+        featureKey: FEATURES.FINANCE_CORE,
+        permission: PERMISSIONS.FINANCE_VIEW,
+        icon: 'finance',
+      },
+      {
+        href: '/financeiro/caixa',
+        label: 'Caixa',
+        featureKey: FEATURES.FINANCE_CORE,
+        permission: PERMISSIONS.FINANCE_CASH_OPEN,
+        icon: 'cash-register',
       },
     ],
   },

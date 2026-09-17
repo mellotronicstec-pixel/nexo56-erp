@@ -69,6 +69,12 @@ import {
   releaseReservationAction,
   reservePartAction,
 } from '../../estoque/actions';
+import { findServiceOrderCharge } from '@/modules/finance/application/finance-integration-service';
+import { formatTitleNumber } from '@/modules/finance/domain/finance';
+import { Money } from '@/core/money/money';
+import { todayIn } from '@/core/time/civil-date';
+import { createServiceOrderChargeAction } from '../../financeiro/actions';
+import { FinanceSection } from './finance-section';
 import { PartsSection } from './parts-section';
 import { QuoteSection } from './orcamentos/quote-section';
 
@@ -228,6 +234,28 @@ export default async function ServiceOrderDetailPage({
     unitId: order.unitId,
   });
 
+  /**
+   * FINANCEIRO E OPCIONAL (Prompt 12, itens 29, 68 e 91).
+   *
+   * Duas permissoes, de proposito: `finance.view` mostra a secao; criar a
+   * cobranca exige `finance.receivables.manage`. O tecnico que acompanha o
+   * atendimento ve quanto falta receber sem poder emitir cobranca, e isso e o
+   * arranjo comum numa loja de tres pessoas.
+   */
+  const canViewFinanceDecision = await can(context, {
+    permission: PERMISSIONS.FINANCE_VIEW,
+    featureKey: FEATURES.FINANCE_CORE,
+    unitId: order.unitId,
+  });
+
+  const canChargeDecision = canViewFinanceDecision.allowed
+    ? await can(context, {
+        permission: PERMISSIONS.FINANCE_RECEIVABLES_MANAGE,
+        featureKey: FEATURES.FINANCE_CORE,
+        unitId: order.unitId,
+      })
+    : { allowed: false };
+
   const [members, preparationDone, quoteList, quoteNumberFormat, reservationList, partChoices] =
     await Promise.all([
       canAssignDecision.allowed ? listUnitMembers(context, order.unitId) : Promise.resolve([]),
@@ -245,6 +273,18 @@ export default async function ServiceOrderDetailPage({
         : Promise.resolve([]),
       canReserveDecision.allowed ? searchPartsForPicker(context, '', 50) : Promise.resolve([]),
     ]);
+
+  /** A cobranca ja existente, quando ha: e ela que a secao mostra. */
+  const charge = canViewFinanceDecision.allowed
+    ? await findServiceOrderCharge(context, order.id)
+    : null;
+
+  /**
+   * O valor sugerido sai do orcamento APROVADO. Nao e o maior orcamento nem o
+   * ultimo: e o que o cliente aceitou. Sem orcamento aprovado nao ha sugestao,
+   * e a pessoa informa o valor — nao se inventa um numero.
+   */
+  const approvedQuote = quoteList.find((quote) => quote.status === 'approved') ?? null;
 
   const formatter = new Intl.DateTimeFormat('pt-BR', {
     dateStyle: 'short',
@@ -511,6 +551,48 @@ export default async function ServiceOrderDetailPage({
             reserveAction={reservePartAction}
             releaseAction={releaseReservationAction}
             consumeAction={consumeReservationAction}
+          />
+        </Section>
+      ) : null}
+
+      {/*
+        FINANCEIRO (Prompt 12, itens 29 e 68).
+
+        A secao fica DEPOIS de pecas e ANTES de compras porque e essa a ordem
+        do atendimento: orca, separa a peca, e so entao cobra. Ela NUNCA muda
+        a situacao da Ordem de Servico — o Financeiro nao escreve em
+        `service_orders`, e pagar nao e a mesma coisa que retirar o aparelho.
+      */}
+      {canViewFinanceDecision.allowed ? (
+        <Section
+          id="financeiro"
+          title="Financeiro"
+          description="Cobranca deste atendimento. Gerar, receber ou quitar nao muda a situacao da Ordem de Servico."
+        >
+          <FinanceSection
+            serviceOrderId={order.id}
+            charge={
+              charge
+                ? {
+                    id: charge.id,
+                    number: charge.number,
+                    amount: charge.amount,
+                    settledAmount: charge.settledAmount,
+                    outstanding: Money.parse(charge.amount)
+                      .subtract(Money.parse(charge.settledAmount))
+                      .toString(),
+                    status: charge.status,
+                    dueDate: charge.dueDate,
+                    installmentCount: charge.installmentCount,
+                    formattedNumber: formatTitleNumber('receivable', charge.number),
+                  }
+                : null
+            }
+            suggestedAmount={approvedQuote?.total ?? null}
+            suggestedDescription={`Servico da OS ${number}`}
+            today={todayIn(context.tenantTimezone)}
+            canCreate={canChargeDecision.allowed}
+            action={createServiceOrderChargeAction}
           />
         </Section>
       ) : null}

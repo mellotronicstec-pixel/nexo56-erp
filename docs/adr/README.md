@@ -70,3 +70,12 @@ substitui, e o antigo passa a `Substituído por ADR-XXX`.
 | [050](ADR-050-recebimento-parcial-e-o-caso-normal.md)                      | Recebimento parcial é o caso normal                   | Aceito |
 | [051](ADR-051-custo-comercial-e-custo-de-estoque.md)                       | Frete e desconto ficam no pedido, não no custo        | Aceito |
 | [052](ADR-052-fornecedor-pertence-ao-tenant.md)                            | Fornecedor é do tenant; pedido é da unidade           | Aceito |
+| [053](ADR-053-titulo-unico-com-direcao.md)                                 | Um título com direção, não duas tabelas               | Aceito |
+| [054](ADR-054-razao-financeiro-append-only.md)                             | Razão append-only; estorno é contramovimento          | Aceito |
+| [055](ADR-055-vencido-derivado.md)                                         | "Vencido" é derivado, nunca uma coluna                | Aceito |
+| [056](ADR-056-parcelamento-e-parcela-sempre.md)                            | Todo título tem parcelas; sobra nas primeiras         | Aceito |
+| [057](ADR-057-cobranca-nasce-de-ato-humano.md)                             | A cobrança da OS nasce de um ato humano               | Aceito |
+| [058](ADR-058-uma-conta-a-pagar-por-recebimento.md)                        | Conta a pagar por recebimento, não por pedido         | Aceito |
+| [059](ADR-059-conta-financeira-e-forma-de-pagamento.md)                    | Conta, forma de pagamento e categoria                 | Aceito |
+| [060](ADR-060-caixa-operacional.md)                                        | Caixa: um aberto por conta, contagem às cegas         | Aceito |
+| [061](ADR-061-liquidacao-idempotente-e-sem-over-settlement.md)             | Liquidação idempotente, sem over-settlement           | Aceito |

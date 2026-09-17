@@ -130,3 +130,17 @@ e listas. Coberto por teste.
 11. **Custo de compra nunca vai para log** (Prompt 11). O que a empresa paga ao
     fornecedor é informação comercial sensível: o log estruturado registra
     módulo, operação e identificador do pedido, nunca valores.
+12. **Dado de cartão NUNCA é armazenado** (Prompt 12, item 109). Não há coluna
+    para número de cartão, CVV, senha ou token bancário — e não é "ainda não
+    implementamos": é proibição. O que existe é `card_installments` (um inteiro,
+    o parcelamento combinado na maquininha) e `reference` (número do
+    comprovante). Há teste de componente que varre os atributos `name` do painel
+    de liquidação e falha se algum deles parecer dado de cartão.
+13. **Valor financeiro não vai para log nem para payload de evento** (Prompt 12).
+    Quanto um cliente deve é informação sensível do titular, e quanto a loja
+    fatura é informação comercial da empresa. Os eventos financeiros levam
+    identificadores (`titleId`, `settlementId`, `unitId`) e, quando indispensável
+    para o consumidor, a direção — nunca o montante.
+14. **O motivo de estorno e de cancelamento é texto livre escrito por uma
+    pessoa** (Prompt 12). Ele vai para o histórico do título e para a auditoria,
+    onde a autorização o protege — nunca para o log da aplicação.

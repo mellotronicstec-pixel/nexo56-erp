@@ -105,11 +105,42 @@ export const EVENT_TYPES = {
   /**
    * A mercadoria chegou e virou saldo.
    *
-   * E o gancho que o Prompt 12 vai consumir para gerar Conta a Pagar. HOJE NAO
-   * HA CONSUMIDOR: nenhum titulo financeiro e criado, nenhum pagamento e
-   * registrado (itens 42 e 88).
+   * O Prompt 12 tornou este o MOMENTO em que a obrigacao financeira nasce
+   * (ADR-057) — mas a criacao continua sendo uma ACAO DE PESSOA na ficha do
+   * pedido, e nao um consumidor automatico deste evento. O evento segue sendo
+   * o registro do fato; quem confere a nota e quem decide pagar.
    */
   PURCHASE_RECEIPT_CREATED: 'PURCHASE_RECEIPT_CREATED',
+
+  // --- Prompt 12: financeiro ------------------------------------------------
+  /**
+   * Uma OBRIGACAO nasceu. Nao ha dinheiro nenhum envolvido ainda: um titulo e
+   * um direito ou um dever, e a liquidacao e outro fato, com outra data.
+   */
+  RECEIVABLE_CREATED: 'RECEIVABLE_CREATED',
+  PAYABLE_CREATED: 'PAYABLE_CREATED',
+  FINANCIAL_TITLE_CANCELLED: 'FINANCIAL_TITLE_CANCELLED',
+  /** Dinheiro do cliente ENTROU. */
+  CUSTOMER_PAYMENT_RECEIVED: 'CUSTOMER_PAYMENT_RECEIVED',
+  /** Dinheiro da empresa SAIU. */
+  SUPPLIER_PAYMENT_MADE: 'SUPPLIER_PAYMENT_MADE',
+  /** Uma liquidacao foi desfeita por contramovimento. Nada foi apagado. */
+  FINANCIAL_SETTLEMENT_REVERSED: 'FINANCIAL_SETTLEMENT_REVERSED',
+  CASH_SESSION_OPENED: 'CASH_SESSION_OPENED',
+  CASH_SESSION_CLOSED: 'CASH_SESSION_CLOSED',
+  CASH_SUPPLY_RECORDED: 'CASH_SUPPLY_RECORDED',
+  CASH_WITHDRAWAL_RECORDED: 'CASH_WITHDRAWAL_RECORDED',
+  /**
+   * TODA a cobranca de uma Ordem de Servico foi liquidada (item 79).
+   *
+   * Publicado UMA vez, quando o ultimo titulo daquela OS chega a saldo zero —
+   * nunca a cada recebimento parcial. E o gancho do Prompt 13 (Garantias),
+   * para o dia em que o pagamento final disparar a documentacao de garantia.
+   *
+   * HOJE NAO HA CONSUMIDOR: nenhuma garantia e criada, nenhum certificado e
+   * emitido, e a situacao da Ordem de Servico NAO muda por causa dele.
+   */
+  SERVICE_ORDER_FINANCIAL_SETTLED: 'SERVICE_ORDER_FINANCIAL_SETTLED',
 } as const;
 
 export type EventType = (typeof EVENT_TYPES)[keyof typeof EVENT_TYPES];

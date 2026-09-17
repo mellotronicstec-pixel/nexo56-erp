@@ -20,13 +20,15 @@ testes próprios — nunca como placeholder (Prompt 01, itens 8 e 82).
 
 ## De negócio
 
-| Módulo           | Prompt | Responsabilidade                                                                   | Tabelas                                                                                                                                        |
-| ---------------- | ------ | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `customers`      | 05     | pessoas e empresas atendidas, contatos e endereços                                 | `customers`, `customer_contacts`, `customer_addresses`                                                                                         |
-| `equipment`      | 06     | aparelhos, recebimento, acessórios, inspeção, fotos e leitura de etiqueta          | `equipment`, `equipment_intakes`, `equipment_intake_accessories`, `equipment_intake_conditions`, `equipment_media`, `equipment_label_readings` |
-| `service-orders` | 07–08  | abertura, numeração, vínculos, ficha, histórico e **workflow** da Ordem de Serviço | `service_orders`, `service_order_timeline`, `service_order_tasks`                                                                              |
-| `quotes`         | 09     | propostas comerciais da OS: itens, valores, envio, aprovação, recusa e revisões    | `quotes`, `quote_items`, `quote_timeline`                                                                                                      |
-| `inventory`      | 10     | catálogo de peças, localizações, saldos, ledger, reservas e transferências         | `parts`, `stock_locations`, `stock_balances`, `stock_movements`, `stock_reservations`, `stock_transfers`                                       |
+| Módulo           | Prompt | Responsabilidade                                                                   | Tabelas                                                                                                                                                                                                             |
+| ---------------- | ------ | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `customers`      | 05     | pessoas e empresas atendidas, contatos e endereços                                 | `customers`, `customer_contacts`, `customer_addresses`                                                                                                                                                              |
+| `equipment`      | 06     | aparelhos, recebimento, acessórios, inspeção, fotos e leitura de etiqueta          | `equipment`, `equipment_intakes`, `equipment_intake_accessories`, `equipment_intake_conditions`, `equipment_media`, `equipment_label_readings`                                                                      |
+| `service-orders` | 07–08  | abertura, numeração, vínculos, ficha, histórico e **workflow** da Ordem de Serviço | `service_orders`, `service_order_timeline`, `service_order_tasks`                                                                                                                                                   |
+| `quotes`         | 09     | propostas comerciais da OS: itens, valores, envio, aprovação, recusa e revisões    | `quotes`, `quote_items`, `quote_timeline`                                                                                                                                                                           |
+| `inventory`      | 10     | catálogo de peças, localizações, saldos, ledger, reservas e transferências         | `parts`, `stock_locations`, `stock_balances`, `stock_movements`, `stock_reservations`, `stock_transfers`                                                                                                            |
+| `purchasing`     | 11     | fornecedores, necessidades, pedidos, recebimento parcial e histórico de custo      | `suppliers`, `supplier_contacts`, `supplier_parts`, `purchase_price_history`, `purchase_needs`, `purchase_orders`, `purchase_order_items`, `purchase_receipts`, `purchase_receipt_items`, `purchase_order_timeline` |
+| `finance`        | 12     | contas a receber e a pagar, parcelas, liquidação, estorno, razão e caixa           | `financial_accounts`, `payment_methods`, `financial_categories`, `financial_titles`, `financial_installments`, `financial_settlements`, `cash_sessions`, `financial_movements`, `financial_title_timeline`          |
 
 O `equipment` usa também a abstração de armazenamento de arquivos
 (`core/storage`), introduzida no Prompt 06: os bytes das fotos ficam fora do
@@ -51,7 +53,17 @@ equipment      ──→ customers, tenancy, access-control, features, audit, ev
 service-orders ──→ customers, equipment, tenancy (sequencias), access-control, features, audit, events
 quotes         ──→ service-orders (workflow + leitura), tenancy (sequencias), money, access-control, features, audit, events
 inventory      ──→ service-orders (leitura + linha do tempo), tenancy (sequencias), money, quantity, access-control, features, audit, events
+purchasing     ──→ inventory (primitiva de entrada), service-orders (leitura), tenancy (sequencias), money, quantity, access-control, features, audit, events
+finance        ──→ service-orders, quotes, purchasing, customers (LEITURA apenas), tenancy (sequencias), money, access-control, features, audit, events
 ```
+
+`finance` lê os módulos operacionais e **nunca escreve neles**. Nenhum deles
+importa `finance`: as seções financeiras na ficha da OS, do pedido de compra, do
+cliente e do fornecedor vivem na camada de páginas, como as demais seções que
+cruzam módulos. O teste de boundary falha se `service-orders`, `quotes`,
+`inventory` ou `purchasing` importarem de `finance`, e também se `core`
+importar — com a única exceção de `core/db/schema.ts`, o barril do Drizzle, que
+por construção reexporta o schema de todos os módulos e nunca um serviço.
 
 `inventory` **nunca** importa `quotes`, e `quotes/application` **nunca** importa
 `inventory`: a única ponte é a FK `quote_items.part_id → parts`, declarada no

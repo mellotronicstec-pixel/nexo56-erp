@@ -1419,6 +1419,328 @@ describe('upgrade incremental entre prompts', () => {
     }
   });
 
+  it('leva um banco do Prompt 11, com compras e estoque, ate o Prompt 12 sem perda', async () => {
+    const stepDb = 'nexo56_migration_step12_test';
+    await adminConnection.query(`DROP DATABASE IF EXISTS \`${stepDb}\``);
+    await adminConnection.query(
+      `CREATE DATABASE \`${stepDb}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`,
+    );
+
+    const folder = buildFolderUpTo('0009');
+    const connection = await mysql.createConnection({
+      uri: urlForDatabase(stepDb),
+      timezone: 'Z',
+      multipleStatements: true,
+    });
+
+    try {
+      // --- banco no estado do Prompt 11 --------------------------------------
+      await migrate(drizzle(connection), { migrationsFolder: folder });
+
+      const [beforeTables] = await connection.query<mysql.RowDataPacket[]>('SHOW TABLES');
+      const beforeNames = beforeTables.map((row) => Object.values(row)[0] as string);
+      expect(beforeNames).toContain('purchase_orders');
+      expect(beforeNames).toContain('stock_movements');
+      expect(beforeNames).not.toContain('financial_titles');
+
+      await connection.query(`
+        INSERT INTO plans (id, \`key\`, name, description, is_internal, created_at, updated_at)
+        VALUES ('plan-p11', 'internal', 'Plano interno', '', 1, NOW(3), NOW(3));
+
+        INSERT INTO tenants (id, slug, name, status, timezone, plan_id, created_at, updated_at)
+        VALUES ('tenant-p11', 'empresa-p11', 'Empresa P11', 'active', 'America/Sao_Paulo', 'plan-p11', NOW(3), NOW(3)),
+               ('tenant-p11b', 'empresa-p11b', 'Empresa P11B', 'active', 'UTC', 'plan-p11', NOW(3), NOW(3));
+
+        INSERT INTO units (id, tenant_id, name, status, created_at, updated_at)
+        VALUES ('unit-p11', 'tenant-p11', 'Unidade P11', 'active', NOW(3), NOW(3)),
+               ('unit-p11b', 'tenant-p11', 'Unidade P11 Norte', 'active', NOW(3), NOW(3)),
+               ('unit-p11x', 'tenant-p11b', 'Unidade de outra empresa', 'active', NOW(3), NOW(3));
+
+        INSERT INTO users (id, tenant_id, email, name, password_hash, status, created_at, updated_at)
+        VALUES ('user-p11', 'tenant-p11', 'p11@empresa.invalid', 'Usuario P11', 'scrypt$65536$8$2$c2FsdA==$aGFzaA==', 'active', NOW(3), NOW(3));
+
+        INSERT INTO customers
+          (id, tenant_id, kind, name, name_normalized, status, created_at, updated_at, created_by)
+        VALUES ('cli-p11', 'tenant-p11', 'individual', 'Carla Souza', 'carla souza', 'active', NOW(3), NOW(3), 'user-p11'),
+               ('cli-p11x', 'tenant-p11b', 'individual', 'Cliente alheio', 'cliente alheio', 'active', NOW(3), NOW(3), 'user-p11');
+
+        INSERT INTO equipment
+          (id, tenant_id, customer_id, kind, kind_normalized, voltage, status,
+           created_at, updated_at, created_by)
+        VALUES ('eq-p11', 'tenant-p11', 'cli-p11', 'Televisor', 'televisor', 'bivolt', 'active',
+                NOW(3), NOW(3), 'user-p11');
+
+        INSERT INTO service_orders
+          (id, tenant_id, unit_id, number, customer_id, equipment_id, status, customer_report,
+           opened_at, version, status_changed_at, created_by, created_at, updated_at)
+        VALUES
+          ('so-p11', 'tenant-p11', 'unit-p11', 1, 'cli-p11', 'eq-p11', 'awaiting_repair',
+           'Nao liga.', NOW(3), 4, NOW(3), 'user-p11', NOW(3), NOW(3)),
+          ('so-p11b', 'tenant-p11', 'unit-p11b', 2, 'cli-p11', 'eq-p11', 'in_repair',
+           'Sem som.', NOW(3), 2, NOW(3), 'user-p11', NOW(3), NOW(3));
+
+        INSERT INTO quotes
+          (id, tenant_id, unit_id, service_order_id, number, revision, status,
+           subtotal, discount, total, version, created_by, created_at, updated_at)
+        VALUES ('orc-p11', 'tenant-p11', 'unit-p11', 'so-p11', 1, 1, 'approved',
+                '900.00', '0.00', '900.00', 2, 'user-p11', NOW(3), NOW(3));
+
+        INSERT INTO parts
+          (id, tenant_id, code, code_normalized, name, name_search, unit_of_measure, status,
+           version, created_at, updated_at, created_by)
+        VALUES ('peca-p11', 'tenant-p11', 'TELA-01', 'TELA01', 'Tela LCD', 'tela lcd', 'unit',
+                'active', 1, NOW(3), NOW(3), 'user-p11');
+
+        INSERT INTO stock_balances
+          (id, tenant_id, unit_id, part_id, on_hand, reserved, minimum_quantity, average_cost,
+           version, created_at, updated_at)
+        VALUES ('saldo-p11', 'tenant-p11', 'unit-p11', 'peca-p11', '10.0000', '0.0000', '2.0000',
+                '100.00', 1, NOW(3), NOW(3));
+
+        INSERT INTO stock_movements
+          (id, tenant_id, unit_id, part_id, type, quantity, resulting_on_hand, unit_cost,
+           total_cost, origin_kind, reference, occurred_at, created_at)
+        VALUES ('mov-p11', 'tenant-p11', 'unit-p11', 'peca-p11', 'receipt', '10.0000', '10.0000',
+                '100.00', '1000.00', 'purchase_order', 'PC 000001', NOW(3), NOW(3));
+
+        INSERT INTO suppliers
+          (id, tenant_id, kind, name, name_search, status, version, created_at, updated_at)
+        VALUES ('forn-p11', 'tenant-p11', 'company', 'Distribuidora P11', 'distribuidora p11',
+                'active', 1, NOW(3), NOW(3));
+
+        INSERT INTO purchase_needs
+          (id, tenant_id, unit_id, part_id, quantity, ordered_quantity, received_quantity,
+           origin, status, version, created_by, created_at, updated_at)
+        VALUES ('nec-p11', 'tenant-p11', 'unit-p11', 'peca-p11', '10.0000', '10.0000', '10.0000',
+                'manual', 'fulfilled', 3, 'user-p11', NOW(3), NOW(3));
+
+        INSERT INTO purchase_orders
+          (id, tenant_id, unit_id, supplier_id, number, status, subtotal, discount, freight,
+           other_costs, total, version, created_by, created_at, updated_at)
+        VALUES ('pc-p11', 'tenant-p11', 'unit-p11', 'forn-p11', 1, 'received', '1000.00', '0.00',
+                '0.00', '0.00', '1000.00', 4, 'user-p11', NOW(3), NOW(3));
+
+        INSERT INTO purchase_order_items
+          (id, tenant_id, purchase_order_id, part_id, description, unit_of_measure, position,
+           quantity, received_quantity, unit_cost, total, created_at, updated_at)
+        VALUES ('pci-p11', 'tenant-p11', 'pc-p11', 'peca-p11', 'Tela LCD', 'unit', 1,
+                '10.0000', '10.0000', '100.00', '1000.00', NOW(3), NOW(3));
+
+        INSERT INTO purchase_receipts
+          (id, tenant_id, unit_id, purchase_order_id, received_at, document_number,
+           created_by, created_at, updated_at)
+        VALUES ('rec-p11', 'tenant-p11', 'unit-p11', 'pc-p11', NOW(3), 'NF 4321',
+                'user-p11', NOW(3), NOW(3));
+
+        INSERT INTO purchase_price_history
+          (id, tenant_id, supplier_id, part_id, unit_id, purchase_order_id, purchase_receipt_id,
+           quantity, unit_cost, total_cost, occurred_at, created_at)
+        VALUES ('hist-p11', 'tenant-p11', 'forn-p11', 'peca-p11', 'unit-p11', 'pc-p11', 'rec-p11',
+                '10.0000', '100.00', '1000.00', NOW(3), NOW(3));
+      `);
+
+      // --- upgrade para o Prompt 12 ------------------------------------------
+      await migrate(drizzle(connection), { migrationsFolder: './drizzle' });
+
+      const [afterTables] = await connection.query<mysql.RowDataPacket[]>('SHOW TABLES');
+      const afterNames = afterTables.map((row) => Object.values(row)[0] as string);
+      for (const tabela of [
+        'financial_accounts',
+        'payment_methods',
+        'financial_categories',
+        'financial_titles',
+        'financial_installments',
+        'financial_settlements',
+        'financial_movements',
+        'cash_sessions',
+        'financial_title_timeline',
+      ]) {
+        expect(afterNames).toContain(tabela);
+      }
+
+      /**
+       * NENHUMA TABELA DE CONTABILIDADE OU FISCAL (itens 80 e 82). O Prompt 12
+       * e financeiro OPERACIONAL: nao ha razao contabil, plano de contas, nem
+       * nota fiscal.
+       */
+      for (const proibida of [
+        'accounting_entries',
+        'chart_of_accounts',
+        'general_ledger',
+        'fiscal_invoices',
+        'bank_statements',
+      ]) {
+        expect(afterNames).not.toContain(proibida);
+      }
+
+      // --- TUDO do Prompt 11 continua exatamente onde estava ------------------
+      const preservados: Array<[string, string, Record<string, unknown>]> = [
+        ['service_orders', 'so-p11', { status: 'awaiting_repair', number: 1 }],
+        ['quotes', 'orc-p11', { status: 'approved', total: '900.00' }],
+        ['stock_balances', 'saldo-p11', { on_hand: '10.0000', average_cost: '100.00' }],
+        ['stock_movements', 'mov-p11', { reference: 'PC 000001', origin_kind: 'purchase_order' }],
+        ['suppliers', 'forn-p11', { name: 'Distribuidora P11', status: 'active' }],
+        ['purchase_orders', 'pc-p11', { status: 'received', total: '1000.00' }],
+        ['purchase_order_items', 'pci-p11', { received_quantity: '10.0000' }],
+        ['purchase_receipts', 'rec-p11', { document_number: 'NF 4321' }],
+        ['purchase_price_history', 'hist-p11', { unit_cost: '100.00' }],
+        ['purchase_needs', 'nec-p11', { status: 'fulfilled', received_quantity: '10.0000' }],
+        ['customers', 'cli-p11', { name: 'Carla Souza' }],
+        ['equipment', 'eq-p11', { kind: 'Televisor' }],
+        ['parts', 'peca-p11', { code: 'TELA-01' }],
+      ];
+
+      for (const [tabela, id, esperado] of preservados) {
+        const [linhas] = await connection.query<mysql.RowDataPacket[]>(
+          `SELECT * FROM \`${tabela}\` WHERE id = ?`,
+          [id],
+        );
+        expect(linhas, `${tabela}/${id} sumiu no upgrade`).toHaveLength(1);
+        expect(linhas[0]).toMatchObject(esperado);
+      }
+
+      // --- e o Financeiro ja funciona sobre esse banco -----------------------
+      await connection.query(`
+        INSERT INTO financial_accounts
+          (id, tenant_id, name, name_search, kind, current_balance, status, version,
+           created_by, created_at, updated_at)
+        VALUES ('conta-p12', 'tenant-p11', 'Banco', 'banco', 'bank', '0.00', 'active', 1,
+                'user-p11', NOW(3), NOW(3));
+
+        INSERT INTO payment_methods
+          (id, tenant_id, kind, name, name_search, status, position, version,
+           created_by, created_at, updated_at)
+        VALUES ('metodo-p12', 'tenant-p11', 'pix', 'PIX', 'pix', 'active', 0, 1,
+                'user-p11', NOW(3), NOW(3));
+
+        INSERT INTO financial_titles
+          (id, tenant_id, unit_id, direction, number, counterparty_kind, customer_id,
+           description, origin, origin_key, service_order_id, quote_id, amount, settled_amount,
+           issued_at, due_date, installment_count, status, version, created_by, created_at, updated_at)
+        VALUES ('tit-p12', 'tenant-p11', 'unit-p11', 'receivable', 1, 'customer', 'cli-p11',
+                'Atendimento da OS 000001', 'service_order', 'service_order:so-p11', 'so-p11',
+                'orc-p11', '900.00', '0.00', '2026-09-14', '2026-10-15', 1, 'open', 1,
+                'user-p11', NOW(3), NOW(3));
+
+        INSERT INTO financial_installments
+          (id, tenant_id, unit_id, title_id, number, amount, settled_amount, due_date,
+           status, version, created_at, updated_at)
+        VALUES ('parc-p12', 'tenant-p11', 'unit-p11', 'tit-p12', 1, '900.00', '0.00',
+                '2026-10-15', 'open', 1, NOW(3), NOW(3));
+
+        INSERT INTO financial_settlements
+          (id, tenant_id, unit_id, title_id, installment_id, direction, amount, effective_date,
+           financial_account_id, payment_method_id, status, created_by, created_at, updated_at)
+        VALUES ('liq-p12', 'tenant-p11', 'unit-p11', 'tit-p12', 'parc-p12', 'receivable',
+                '900.00', '2026-09-20', 'conta-p12', 'metodo-p12', 'confirmed',
+                'user-p11', NOW(3), NOW(3));
+
+        INSERT INTO financial_movements
+          (id, tenant_id, unit_id, financial_account_id, direction, amount, resulting_balance,
+           origin_kind, settlement_id, effective_date, occurred_at, actor_id, created_at)
+        VALUES ('mv-p12', 'tenant-p11', 'unit-p11', 'conta-p12', 'inflow', '900.00', '900.00',
+                'settlement', 'liq-p12', '2026-09-20', NOW(3), 'user-p11', NOW(3));
+
+        UPDATE financial_titles SET settled_amount = '900.00', status = 'settled' WHERE id = 'tit-p12';
+        UPDATE financial_installments SET settled_amount = '900.00', status = 'settled' WHERE id = 'parc-p12';
+      `);
+
+      const [titulo] = await connection.query<mysql.RowDataPacket[]>(
+        `SELECT status, settled_amount FROM financial_titles WHERE id = 'tit-p12'`,
+      );
+      expect(titulo[0]).toMatchObject({ status: 'settled', settled_amount: '900.00' });
+
+      // --- as invariantes novas valem no banco -------------------------------
+
+      /** Conta a receber com fornecedor e recusada pela CHECK (item 8). */
+      await expect(
+        connection.query(`
+          INSERT INTO financial_titles
+            (id, tenant_id, unit_id, direction, number, counterparty_kind, supplier_id,
+             description, amount, settled_amount, issued_at, due_date, installment_count,
+             status, version, created_by, created_at, updated_at)
+          VALUES ('tit-x', 'tenant-p11', 'unit-p11', 'receivable', 2, 'supplier', 'forn-p11',
+                  'Invalido', '10.00', '0.00', '2026-09-14', '2026-10-15', 1, 'open', 1,
+                  'user-p11', NOW(3), NOW(3))
+        `),
+      ).rejects.toThrow();
+
+      /** Over-settlement e recusado pela CHECK (item 12). */
+      await expect(
+        connection.query(
+          `UPDATE financial_titles SET settled_amount = '1000.00' WHERE id = 'tit-p12'`,
+        ),
+      ).rejects.toThrow();
+
+      /** Valor zero ou negativo e recusado (item 87). */
+      await expect(
+        connection.query(`
+          INSERT INTO financial_titles
+            (id, tenant_id, unit_id, direction, number, counterparty_kind, customer_id,
+             description, amount, settled_amount, issued_at, due_date, installment_count,
+             status, version, created_by, created_at, updated_at)
+          VALUES ('tit-zero', 'tenant-p11', 'unit-p11', 'receivable', 3, 'customer', 'cli-p11',
+                  'Zero', '0.00', '0.00', '2026-09-14', '2026-10-15', 1, 'open', 1,
+                  'user-p11', NOW(3), NOW(3))
+        `),
+      ).rejects.toThrow();
+
+      /** Cliente de OUTRA empresa e recusado pela FK composta (item 96). */
+      await expect(
+        connection.query(`
+          INSERT INTO financial_titles
+            (id, tenant_id, unit_id, direction, number, counterparty_kind, customer_id,
+             description, amount, settled_amount, issued_at, due_date, installment_count,
+             status, version, created_by, created_at, updated_at)
+          VALUES ('tit-cross', 'tenant-p11', 'unit-p11', 'receivable', 4, 'customer', 'cli-p11x',
+                  'Cross-tenant', '10.00', '0.00', '2026-09-14', '2026-10-15', 1, 'open', 1,
+                  'user-p11', NOW(3), NOW(3))
+        `),
+      ).rejects.toThrow();
+
+      /** Titulo apontando para OS de OUTRA unidade e recusado (item 97). */
+      await expect(
+        connection.query(`
+          INSERT INTO financial_titles
+            (id, tenant_id, unit_id, direction, number, counterparty_kind, customer_id,
+             service_order_id, description, amount, settled_amount, issued_at, due_date,
+             installment_count, status, version, created_by, created_at, updated_at)
+          VALUES ('tit-unit', 'tenant-p11', 'unit-p11', 'receivable', 5, 'customer', 'cli-p11',
+                  'so-p11b', 'Unidade errada', '10.00', '0.00', '2026-09-14', '2026-10-15', 1,
+                  'open', 1, 'user-p11', NOW(3), NOW(3))
+        `),
+      ).rejects.toThrow();
+
+      /** Duas cobrancas para a MESMA OS sao recusadas pela UNIQUE (item 38). */
+      await expect(
+        connection.query(`
+          INSERT INTO financial_titles
+            (id, tenant_id, unit_id, direction, number, counterparty_kind, customer_id,
+             description, origin, origin_key, amount, settled_amount, issued_at, due_date,
+             installment_count, status, version, created_by, created_at, updated_at)
+          VALUES ('tit-dup', 'tenant-p11', 'unit-p11', 'receivable', 6, 'customer', 'cli-p11',
+                  'Duplicada', 'service_order', 'service_order:so-p11', '10.00', '0.00',
+                  '2026-09-14', '2026-10-15', 1, 'open', 1, 'user-p11', NOW(3), NOW(3))
+        `),
+      ).rejects.toThrow();
+
+      /** Movimento com valor negativo e recusado: o sinal vive na direcao (item 15). */
+      await expect(
+        connection.query(`
+          INSERT INTO financial_movements
+            (id, tenant_id, unit_id, financial_account_id, direction, amount, resulting_balance,
+             origin_kind, effective_date, occurred_at, created_at)
+          VALUES ('mv-neg', 'tenant-p11', 'unit-p11', 'conta-p12', 'inflow', '-10.00', '0.00',
+                  'settlement', '2026-09-20', NOW(3), NOW(3))
+        `),
+      ).rejects.toThrow();
+    } finally {
+      await connection.end();
+      rmSync(folder, { recursive: true, force: true });
+      await adminConnection.query(`DROP DATABASE IF EXISTS \`${stepDb}\``);
+    }
+  });
+
   it('cria um banco vazio do zero com todas as migrations', async () => {
     const freshDb = 'nexo56_migration_fresh_test';
     await adminConnection.query(`DROP DATABASE IF EXISTS \`${freshDb}\``);

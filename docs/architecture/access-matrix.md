@@ -104,8 +104,19 @@ Enviar e aprovar exigem, além da permissão de orçamento,
 `service_orders.transition`: as duas ações **movem a Ordem de Serviço**, e a
 permissão descreve o que de fato acontece.
 
-As permissões de operação diária restantes (estoque, caixa) chegam com os
-módulos seguintes.
+O Prompt 12 acrescentou as dez de **Financeiro**, sob a feature OPCIONAL
+`finance.core`. O corte separa três decisões diferentes: **consultar**
+(`finance.view`), **criar a obrigação** (`finance.receivables.manage` /
+`finance.payables.manage`) e **registrar o fato** (`finance.receive` /
+`finance.pay`). Criar um título é decisão comercial — quanto cobrar, em quantas
+vezes; liquidar é registro — o dinheiro entrou. O atendente dá baixa o dia
+inteiro e não deveria emitir uma cobrança de R$ 5.000.
+
+`finance.reverse` é separada porque estornar desfaz um fato já registrado, e as
+três do caixa (`open`, `close`, `adjust`) porque quem abre a gaveta de manhã não
+é necessariamente quem tem autoridade para uma sangria.
+
+Todas são avaliadas **na unidade DO TÍTULO**, nunca na unidade ativa da sessão.
 
 ---
 
@@ -161,6 +172,13 @@ módulos seguintes.
 | `/compras/novo-pedido`                         | `purchases.create` + unidade ativa                                    |
 | `/compras/necessidades`                        | `purchases.view` + unidade ativa                                      |
 | `/compras/[purchaseOrderId]`                   | `purchases.view` + pedido em unidade autorizada                       |
+| `/financeiro`                                  | `finance.view` + feature `finance.core` + unidade ativa               |
+| `/financeiro/contas-a-receber`                 | `finance.view` + unidade ativa                                        |
+| `/financeiro/contas-a-pagar`                   | `finance.view` + unidade ativa                                        |
+| `/financeiro/novo-lancamento`                  | `finance.view`; lançar exige `finance.*.manage`                       |
+| `/financeiro/titulos/[titleId]`                | `finance.view` + título em unidade autorizada                         |
+| `/financeiro/caixa`                            | `finance.cash.open` + unidade ativa                                   |
+| `/financeiro/configuracoes`                    | `finance.settings.manage`                                             |
 | `/acesso-negado`                               | — (página de explicação)                                              |
 
 **`purchases.receive` é verificada na unidade DO PEDIDO**, não na unidade ativa
@@ -180,100 +198,118 @@ exige `users.view`; conceder-lhe um perfil exige `users.manage_access`.
 
 ## 4. Exemplos permitidos
 
-| #   | Situação                                                                                          | Resultado |
-| --- | ------------------------------------------------------------------------------------------------- | --------- |
-| 1   | Administrador da Empresa A abre a lista de usuários da Empresa A                                  | permitido |
-| 2   | Usuário com `users.view` abre a ficha de acesso de um colega do mesmo tenant                      | permitido |
-| 3   | Usuário com `users.manage_access` vincula um colega à Unidade Norte                               | permitido |
-| 4   | Usuário com `users.manage_access` atribui "Técnico" **só na Unidade Norte** a quem tem vínculo lá | permitido |
-| 5   | Usuário com papel TENANT "Financeiro" opera na Unidade Norte **e** na Unidade Sul                 | permitido |
-| 6   | Qualquer usuário autenticado abre `/minha-conta` e encerra as próprias outras sessões             | permitido |
-| 7   | Usuário troca a própria senha informando a senha atual correta                                    | permitido |
-| 8   | Usuário com `sessions.revoke` encerra as sessões de um colega do mesmo tenant                     | permitido |
-| 9   | Usuário com `roles.manage_permissions` concede a um perfil uma permissão **que ele mesmo tem**    | permitido |
-| 10  | Atendente da Unidade Norte abre o equipamento cadastrado na Unidade Sul (mesmo tenant)            | permitido |
-| 11  | Usuário com `equipment_intake.create` e unidade ativa registra um recebimento                     | permitido |
-| 12  | Usuário com `equipment.view` carrega a foto do equipamento pela rota `/api/midia/[mediaId]`       | permitido |
-| 13  | Atendente com `service_orders.create` e unidade ativa abre uma OS a partir de um recebimento      | permitido |
-| 14  | Usuário com papel só na Unidade Norte abre OS de um recebimento registrado na Norte               | permitido |
-| 15  | Reenviar o mesmo formulário de abertura devolve a MESMA OS, sem criar a segunda                   | permitido |
-| 16  | Usuário com `service_orders.transition` move a OS de Aguardando Parecer para Aguardando Conserto  | permitido |
-| 17  | Papel TENANT com `service_orders.transition` move OS de qualquer unidade que a pessoa acesse      | permitido |
-| 18  | Usuário com `service_orders.manage_tasks` conclui a tarefa de preparação da própria unidade       | permitido |
-| 19  | Registrar busca de peça duas vezes: a segunda não cria tarefa duplicada e não é erro              | permitido |
-| 20  | Técnico com `quotes.create` e `quotes.update_draft` monta a proposta sem poder enviá-la           | permitido |
-| 21  | Atendente com `quotes.send` + `service_orders.transition` formaliza e a OS vai para aprovação     | permitido |
-| 22  | Criar revisão de um orçamento recusado, mantendo a recusa no histórico                            | permitido |
-| 23  | Item de orçamento com valor zero (cortesia)                                                       | permitido |
+| #   | Situação                                                                                            | Resultado |
+| --- | --------------------------------------------------------------------------------------------------- | --------- |
+| 1   | Administrador da Empresa A abre a lista de usuários da Empresa A                                    | permitido |
+| 2   | Usuário com `users.view` abre a ficha de acesso de um colega do mesmo tenant                        | permitido |
+| 3   | Usuário com `users.manage_access` vincula um colega à Unidade Norte                                 | permitido |
+| 4   | Usuário com `users.manage_access` atribui "Técnico" **só na Unidade Norte** a quem tem vínculo lá   | permitido |
+| 5   | Usuário com papel TENANT "Financeiro" opera na Unidade Norte **e** na Unidade Sul                   | permitido |
+| 6   | Qualquer usuário autenticado abre `/minha-conta` e encerra as próprias outras sessões               | permitido |
+| 7   | Usuário troca a própria senha informando a senha atual correta                                      | permitido |
+| 8   | Usuário com `sessions.revoke` encerra as sessões de um colega do mesmo tenant                       | permitido |
+| 9   | Usuário com `roles.manage_permissions` concede a um perfil uma permissão **que ele mesmo tem**      | permitido |
+| 10  | Atendente da Unidade Norte abre o equipamento cadastrado na Unidade Sul (mesmo tenant)              | permitido |
+| 11  | Usuário com `equipment_intake.create` e unidade ativa registra um recebimento                       | permitido |
+| 12  | Usuário com `equipment.view` carrega a foto do equipamento pela rota `/api/midia/[mediaId]`         | permitido |
+| 13  | Atendente com `service_orders.create` e unidade ativa abre uma OS a partir de um recebimento        | permitido |
+| 14  | Usuário com papel só na Unidade Norte abre OS de um recebimento registrado na Norte                 | permitido |
+| 15  | Reenviar o mesmo formulário de abertura devolve a MESMA OS, sem criar a segunda                     | permitido |
+| 16  | Usuário com `service_orders.transition` move a OS de Aguardando Parecer para Aguardando Conserto    | permitido |
+| 17  | Papel TENANT com `service_orders.transition` move OS de qualquer unidade que a pessoa acesse        | permitido |
+| 18  | Usuário com `service_orders.manage_tasks` conclui a tarefa de preparação da própria unidade         | permitido |
+| 19  | Registrar busca de peça duas vezes: a segunda não cria tarefa duplicada e não é erro                | permitido |
+| 20  | Técnico com `quotes.create` e `quotes.update_draft` monta a proposta sem poder enviá-la             | permitido |
+| 21  | Atendente com `quotes.send` + `service_orders.transition` formaliza e a OS vai para aprovação       | permitido |
+| 22  | Criar revisão de um orçamento recusado, mantendo a recusa no histórico                              | permitido |
+| 23  | Item de orçamento com valor zero (cortesia)                                                         | permitido |
+| 24  | Atendente com `finance.receive` registra R$ 600 num título de R$ 1.000 (pagamento parcial)          | permitido |
+| 25  | Reenviar o mesmo formulário de liquidação devolve a MESMA liquidação, sem lançar em duplicidade     | permitido |
+| 26  | Duas liquidações de PARCELAS DIFERENTES do mesmo título, em paralelo: as duas passam e a soma fecha | permitido |
+| 27  | Usuário com `finance.view` vê o saldo devedor do cliente sem poder emitir cobrança                  | permitido |
+| 28  | Gerar a cobrança da mesma OS duas vezes: devolve a mesma cobrança, com aviso                        | permitido |
+| 29  | Pedido de compra com duas entregas parciais gera DUAS contas a pagar que somam o recebido           | permitido |
 
 ---
 
 ## 5. Exemplos negados
 
-| #   | Tentativa                                                                             | Motivo                           | Resposta                                 |
-| --- | ------------------------------------------------------------------------------------- | -------------------------------- | ---------------------------------------- |
-| 1   | Sem sessão, acessar `/administracao/usuarios` por URL direta                          | `NOT_AUTHENTICATED`              | redireciona para `/login`                |
-| 2   | Com sessão, sem `users.view`, acessar `/administracao/usuarios`                       | `PERMISSION_DENIED`              | `/acesso-negado`                         |
-| 3   | Abrir a ficha de um usuário **de outra empresa** usando o ID real                     | `RESOURCE_OUT_OF_SCOPE`          | **404 "registro não encontrado"**        |
-| 4   | Atribuir a si mesmo um perfil com mais permissões                                     | autoescalonamento                | erro de regra de negócio                 |
-| 5   | Conceder a um perfil uma permissão que o próprio concedente **não** possui            | delegação além do próprio        | erro de regra de negócio                 |
-| 6   | Atribuir perfil por unidade a quem **não tem vínculo** naquela unidade                | vínculo ausente                  | erro; e o banco recusaria a linha        |
-| 7   | Revogar o papel do **último** administrador da empresa                                | tenant sem administrador         | erro de regra de negócio                 |
-| 8   | Desativar o **último** administrador da empresa                                       | tenant sem administrador         | erro de regra de negócio                 |
-| 9   | Excluir o perfil `Administrador` (`is_system`)                                        | perfil estrutural                | erro de regra de negócio                 |
-| 10  | Trocar para uma unidade **não autorizada** enviando o ID no formulário                | `UNIT_NOT_AUTHORIZED`            | ignorado em silêncio, com log            |
-| 11  | Usar permissão de papel UNIT (só na Unidade Norte) para uma ação de **nível tenant**  | `PERMISSION_DENIED`              | erro de autorização                      |
-| 12  | Usar permissão de papel UNIT da Unidade Norte para agir **na Unidade Sul**            | `PERMISSION_DENIED`              | erro de autorização                      |
-| 13  | Agir numa unidade sem tê-la selecionada, quando a ação é de unidade                   | `UNIT_REQUIRED`                  | erro de autorização                      |
-| 14  | Usar sessão de usuário **desativado** depois da desativação                           | contexto inválido                | redireciona para `/login`                |
-| 15  | Usar sessão de empresa **suspensa**                                                   | contexto inválido                | redireciona para `/login`                |
-| 16  | Reusar um código de redefinição de senha já consumido                                 | token usado                      | erro de autenticação                     |
-| 17  | Usar um código de redefinição expirado (> 60 min)                                     | token expirado                   | erro de autenticação                     |
-| 18  | Trocar a própria senha informando a senha atual errada                                | senha incorreta                  | erro de autenticação                     |
-| 19  | Encerrar a sessão de outra pessoa pela tela `/minha-conta`                            | fora do escopo do usuário        | "registro não encontrado"                |
-| 20  | 6ª tentativa de login com senha errada em 5 minutos                                   | rate limit                       | erro com `Retry-After`                   |
-| 21  | Acessar `/administracao/unidades` com `platform.multi_unit` desativada para a empresa | `FEATURE_UNAVAILABLE`            | `/acesso-negado`                         |
-| 22  | `INSERT` direto em SQL vinculando usuário da Empresa A a unidade da Empresa B         | FK composta                      | `ERROR 1452` do InnoDB                   |
-| 23  | Ver o recebimento da Unidade Sul estando com a Unidade Norte ativa                    | escopo de unidade                | não aparece na consulta                  |
-| 24  | Registrar recebimento **sem unidade ativa**                                           | `UNIT_REQUIRED`                  | erro de autorização                      |
-| 25  | Enviar `unitId` de outra unidade no formulário de recebimento                         | valor ignorado                   | usa `context.activeUnitId`               |
-| 26  | Abrir `/api/midia/[mediaId]` **sem sessão**                                           | sem autenticação                 | `401`, sem corpo                         |
-| 27  | Abrir mídia de outro tenant com sessão válida                                         | fora do tenant                   | `404` (nunca 403)                        |
-| 28  | Enviar um `.php` renomeado para `.jpg` como foto                                      | magic bytes                      | recusado com mensagem em português       |
-| 29  | `INSERT` direto ligando equipamento da Empresa B a cliente da Empresa A               | FK composta                      | `ERROR 1452` do InnoDB                   |
-| 30  | Ver OS da Unidade Sul estando com a Unidade Norte ativa                               | escopo de unidade                | não aparece; ficha "não encontrada"      |
-| 31  | Abrir OS a partir de recebimento registrado em OUTRA unidade                          | coerência de unidade             | erro de regra + FK composta              |
-| 32  | Abrir uma segunda OS para o mesmo recebimento                                         | UNIQUE de recebimento            | erro de regra, com link para a existente |
-| 33  | `INSERT` direto com número de OS repetido na mesma empresa                            | UNIQUE `(tenant, number)`        | `ERROR 1062` do InnoDB                   |
-| 34  | Abrir OS sem unidade ativa                                                            | `UNIT_REQUIRED`                  | erro de autorização                      |
-| 35  | Enviar `customerId` de outro cliente no formulário de abertura                        | valor ignorado                   | cliente vem do equipamento               |
-| 36  | Mover OS da Unidade Sul com papel de transição concedido só na Unidade Norte          | escopo da **ordem**              | erro de autorização                      |
-| 37  | Finalizar a OS tendo só `service_orders.transition`                                   | `PERMISSION_DENIED`              | erro de autorização                      |
-| 38  | Cancelar a OS tendo só `service_orders.transition`                                    | `PERMISSION_DENIED`              | erro de autorização                      |
-| 39  | Cancelar a OS sem escrever o motivo                                                   | motivo obrigatório               | erro de validação                        |
-| 40  | Transição não prevista na matriz (ex.: Aguardando Peça → Reparo Concluído)            | regra de workflow                | recusa explicada em português            |
-| 41  | Qualquer transição a partir de OS Finalizada ou Cancelada                             | estado terminal                  | recusa explicada em português            |
-| 42  | Ir para Aguardando Cliente Retirar pelo seletor genérico de situação                  | transição `actionOnly`           | recusa: só pela ação correspondente      |
-| 43  | "Informar Ordem Disponível" antes de concluir a preparação                            | condição da ação                 | recusa explicada em português            |
-| 44  | Gravar uma transição com a versão que já ficou velha (outra pessoa gravou antes)      | conflito de versão               | aviso para recarregar; nada é gravado    |
-| 45  | Atribuir como técnico alguém sem vínculo com a unidade da ordem, ou inativo           | vínculo/situação                 | erro de regra de negócio                 |
-| 46  | Atribuir como técnico alguém de **outra empresa**, com o UUID em mãos                 | fora do tenant                   | erro de regra de negócio                 |
-| 47  | Concluir tarefa de outra unidade ou de outra empresa pelo UUID                        | escopo                           | "não encontrada"                         |
-| 48  | Concluir a mesma tarefa duas vezes                                                    | tarefa já encerrada              | erro de regra de negócio                 |
-| 49  | Registrar busca de peça fora de Aguardando Peça                                       | estado incompatível              | erro de regra de negócio                 |
-| 50  | `INSERT` direto de duas tarefas abertas do mesmo tipo na mesma OS                     | UNIQUE com `open_marker`         | `ERROR 1062` do InnoDB                   |
-| 51  | Enviar orçamento sem `service_orders.transition`                                      | a ação move a OS                 | erro de autorização; nada é gravado      |
-| 52  | Enviar orçamento com a OS em estado incompatível                                      | regra de workflow                | recusa explicada; nada é gravado         |
-| 53  | Enviar orçamento sem nenhum item                                                      | proposta vazia                   | erro de regra de negócio                 |
-| 54  | Editar itens ou valores de um orçamento já enviado                                    | imutabilidade pós-envio          | erro; oriente a criar revisão            |
-| 55  | Aprovar um orçamento que ainda é rascunho                                             | matriz do orçamento              | recusa explicada em português            |
-| 56  | Registrar recusa sem escrever o motivo                                                | motivo obrigatório               | erro de validação                        |
-| 57  | Duas aprovações simultâneas do mesmo orçamento                                        | `version` + compare-and-swap     | uma vence; a outra recebe aviso          |
-| 58  | `INSERT` direto de duas propostas vivas na mesma OS                                   | UNIQUE com `active_marker`       | `ERROR 1062` do InnoDB                   |
-| 59  | `INSERT` direto de orçamento na unidade B para OS da unidade A                        | FK `(service_order_id, unit_id)` | `ERROR 1452` do InnoDB                   |
-| 60  | Operar orçamento com papel concedido só na outra unidade                              | escopo da **ordem**              | erro de autorização                      |
-| 61  | Abrir orçamento de outra empresa com o UUID em mãos                                   | fora do tenant                   | "não encontrado" (nunca 403)             |
-| 62  | Item com valor negativo, quantidade zero ou desconto maior que a linha                | validação de domínio             | erro de validação em português           |
+| #   | Tentativa                                                                             | Motivo                                                            | Resposta                                   |
+| --- | ------------------------------------------------------------------------------------- | ----------------------------------------------------------------- | ------------------------------------------ |
+| 1   | Sem sessão, acessar `/administracao/usuarios` por URL direta                          | `NOT_AUTHENTICATED`                                               | redireciona para `/login`                  |
+| 2   | Com sessão, sem `users.view`, acessar `/administracao/usuarios`                       | `PERMISSION_DENIED`                                               | `/acesso-negado`                           |
+| 3   | Abrir a ficha de um usuário **de outra empresa** usando o ID real                     | `RESOURCE_OUT_OF_SCOPE`                                           | **404 "registro não encontrado"**          |
+| 4   | Atribuir a si mesmo um perfil com mais permissões                                     | autoescalonamento                                                 | erro de regra de negócio                   |
+| 5   | Conceder a um perfil uma permissão que o próprio concedente **não** possui            | delegação além do próprio                                         | erro de regra de negócio                   |
+| 6   | Atribuir perfil por unidade a quem **não tem vínculo** naquela unidade                | vínculo ausente                                                   | erro; e o banco recusaria a linha          |
+| 7   | Revogar o papel do **último** administrador da empresa                                | tenant sem administrador                                          | erro de regra de negócio                   |
+| 8   | Desativar o **último** administrador da empresa                                       | tenant sem administrador                                          | erro de regra de negócio                   |
+| 9   | Excluir o perfil `Administrador` (`is_system`)                                        | perfil estrutural                                                 | erro de regra de negócio                   |
+| 10  | Trocar para uma unidade **não autorizada** enviando o ID no formulário                | `UNIT_NOT_AUTHORIZED`                                             | ignorado em silêncio, com log              |
+| 11  | Usar permissão de papel UNIT (só na Unidade Norte) para uma ação de **nível tenant**  | `PERMISSION_DENIED`                                               | erro de autorização                        |
+| 12  | Usar permissão de papel UNIT da Unidade Norte para agir **na Unidade Sul**            | `PERMISSION_DENIED`                                               | erro de autorização                        |
+| 13  | Agir numa unidade sem tê-la selecionada, quando a ação é de unidade                   | `UNIT_REQUIRED`                                                   | erro de autorização                        |
+| 14  | Usar sessão de usuário **desativado** depois da desativação                           | contexto inválido                                                 | redireciona para `/login`                  |
+| 15  | Usar sessão de empresa **suspensa**                                                   | contexto inválido                                                 | redireciona para `/login`                  |
+| 16  | Reusar um código de redefinição de senha já consumido                                 | token usado                                                       | erro de autenticação                       |
+| 17  | Usar um código de redefinição expirado (> 60 min)                                     | token expirado                                                    | erro de autenticação                       |
+| 18  | Trocar a própria senha informando a senha atual errada                                | senha incorreta                                                   | erro de autenticação                       |
+| 19  | Encerrar a sessão de outra pessoa pela tela `/minha-conta`                            | fora do escopo do usuário                                         | "registro não encontrado"                  |
+| 20  | 6ª tentativa de login com senha errada em 5 minutos                                   | rate limit                                                        | erro com `Retry-After`                     |
+| 21  | Acessar `/administracao/unidades` com `platform.multi_unit` desativada para a empresa | `FEATURE_UNAVAILABLE`                                             | `/acesso-negado`                           |
+| 22  | `INSERT` direto em SQL vinculando usuário da Empresa A a unidade da Empresa B         | FK composta                                                       | `ERROR 1452` do InnoDB                     |
+| 23  | Ver o recebimento da Unidade Sul estando com a Unidade Norte ativa                    | escopo de unidade                                                 | não aparece na consulta                    |
+| 24  | Registrar recebimento **sem unidade ativa**                                           | `UNIT_REQUIRED`                                                   | erro de autorização                        |
+| 25  | Enviar `unitId` de outra unidade no formulário de recebimento                         | valor ignorado                                                    | usa `context.activeUnitId`                 |
+| 26  | Abrir `/api/midia/[mediaId]` **sem sessão**                                           | sem autenticação                                                  | `401`, sem corpo                           |
+| 27  | Abrir mídia de outro tenant com sessão válida                                         | fora do tenant                                                    | `404` (nunca 403)                          |
+| 28  | Enviar um `.php` renomeado para `.jpg` como foto                                      | magic bytes                                                       | recusado com mensagem em português         |
+| 29  | `INSERT` direto ligando equipamento da Empresa B a cliente da Empresa A               | FK composta                                                       | `ERROR 1452` do InnoDB                     |
+| 30  | Ver OS da Unidade Sul estando com a Unidade Norte ativa                               | escopo de unidade                                                 | não aparece; ficha "não encontrada"        |
+| 31  | Abrir OS a partir de recebimento registrado em OUTRA unidade                          | coerência de unidade                                              | erro de regra + FK composta                |
+| 32  | Abrir uma segunda OS para o mesmo recebimento                                         | UNIQUE de recebimento                                             | erro de regra, com link para a existente   |
+| 33  | `INSERT` direto com número de OS repetido na mesma empresa                            | UNIQUE `(tenant, number)`                                         | `ERROR 1062` do InnoDB                     |
+| 34  | Abrir OS sem unidade ativa                                                            | `UNIT_REQUIRED`                                                   | erro de autorização                        |
+| 35  | Enviar `customerId` de outro cliente no formulário de abertura                        | valor ignorado                                                    | cliente vem do equipamento                 |
+| 36  | Mover OS da Unidade Sul com papel de transição concedido só na Unidade Norte          | escopo da **ordem**                                               | erro de autorização                        |
+| 37  | Finalizar a OS tendo só `service_orders.transition`                                   | `PERMISSION_DENIED`                                               | erro de autorização                        |
+| 38  | Cancelar a OS tendo só `service_orders.transition`                                    | `PERMISSION_DENIED`                                               | erro de autorização                        |
+| 39  | Cancelar a OS sem escrever o motivo                                                   | motivo obrigatório                                                | erro de validação                          |
+| 40  | Transição não prevista na matriz (ex.: Aguardando Peça → Reparo Concluído)            | regra de workflow                                                 | recusa explicada em português              |
+| 41  | Qualquer transição a partir de OS Finalizada ou Cancelada                             | estado terminal                                                   | recusa explicada em português              |
+| 42  | Ir para Aguardando Cliente Retirar pelo seletor genérico de situação                  | transição `actionOnly`                                            | recusa: só pela ação correspondente        |
+| 43  | "Informar Ordem Disponível" antes de concluir a preparação                            | condição da ação                                                  | recusa explicada em português              |
+| 44  | Gravar uma transição com a versão que já ficou velha (outra pessoa gravou antes)      | conflito de versão                                                | aviso para recarregar; nada é gravado      |
+| 45  | Atribuir como técnico alguém sem vínculo com a unidade da ordem, ou inativo           | vínculo/situação                                                  | erro de regra de negócio                   |
+| 46  | Atribuir como técnico alguém de **outra empresa**, com o UUID em mãos                 | fora do tenant                                                    | erro de regra de negócio                   |
+| 47  | Concluir tarefa de outra unidade ou de outra empresa pelo UUID                        | escopo                                                            | "não encontrada"                           |
+| 48  | Concluir a mesma tarefa duas vezes                                                    | tarefa já encerrada                                               | erro de regra de negócio                   |
+| 49  | Registrar busca de peça fora de Aguardando Peça                                       | estado incompatível                                               | erro de regra de negócio                   |
+| 50  | `INSERT` direto de duas tarefas abertas do mesmo tipo na mesma OS                     | UNIQUE com `open_marker`                                          | `ERROR 1062` do InnoDB                     |
+| 51  | Enviar orçamento sem `service_orders.transition`                                      | a ação move a OS                                                  | erro de autorização; nada é gravado        |
+| 52  | Enviar orçamento com a OS em estado incompatível                                      | regra de workflow                                                 | recusa explicada; nada é gravado           |
+| 53  | Enviar orçamento sem nenhum item                                                      | proposta vazia                                                    | erro de regra de negócio                   |
+| 54  | Editar itens ou valores de um orçamento já enviado                                    | imutabilidade pós-envio                                           | erro; oriente a criar revisão              |
+| 55  | Aprovar um orçamento que ainda é rascunho                                             | matriz do orçamento                                               | recusa explicada em português              |
+| 56  | Registrar recusa sem escrever o motivo                                                | motivo obrigatório                                                | erro de validação                          |
+| 57  | Duas aprovações simultâneas do mesmo orçamento                                        | `version` + compare-and-swap                                      | uma vence; a outra recebe aviso            |
+| 58  | `INSERT` direto de duas propostas vivas na mesma OS                                   | UNIQUE com `active_marker`                                        | `ERROR 1062` do InnoDB                     |
+| 59  | `INSERT` direto de orçamento na unidade B para OS da unidade A                        | FK `(service_order_id, unit_id)`                                  | `ERROR 1452` do InnoDB                     |
+| 60  | Operar orçamento com papel concedido só na outra unidade                              | escopo da **ordem**                                               | erro de autorização                        |
+| 61  | Abrir orçamento de outra empresa com o UUID em mãos                                   | fora do tenant                                                    | "não encontrado" (nunca 403)               |
+| 62  | Item com valor negativo, quantidade zero ou desconto maior que a linha                | validação de domínio                                              | erro de validação em português             |
+| 63  | Liquidar R$ 600 num saldo de R$ 400                                                   | `WHERE settled_amount + :q <= amount`                             | `affectedRows = 0` → conflito em português |
+| 64  | Duas pessoas liquidando a MESMA parcela ao mesmo tempo, somando mais que o saldo      | idem, no banco                                                    | uma passa, a outra recebe conflito         |
+| 65  | Estornar duas vezes o mesmo lançamento                                                | `UNIQUE (reversal_of_movement_id)` + `WHERE status = 'confirmed'` | a segunda é recusada                       |
+| 66  | Cancelar título que já recebeu pagamento                                              | `AND settled_amount = '0.00'` no `WHERE`                          | recusa: estorne primeiro                   |
+| 67  | `UPDATE` ou `DELETE` em `financial_movements`                                         | razão append-only                                                 | **build vermelho** no teste de boundary    |
+| 68  | Abrir o segundo caixa na mesma conta                                                  | `UNIQUE (financial_account_id, open_marker)`                      | `ER_DUP_ENTRY` → conflito                  |
+| 69  | Liquidar em conta do tipo dinheiro sem caixa aberto                                   | regra do caso de uso                                              | recusa, e a tela avisa **antes** do envio  |
+| 70  | Liquidar título da loja B numa conta exclusiva da loja A                              | `accountServesUnit()`                                             | erro de validação em português             |
+| 71  | Conta a receber com fornecedor como contraparte                                       | CHECK `ck_fin_title_counterparty_direction`                       | recusa do InnoDB                           |
+| 72  | Abrir título de outra empresa com o UUID em mãos                                      | fora do tenant                                                    | "não encontrado" (nunca 403)               |
+| 73  | Liquidar com papel concedido só na outra unidade                                      | escopo da **unidade do título**                                   | erro de autorização                        |
+| 74  | Financeiro tentar mudar `service_orders.status`                                       | fronteira de mão única                                            | **não existe código** que faça isso        |
 
 **Por que o item 3 responde 404 e não 403:** responder "sem permissão"
 confirmaria que aquele registro existe. Para quem está do lado de fora, um ID
@@ -283,20 +319,22 @@ de outra empresa e um ID inexistente são indistinguíveis.
 
 ## 6. Onde cada linha é verificada
 
-| Bloco                                   | Teste                                                                              |
-| --------------------------------------- | ---------------------------------------------------------------------------------- |
-| Permitidos 1–5, negados 6, 11, 12, 13   | `tests/integration/role-scope.test.ts`                                             |
-| Negados 3, 4, 5, 10, 22                 | `tests/integration/privilege-escalation.test.ts`                                   |
-| Negados 7, 8, 9                         | `tests/integration/last-admin.test.ts`                                             |
-| Permitidos 6, 7, 8; negados 14–19       | `tests/integration/account-security.test.ts`                                       |
-| Permitidos 1, 2, 3; perfis de origem    | `tests/integration/user-administration.test.ts`                                    |
-| Negados 14, 15, 20                      | `tests/integration/auth.test.ts`                                                   |
-| Negados 1, 2, 21                        | `tests/integration/effective-access.test.ts` + navegador                           |
-| Negado 20 (janela e contagem)           | `tests/unit/rate-limit.test.ts`                                                    |
-| Negado 22                               | `tests/integration/cross-tenant-constraints.test.ts`                               |
-| Permitidos 10–12; negados 23–25         | `tests/integration/equipment.test.ts` + `equipment-authorization.test.ts`          |
-| Negados 27, 28                          | `tests/integration/equipment.test.ts` (bloco fotos)                                |
-| Negado 26; permitido 12                 | navegador real contra o build de produção                                          |
-| Negado 29                               | `tests/integration/equipment.test.ts` (FK composta)                                |
-| Permitidos 13–15; negados 30–32, 34, 35 | `tests/integration/service-orders.test.ts` + `service-order-authorization.test.ts` |
-| Negado 33                               | `tests/integration/service-order-sequence.test.ts`                                 |
+| Bloco                                   | Teste                                                                                                                               |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Permitidos 1–5, negados 6, 11, 12, 13   | `tests/integration/role-scope.test.ts`                                                                                              |
+| Negados 3, 4, 5, 10, 22                 | `tests/integration/privilege-escalation.test.ts`                                                                                    |
+| Negados 7, 8, 9                         | `tests/integration/last-admin.test.ts`                                                                                              |
+| Permitidos 6, 7, 8; negados 14–19       | `tests/integration/account-security.test.ts`                                                                                        |
+| Permitidos 1, 2, 3; perfis de origem    | `tests/integration/user-administration.test.ts`                                                                                     |
+| Negados 14, 15, 20                      | `tests/integration/auth.test.ts`                                                                                                    |
+| Negados 1, 2, 21                        | `tests/integration/effective-access.test.ts` + navegador                                                                            |
+| Negado 20 (janela e contagem)           | `tests/unit/rate-limit.test.ts`                                                                                                     |
+| Negado 22                               | `tests/integration/cross-tenant-constraints.test.ts`                                                                                |
+| Permitidos 10–12; negados 23–25         | `tests/integration/equipment.test.ts` + `equipment-authorization.test.ts`                                                           |
+| Negados 27, 28                          | `tests/integration/equipment.test.ts` (bloco fotos)                                                                                 |
+| Negado 26; permitido 12                 | navegador real contra o build de produção                                                                                           |
+| Negado 29                               | `tests/integration/equipment.test.ts` (FK composta)                                                                                 |
+| Permitidos 13–15; negados 30–32, 34, 35 | `tests/integration/service-orders.test.ts` + `service-order-authorization.test.ts`                                                  |
+| Negado 33                               | `tests/integration/service-order-sequence.test.ts`                                                                                  |
+| Permitidos 24–29; negados 63–74         | `tests/integration/finance.test.ts`, `finance-concurrency.test.ts`, `finance-authorization.test.ts`, `finance-integrations.test.ts` |
+| Negado 67                               | `tests/unit/finance-boundary.test.ts` (varredura do código-fonte)                                                                   |

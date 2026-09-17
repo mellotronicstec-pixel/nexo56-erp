@@ -151,6 +151,40 @@ export const PERMISSIONS = {
    */
   PURCHASES_RECEIVE: 'purchases.receive',
   PURCHASES_CANCEL: 'purchases.cancel',
+
+  /**
+   * FINANCEIRO (Prompt 12, itens 51 e 52).
+   *
+   * Informacao financeira e sensivel de um jeito diferente do resto do ERP: o
+   * tecnico precisa ver a OS, e nao precisa ver o caixa, a margem, as contas
+   * bancarias nem quanto a empresa paga aos fornecedores. Por isso
+   * `service_orders.view` NAO concede `finance.view`, e a separacao esta
+   * escrita em docs/modules/finance/permissions.md.
+   *
+   * O corte segue o que tem CONSEQUENCIA DIFERENTE: consultar, administrar
+   * obrigacoes, movimentar dinheiro que entra, movimentar dinheiro que sai,
+   * desfazer o que ja foi movimentado, e operar a gaveta do balcao.
+   */
+  FINANCE_VIEW: 'finance.view',
+  FINANCE_RECEIVABLES_MANAGE: 'finance.receivables.manage',
+  FINANCE_PAYABLES_MANAGE: 'finance.payables.manage',
+  /** Dinheiro do cliente ENTRANDO. */
+  FINANCE_RECEIVE: 'finance.receive',
+  /** Dinheiro da empresa SAINDO. Nao e a mesma capacidade de receber. */
+  FINANCE_PAY: 'finance.pay',
+  /**
+   * DESFAZER O QUE JA ACONTECEU.
+   *
+   * Estorno nao apaga nada: cria contramovimento e devolve o saldo em aberto.
+   * Ainda assim e a permissao mais sensivel do modulo, porque e a unica que
+   * mexe em dinheiro ja registrado.
+   */
+  FINANCE_REVERSE: 'finance.reverse',
+  FINANCE_CASH_OPEN: 'finance.cash.open',
+  FINANCE_CASH_CLOSE: 'finance.cash.close',
+  /** Suprimento e sangria: dinheiro entrando e saindo da gaveta sem titulo. */
+  FINANCE_CASH_ADJUST: 'finance.cash.adjust',
+  FINANCE_SETTINGS_MANAGE: 'finance.settings.manage',
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -491,6 +525,69 @@ export const PERMISSION_CATALOG: readonly PermissionDefinition[] = [
     description: 'Cancela o pedido e o saldo ainda pendente. Nao desfaz o que ja foi recebido.',
     featureKey: 'operations.purchasing',
   },
+  {
+    key: PERMISSIONS.FINANCE_VIEW,
+    name: 'Visualizar financeiro',
+    description: 'Consulta contas a receber, contas a pagar, caixa e fluxo financeiro da unidade.',
+    featureKey: 'finance.core',
+  },
+  {
+    key: PERMISSIONS.FINANCE_RECEIVABLES_MANAGE,
+    name: 'Administrar contas a receber',
+    description: 'Cria, edita e cancela cobrancas de clientes, com parcelamento.',
+    featureKey: 'finance.core',
+  },
+  {
+    key: PERMISSIONS.FINANCE_PAYABLES_MANAGE,
+    name: 'Administrar contas a pagar',
+    description: 'Cria, edita e cancela contas a pagar e despesas da empresa.',
+    featureKey: 'finance.core',
+  },
+  {
+    key: PERMISSIONS.FINANCE_RECEIVE,
+    name: 'Registrar recebimento',
+    description:
+      'Registra dinheiro do cliente entrando: gera liquidacao e movimento na conta financeira.',
+    featureKey: 'finance.core',
+  },
+  {
+    key: PERMISSIONS.FINANCE_PAY,
+    name: 'Registrar pagamento',
+    description:
+      'Registra dinheiro da empresa saindo para fornecedor ou despesa. Nao movimenta estoque.',
+    featureKey: 'finance.core',
+  },
+  {
+    key: PERMISSIONS.FINANCE_REVERSE,
+    name: 'Estornar liquidacao',
+    description:
+      'Desfaz um recebimento ou pagamento por contramovimento, com motivo. Acao sensivel.',
+    featureKey: 'finance.core',
+  },
+  {
+    key: PERMISSIONS.FINANCE_CASH_OPEN,
+    name: 'Abrir caixa',
+    description: 'Abre a sessao de caixa da unidade, informando o valor inicial da gaveta.',
+    featureKey: 'finance.core',
+  },
+  {
+    key: PERMISSIONS.FINANCE_CASH_CLOSE,
+    name: 'Fechar caixa',
+    description: 'Fecha a sessao, informa o valor contado e registra a diferenca.',
+    featureKey: 'finance.core',
+  },
+  {
+    key: PERMISSIONS.FINANCE_CASH_ADJUST,
+    name: 'Suprimento e sangria',
+    description: 'Coloca ou retira dinheiro da gaveta fora de um titulo, com motivo.',
+    featureKey: 'finance.core',
+  },
+  {
+    key: PERMISSIONS.FINANCE_SETTINGS_MANAGE,
+    name: 'Configurar financeiro',
+    description: 'Administra contas financeiras, formas de pagamento e categorias.',
+    featureKey: 'finance.core',
+  },
 ];
 
 /** Papeis estruturais criados no bootstrap de cada tenant. */
@@ -690,6 +787,23 @@ export const PERMISSION_GROUPS = [
     ],
   },
   {
+    key: 'financeiro',
+    name: 'Financeiro',
+    description: 'Contas a receber e a pagar, recebimentos, pagamentos, caixa e configuracao.',
+    permissions: [
+      PERMISSIONS.FINANCE_VIEW,
+      PERMISSIONS.FINANCE_RECEIVABLES_MANAGE,
+      PERMISSIONS.FINANCE_PAYABLES_MANAGE,
+      PERMISSIONS.FINANCE_RECEIVE,
+      PERMISSIONS.FINANCE_PAY,
+      PERMISSIONS.FINANCE_REVERSE,
+      PERMISSIONS.FINANCE_CASH_OPEN,
+      PERMISSIONS.FINANCE_CASH_CLOSE,
+      PERMISSIONS.FINANCE_CASH_ADJUST,
+      PERMISSIONS.FINANCE_SETTINGS_MANAGE,
+    ],
+  },
+  {
     key: 'plataforma',
     name: 'Modulos e auditoria',
     description: 'Configuracao de funcionalidades e trilha de auditoria.',
@@ -714,6 +828,13 @@ export const PERMISSION_GROUPS = [
  * significa "amplia acesso, direta ou indiretamente" — e administrar clientes
  * nao concede capacidade a ninguem. Elas sao permissoes de DADO PESSOAL, o que
  * e uma preocupacao real e diferente, tratada pelo RBAC e pela auditoria.
+ */
+/*
+ * NOTA sobre Financeiro (Prompt 12): `finance.*` tambem NAO entra nesta lista,
+ * pela mesma definicao. Estornar uma liquidacao e das acoes mais sensiveis do
+ * sistema — mas nao amplia o acesso de ninguem. Sao permissoes de DINHEIRO e
+ * de DADO COMERCIAL, o que e uma preocupacao real e diferente, tratada pelo
+ * RBAC, pela auditoria e pelo ledger append-only.
  */
 export const HIGH_RISK_PERMISSIONS: readonly PermissionKey[] = [
   PERMISSIONS.ADMIN_ACCESS,

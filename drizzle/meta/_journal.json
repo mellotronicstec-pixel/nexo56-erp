@@ -71,6 +71,13 @@
       "when": 1789383444758,
       "tag": "0009_purchasing",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "5",
+      "when": 1789410339377,
+      "tag": "0010_finance",
+      "breakpoints": true
     }
   ]
 }

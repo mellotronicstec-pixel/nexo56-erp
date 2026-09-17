@@ -38,6 +38,15 @@ export const FEATURES = {
    * estoque nao precisa de fornecedor nenhum para funcionar.
    */
   OPERATIONS_PURCHASING: 'operations.purchasing',
+  /**
+   * Financeiro (Prompt 12, itens 55 e 56).
+   *
+   * Prefixo proprio porque nao e "uma operacao a mais": e um dominio com
+   * vocabulario, permissoes e riscos proprios. OPTIONAL de verdade — a
+   * assistencia que controla dinheiro em caderno continua usando OS,
+   * Orcamento, Estoque e Compras inteiros.
+   */
+  FINANCE_CORE: 'finance.core',
   PLATFORM_MULTI_UNIT: 'platform.multi_unit',
   PLATFORM_LABEL_RECOGNITION: 'platform.label_recognition',
 } as const;
@@ -204,6 +213,27 @@ export const FEATURE_CATALOG: readonly FeatureDefinition[] = [
      */
     type: 'OPTIONAL',
     dependsOn: [FEATURES.OPERATIONS_INVENTORY],
+  },
+  {
+    key: FEATURES.FINANCE_CORE,
+    name: 'Financeiro',
+    description:
+      'Contas a receber e a pagar, parcelamento, recebimentos, pagamentos, caixa, despesas e fluxo financeiro.',
+    /**
+     * OPTIONAL, e a consequencia disso e deliberada (Prompt 12, item 57):
+     * desligar o Financeiro NAO impede uma Ordem de Servico de ser
+     * tecnicamente concluida. Conclusao tecnica e fechamento financeiro sao
+     * coisas diferentes, e o produto inteiro depende de continuarem sendo.
+     *
+     * Depende de CLIENTES porque toda cobranca tem um devedor, e o cliente e o
+     * unico cadastro que o Financeiro exige para existir. NAO depende de
+     * Compras nem de Estoque: uma loja sem pedido de compra ainda paga
+     * aluguel, e uma despesa manual nao precisa de peca nenhuma. Quando
+     * Compras existe, o Financeiro CONSOME o fato de recebimento — a
+     * dependencia e de mao unica, e Compras nunca importa o Financeiro.
+     */
+    type: 'OPTIONAL',
+    dependsOn: [FEATURES.CORE_CUSTOMERS],
   },
   {
     key: FEATURES.PLATFORM_MULTI_UNIT,

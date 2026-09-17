@@ -303,3 +303,27 @@ export const IconPurchase = (props: IconProps) => (
     <circle cx="16.5" cy="18.5" r="1.4" />
   </Icon>
 );
+
+/**
+ * Financeiro: a nota de dinheiro com o valor ao centro.
+ *
+ * Evita de proposito o cifrao sozinho e o grafico de barras: o primeiro nao
+ * distingue Financeiro de "preco" em qualquer outra tela, e o segundo promete
+ * relatorio analitico, que este modulo nao entrega.
+ */
+export const IconFinance = (props: IconProps) => (
+  <Icon {...props}>
+    <rect x="2.5" y="6" width="19" height="12" rx="1.5" />
+    <circle cx="12" cy="12" r="2.5" />
+    <path d="M6 10.5v3M18 10.5v3" />
+  </Icon>
+);
+
+/** Caixa operacional: a gaveta aberta do balcao, com o puxador a frente. */
+export const IconCashRegister = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="M3 10.5h18v8a.5.5 0 01-.5.5h-17a.5.5 0 01-.5-.5z" />
+    <path d="M5.5 10.5V6a.5.5 0 01.5-.5h12a.5.5 0 01.5.5v4.5" />
+    <path d="M9.5 14.5h5" />
+  </Icon>
+);

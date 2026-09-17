@@ -606,6 +606,138 @@ erDiagram
     STOCK_MOVEMENTS ||--o| PURCHASE_RECEIPT_ITEMS : "rastreado por (Compras -> Estoque)"
     PURCHASE_ORDERS ||--o{ PURCHASE_ORDER_TIMELINE : "historia"
     PURCHASE_ORDERS ||--o{ PURCHASE_PRICE_HISTORY : "quanto se pagou"
+
+    FINANCIAL_ACCOUNTS {
+        char36 id PK
+        char36 tenant_id FK
+        char36 unit_id FK "ANULAVEL - nulo = compartilhada pela empresa"
+        varchar kind "cash bank digital_wallet clearing other - congela com movimento"
+        varchar name
+        decimal current_balance "PROJECAO - a verdade e a soma do razao"
+        varchar status "active inactive - NAO existe exclusao"
+        composite uq_fin_account_id_tenant UK "alvo de FK composta"
+    }
+    PAYMENT_METHODS {
+        char36 id PK
+        char36 tenant_id FK
+        varchar kind "cash pix debit_card credit_card bank_transfer boleto other"
+        varchar name "COMO o dinheiro se moveu - nao tem saldo"
+        int position
+        varchar status
+    }
+    FINANCIAL_CATEGORIES {
+        char36 id PK
+        char36 tenant_id FK
+        varchar kind "revenue expense"
+        varchar name "POR QUE entrou ou saiu - agrupa, nunca bloqueia"
+        varchar status
+    }
+    FINANCIAL_TITLES {
+        char36 id PK
+        char36 tenant_id FK
+        char36 unit_id FK
+        varchar direction "receivable payable - UMA tabela para as duas"
+        int number "de tenant_sequences - CR 000042 / CP 000010"
+        varchar counterparty_kind "customer supplier other - alvo da CHECK, sem FK"
+        char36 customer_id FK "so em receivable"
+        char36 supplier_id FK "so em payable"
+        varchar payee_name "favorecido sem cadastro - aluguel, energia"
+        varchar description
+        char36 financial_category_id FK
+        varchar origin "manual service_order purchase_receipt"
+        varchar origin_key UK "UNIQUE por tenant - idempotencia da origem"
+        char36 service_order_id FK "LEITURA - o Financeiro nunca escreve na OS"
+        char36 purchase_order_id FK
+        char36 purchase_receipt_id FK "uma conta a pagar por RECEBIMENTO"
+        decimal amount
+        decimal settled_amount "CHECK <= amount - sem over-settlement"
+        varchar issued_at "data civil"
+        varchar due_date "data civil - vencido e DERIVADO, nao coluna"
+        int installment_count "sempre >= 1"
+        varchar status "open partially_settled settled cancelled - SEM overdue"
+        int version
+        composite uq_fin_title_id_tenant UK "alvo de FK composta"
+    }
+    FINANCIAL_INSTALLMENTS {
+        char36 id PK
+        char36 tenant_id FK
+        char36 title_id FK "FK composta com tenant_id"
+        int number "todo titulo tem ao menos UMA - a vista e 1 de 1"
+        decimal amount "sobra do centavo vai para as PRIMEIRAS"
+        decimal settled_amount "CHECK <= amount"
+        varchar due_date "data civil"
+        varchar status
+    }
+    FINANCIAL_SETTLEMENTS {
+        char36 id PK
+        char36 tenant_id FK
+        char36 title_id FK
+        char36 installment_id FK "a liquidacao e SEMPRE de uma parcela"
+        char36 financial_account_id FK
+        char36 payment_method_id FK
+        char36 cash_session_id FK "quando a conta e caixa em especie"
+        decimal amount
+        varchar effective_date "data civil"
+        varchar status "confirmed reversed - estorno NAO apaga a linha"
+        varchar idempotency_key UK "duplo clique reencontra"
+        int card_installments "registro do combinado - NAO integra com adquirente"
+        varchar reference
+        varchar reversal_reason "obrigatorio no estorno"
+    }
+    CASH_SESSIONS {
+        char36 id PK
+        char36 tenant_id FK
+        char36 unit_id FK
+        char36 financial_account_id FK "so conta do tipo cash"
+        tinyint open_marker UK "1 aberta NULL fechada - UNIQUE com a conta"
+        decimal opening_amount "contado na gaveta"
+        decimal expected_amount "abertura + entradas - saidas"
+        decimal counted_amount "informado AS CEGAS"
+        decimal difference_amount "sobra ou falta - NUNCA some"
+        varchar status "open closed"
+        int version
+    }
+    FINANCIAL_MOVEMENTS {
+        char36 id PK "APPEND-ONLY - sem updated_at, sem version"
+        char36 tenant_id FK
+        char36 unit_id FK
+        char36 financial_account_id FK
+        varchar direction "inflow outflow - o amount e SEMPRE positivo"
+        decimal amount
+        decimal resulting_balance "o saldo DEPOIS deste movimento"
+        varchar origin_kind "settlement reversal cash_opening cash_supply cash_withdrawal"
+        char36 settlement_id FK
+        char36 cash_session_id FK
+        char36 reversal_of_movement_id UK "UNIQUE - estorna-se UMA vez"
+        varchar effective_date "data civil"
+        datetime occurred_at
+    }
+    FINANCIAL_TITLE_TIMELINE {
+        char36 id PK
+        char36 tenant_id FK
+        char36 title_id FK
+        varchar kind "created settled reversed cancelled updated"
+        varchar summary "em portugues, para quem abrir daqui a seis meses"
+        varchar reason
+        datetime occurred_at
+    }
+
+    UNITS ||--o{ FINANCIAL_ACCOUNTS : "opcional - nulo = compartilhada"
+    UNITS ||--o{ FINANCIAL_TITLES : "o titulo pertence a UMA loja"
+    CUSTOMERS ||--o{ FINANCIAL_TITLES : "deve (receivable)"
+    SUPPLIERS ||--o{ FINANCIAL_TITLES : "recebe (payable)"
+    SERVICE_ORDERS ||--o| FINANCIAL_TITLES : "origina a cobranca - ATO HUMANO"
+    PURCHASE_RECEIPTS ||--o| FINANCIAL_TITLES : "origina a conta a pagar"
+    FINANCIAL_CATEGORIES ||--o{ FINANCIAL_TITLES : agrupa
+    FINANCIAL_TITLES ||--o{ FINANCIAL_INSTALLMENTS : "SEMPRE ao menos uma"
+    FINANCIAL_INSTALLMENTS ||--o{ FINANCIAL_SETTLEMENTS : liquidada_por
+    FINANCIAL_ACCOUNTS ||--o{ FINANCIAL_SETTLEMENTS : recebe
+    PAYMENT_METHODS ||--o{ FINANCIAL_SETTLEMENTS : "COMO se moveu"
+    FINANCIAL_SETTLEMENTS ||--o| FINANCIAL_MOVEMENTS : "escreve no razao"
+    FINANCIAL_ACCOUNTS ||--o{ FINANCIAL_MOVEMENTS : "o extrato"
+    FINANCIAL_ACCOUNTS ||--o{ CASH_SESSIONS : "uma aberta por vez"
+    CASH_SESSIONS ||--o{ FINANCIAL_MOVEMENTS : "o que passou pelo turno"
+    FINANCIAL_TITLES ||--o{ FINANCIAL_TITLE_TIMELINE : "historia"
 ```
 
 ### Destaques do diagrama
@@ -697,30 +829,37 @@ erDiagram
 
     PART ||--o{ WARRANTY : "garantia de peca"
     SUPPLIER ||--o{ WARRANTY : responde_por
-    PURCHASE_RECEIPT ||--o{ PAYABLE : "gancho do Prompt 12 - SEM consumidor hoje"
 
     UNIT_C ||--o{ APPOINTMENT : agenda
 ```
 
 ### Invariantes já decididas
 
-| Decisão                                          | Motivo                                                                                                     |
-| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
-| `service_orders.unit_id` **obrigatório**         | A OS acontece fisicamente em uma unidade                                                                   |
-| `quotes.unit_id` **obrigatório**                 | Vem da OS; sustenta a FK `(service_order_id, unit_id)` (ADR-040)                                           |
-| `clients.unit_id` **não define ownership**       | O mesmo cliente é atendido em qualquer filial                                                              |
-| `equipments` pertence a tenant + cliente         | Não se duplica por passar em outra unidade                                                                 |
-| Número da OS **único por tenant**                | Sem ambiguidade em QR, portal, suporte e garantia                                                          |
-| `warranties` é **entidade própria**              | Nunca um booleano dentro da OS (item 63)                                                                   |
-| `stock_balances` é **por unidade**               | **Implementado no Prompt 10**: estoque é físico (item 64)                                                  |
-| `suppliers` **não tem `unit_id`**                | **Prompt 11**: a empresa negocia com o distribuidor, não a loja (ADR-052)                                  |
-| `purchase_orders.unit_id` **obrigatório**        | **Prompt 11**: a mercadoria chega em um endereço; pedido sem destino não existe                            |
-| necessidade e pedido são **entidades distintas** | **Prompt 11**: uma necessidade vira zero, um ou vários pedidos (ADR-048)                                   |
-| `received_quantity <= quantity` é **CHECK**      | **Prompt 11**: a trava de over-receipt vive no banco, não na aplicação (ADR-050)                           |
-| `purchase_price_history` é **append-only**       | **Prompt 11**: o preço anterior nunca é sobrescrito (ADR-051)                                              |
-| `stock_movements` é **append-only**              | **Implementado no Prompt 10**: saldo sem histórico é saldo não auditável (ADR-043)                         |
-| reserva é **entidade própria**                   | **Prompt 10**: reservar não tira nada da prateleira (ADR-045)                                              |
-| `quote_items.part_id` é **anulável**             | **Prompt 10**: linha PART escrita à mão continua válida para sempre (ADR-047)                              |
-| `quotes` guarda **snapshot** de preço            | **Implementado no Prompt 09**: a linha guarda o valor proposto, e a revisão preserva cada versão (ADR-041) |
-| `payments` usa **DECIMAL exato**                 | Nunca float (item 65)                                                                                      |
-| `attachments` guarda **chave de storage**        | Binário não vai para tabela de negócio (item 60)                                                           |
+| Decisão                                                 | Motivo                                                                                                     |
+| ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `service_orders.unit_id` **obrigatório**                | A OS acontece fisicamente em uma unidade                                                                   |
+| `quotes.unit_id` **obrigatório**                        | Vem da OS; sustenta a FK `(service_order_id, unit_id)` (ADR-040)                                           |
+| `clients.unit_id` **não define ownership**              | O mesmo cliente é atendido em qualquer filial                                                              |
+| `equipments` pertence a tenant + cliente                | Não se duplica por passar em outra unidade                                                                 |
+| Número da OS **único por tenant**                       | Sem ambiguidade em QR, portal, suporte e garantia                                                          |
+| `warranties` é **entidade própria**                     | Nunca um booleano dentro da OS (item 63)                                                                   |
+| `stock_balances` é **por unidade**                      | **Implementado no Prompt 10**: estoque é físico (item 64)                                                  |
+| `suppliers` **não tem `unit_id`**                       | **Prompt 11**: a empresa negocia com o distribuidor, não a loja (ADR-052)                                  |
+| `purchase_orders.unit_id` **obrigatório**               | **Prompt 11**: a mercadoria chega em um endereço; pedido sem destino não existe                            |
+| necessidade e pedido são **entidades distintas**        | **Prompt 11**: uma necessidade vira zero, um ou vários pedidos (ADR-048)                                   |
+| `received_quantity <= quantity` é **CHECK**             | **Prompt 11**: a trava de over-receipt vive no banco, não na aplicação (ADR-050)                           |
+| `purchase_price_history` é **append-only**              | **Prompt 11**: o preço anterior nunca é sobrescrito (ADR-051)                                              |
+| `stock_movements` é **append-only**                     | **Implementado no Prompt 10**: saldo sem histórico é saldo não auditável (ADR-043)                         |
+| reserva é **entidade própria**                          | **Prompt 10**: reservar não tira nada da prateleira (ADR-045)                                              |
+| `quote_items.part_id` é **anulável**                    | **Prompt 10**: linha PART escrita à mão continua válida para sempre (ADR-047)                              |
+| `quotes` guarda **snapshot** de preço                   | **Implementado no Prompt 09**: a linha guarda o valor proposto, e a revisão preserva cada versão (ADR-041) |
+| `financial_titles` usa **uma tabela com `direction`**   | **Prompt 12**: a trava de over-settlement existe uma vez só (ADR-053)                                      |
+| `financial_movements` é **append-only**                 | **Prompt 12**: sem `updated_at`, sem `version`. Estorno é contramovimento (ADR-054)                        |
+| **não existe `status = 'overdue'`**                     | **Prompt 12**: vencido é derivado, no fuso da empresa (ADR-055)                                            |
+| todo título tem **ao menos uma parcela**                | **Prompt 12**: à vista é 1 de 1; elimina o `if` de toda consulta (ADR-056)                                 |
+| uma conta a pagar **por recebimento**                   | **Prompt 12**: entregas parciais somam exatamente (ADR-058)                                                |
+| `financial_accounts.unit_id` é **anulável**             | **Prompt 12**: nulo = conta da empresa; preenchido = caixa da loja (ADR-059)                               |
+| `cash_sessions.open_marker` existe **só para o índice** | **Prompt 12**: o MySQL trata cada `NULL` como distinto num UNIQUE (ADR-060)                                |
+| o Financeiro **nunca escreve** em módulo operacional    | **Prompt 12**: receber não entrega o aparelho; pagar não recebe mercadoria                                 |
+| `payments` usa **DECIMAL exato**                        | Nunca float (item 65)                                                                                      |
+| `attachments` guarda **chave de storage**               | Binário não vai para tabela de negócio (item 60)                                                           |

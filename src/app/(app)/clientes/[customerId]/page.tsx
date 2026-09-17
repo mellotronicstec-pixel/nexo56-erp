@@ -30,6 +30,8 @@ import { equipmentTitle, VOLTAGE_LABEL } from '@/modules/equipment/domain/equipm
 import { checkAccess } from '@/modules/features/application/effective-access';
 import { FEATURES } from '@/modules/features/domain/catalog';
 import { hasPermission } from '@/modules/tenancy/domain/tenant-context';
+import { summarizeCustomerFinance } from '@/modules/finance/application/finance-queries';
+import { FinanceSummaryCard } from '../../financeiro/finance-summary';
 import { CustomerStatusActions } from './status-actions';
 import { setCustomerStatusAction } from '../actions';
 
@@ -84,6 +86,23 @@ export default async function CustomerDetailPage({
     : [];
 
   const canManageEquipment = hasPermission(context, PERMISSIONS.EQUIPMENT_MANAGE);
+
+  /**
+   * Situacao financeira do cliente (Prompt 12, item 70).
+   *
+   * MOSTRA, NAO JULGA: nao ha score, limite nem bloqueio automatico. O
+   * Financeiro e OPCIONAL, entao a secao so existe quando a empresa tem o
+   * modulo e a pessoa tem `finance.view` — sem isso o cadastro continua
+   * inteiro, como sempre foi.
+   */
+  const financeAccess = await checkAccess(context, {
+    featureKey: FEATURES.FINANCE_CORE,
+    permission: PERMISSIONS.FINANCE_VIEW,
+  });
+
+  const financeSummary = financeAccess.allowed
+    ? await summarizeCustomerFinance(context, customer.id)
+    : null;
 
   const formatter = new Intl.DateTimeFormat('pt-BR', {
     dateStyle: 'short',
@@ -314,6 +333,21 @@ export default async function CustomerDetailPage({
               </CardBody>
             )}
           </Card>
+        </Section>
+      ) : null}
+
+      {financeSummary ? (
+        <Section
+          id="financeiro"
+          title="Financeiro"
+          description="O que este cliente deve a loja, nas unidades que voce acessa."
+        >
+          <FinanceSummaryCard
+            title="Situacao financeira"
+            description="Cobrancas deste cliente. O sistema mostra a situacao; quem decide atender e voce."
+            summary={financeSummary}
+            emptyText="Nenhuma cobranca registrada para este cliente."
+          />
         </Section>
       ) : null}
 
