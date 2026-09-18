@@ -65,6 +65,89 @@ function buildFoundationOnlyFolder(): string {
   return buildFolderUpTo('0000');
 }
 
+/**
+ * Popula um banco no estado do Prompt 12 com dados REAIS de toda a cadeia
+ * (item 95): tenant, unidade, usuario, cliente, equipamento, OS finalizada,
+ * titulo liquidado e movimento no razao.
+ *
+ * O upgrade para o Prompt 13 precisa encontrar um banco que se parece com o de
+ * uma loja em operacao, nao com um banco vazio — e um esquema que so foi
+ * testado vazio nao prova nada sobre a empresa que ja usa o sistema.
+ */
+async function seedUpToPrompt12(connection: mysql.Connection): Promise<void> {
+  await connection.query(`
+    INSERT INTO plans (id, \`key\`, name, description, is_internal, created_at, updated_at)
+    VALUES ('plan-p12', 'interno-p12', 'Plano', 'Teste', 1, NOW(3), NOW(3));
+
+    INSERT INTO tenants (id, slug, name, plan_id, status, timezone, created_at, updated_at)
+    VALUES ('tenant-p12', 'p12', 'Empresa do Prompt 12', 'plan-p12', 'active',
+            'America/Sao_Paulo', NOW(3), NOW(3));
+
+    INSERT INTO units (id, tenant_id, name, status, timezone, created_at, updated_at)
+    VALUES ('unit-p12', 'tenant-p12', 'Matriz', 'active', 'America/Sao_Paulo', NOW(3), NOW(3));
+
+    INSERT INTO users (id, tenant_id, email, name, password_hash, status, created_at, updated_at)
+    VALUES ('user-p12', 'tenant-p12', 'admin@p12.invalid', 'Admin', 'hash', 'active',
+            NOW(3), NOW(3));
+
+    INSERT INTO customers (id, tenant_id, kind, name, name_normalized, status,
+                           created_by, created_at, updated_at)
+    VALUES ('cli-p12', 'tenant-p12', 'individual', 'Cliente do Prompt 12', 'cliente do prompt 12',
+            'active', 'user-p12', NOW(3), NOW(3));
+
+    INSERT INTO equipment (id, tenant_id, customer_id, kind, kind_normalized, voltage, status,
+                           created_by, created_at, updated_at)
+    VALUES ('eq-p12', 'tenant-p12', 'cli-p12', 'Receiver', 'receiver', 'bivolt', 'active',
+            'user-p12', NOW(3), NOW(3));
+
+    INSERT INTO service_orders
+      (id, tenant_id, unit_id, number, customer_id, equipment_id, status, customer_report,
+       opened_at, version, created_by, created_at, updated_at)
+    VALUES ('so-p12', 'tenant-p12', 'unit-p12', 1, 'cli-p12', 'eq-p12', 'completed',
+            'Nao liga.', NOW(3), 5, 'user-p12', NOW(3), NOW(3));
+
+    INSERT INTO financial_accounts
+      (id, tenant_id, name, name_search, kind, current_balance, status, version,
+       created_by, created_at, updated_at)
+    VALUES ('conta-p12b', 'tenant-p12', 'Banco', 'banco', 'bank', '900.00', 'active', 1,
+            'user-p12', NOW(3), NOW(3));
+
+    INSERT INTO payment_methods
+      (id, tenant_id, kind, name, name_search, status, position, version,
+       created_by, created_at, updated_at)
+    VALUES ('metodo-p12b', 'tenant-p12', 'pix', 'PIX', 'pix', 'active', 0, 1,
+            'user-p12', NOW(3), NOW(3));
+
+    INSERT INTO financial_titles
+      (id, tenant_id, unit_id, direction, number, counterparty_kind, customer_id, description,
+       origin, origin_key, service_order_id, amount, settled_amount, issued_at, due_date,
+       installment_count, status, version, created_by, created_at, updated_at)
+    VALUES ('tit-p12b', 'tenant-p12', 'unit-p12', 'receivable', 1, 'customer', 'cli-p12',
+            'Servico da OS 000001', 'service_order', 'service_order:so-p12', 'so-p12',
+            '900.00', '900.00', '2026-09-01', '2026-09-10', 1, 'settled', 2,
+            'user-p12', NOW(3), NOW(3));
+
+    INSERT INTO financial_installments
+      (id, tenant_id, unit_id, title_id, number, amount, settled_amount, due_date, status,
+       version, created_at, updated_at)
+    VALUES ('parc-p12b', 'tenant-p12', 'unit-p12', 'tit-p12b', 1, '900.00', '900.00',
+            '2026-09-10', 'settled', 2, NOW(3), NOW(3));
+
+    INSERT INTO financial_settlements
+      (id, tenant_id, unit_id, title_id, installment_id, direction, amount, effective_date,
+       financial_account_id, payment_method_id, status, created_by, created_at, updated_at)
+    VALUES ('liq-p12b', 'tenant-p12', 'unit-p12', 'tit-p12b', 'parc-p12b', 'receivable',
+            '900.00', '2026-09-05', 'conta-p12b', 'metodo-p12b', 'confirmed',
+            'user-p12', NOW(3), NOW(3));
+
+    INSERT INTO financial_movements
+      (id, tenant_id, unit_id, financial_account_id, direction, amount, resulting_balance,
+       origin_kind, settlement_id, effective_date, occurred_at, actor_id, created_at)
+    VALUES ('mv-p12b', 'tenant-p12', 'unit-p12', 'conta-p12b', 'inflow', '900.00', '900.00',
+            'settlement', 'liq-p12b', '2026-09-05', NOW(3), 'user-p12', NOW(3));
+  `);
+}
+
 beforeAll(async () => {
   adminConnection = await mysql.createConnection({ uri: BASE_URL, timezone: 'Z' });
   await adminConnection.query(`DROP DATABASE IF EXISTS \`${UPGRADE_DB}\``);
@@ -1732,6 +1815,222 @@ describe('upgrade incremental entre prompts', () => {
              origin_kind, effective_date, occurred_at, created_at)
           VALUES ('mv-neg', 'tenant-p11', 'unit-p11', 'conta-p12', 'inflow', '-10.00', '0.00',
                   'settlement', '2026-09-20', NOW(3), NOW(3))
+        `),
+      ).rejects.toThrow();
+    } finally {
+      await connection.end();
+      rmSync(folder, { recursive: true, force: true });
+      await adminConnection.query(`DROP DATABASE IF EXISTS \`${stepDb}\``);
+    }
+  });
+
+  it('leva um banco do Prompt 12, com financeiro liquidado, ate o Prompt 13 sem perda', async () => {
+    const stepDb = 'nexo56_migration_step13_test';
+    await adminConnection.query(`DROP DATABASE IF EXISTS \`${stepDb}\``);
+    await adminConnection.query(
+      `CREATE DATABASE \`${stepDb}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`,
+    );
+
+    const folder = buildFolderUpTo('0010');
+    const connection = await mysql.createConnection({
+      uri: urlForDatabase(stepDb),
+      timezone: 'Z',
+      multipleStatements: true,
+    });
+
+    try {
+      // --- banco no estado do Prompt 12 --------------------------------------
+      await migrate(drizzle(connection), { migrationsFolder: folder });
+
+      const [beforeTables] = await connection.query<mysql.RowDataPacket[]>('SHOW TABLES');
+      const beforeNames = beforeTables.map((row) => Object.values(row)[0] as string);
+      expect(beforeNames).toContain('financial_titles');
+      expect(beforeNames).not.toContain('warranties');
+
+      /** A OS do Prompt 12 ainda NAO tem classificacao: a coluna nasce agora. */
+      const [beforeCols] = await connection.query<mysql.RowDataPacket[]>(
+        `SHOW COLUMNS FROM service_orders LIKE 'classification'`,
+      );
+      expect(beforeCols).toHaveLength(0);
+
+      // --- dados reais dos prompts anteriores --------------------------------
+      await seedUpToPrompt12(connection);
+
+      // --- upgrade para o Prompt 13 ------------------------------------------
+      await migrate(drizzle(connection), { migrationsFolder: './drizzle' });
+
+      const [afterTables] = await connection.query<mysql.RowDataPacket[]>('SHOW TABLES');
+      const afterNames = afterTables.map((row) => Object.values(row)[0] as string);
+      for (const tabela of [
+        'warranty_policies',
+        'warranties',
+        'warranty_coverage_items',
+        'warranty_certificates',
+        'warranty_returns',
+        'warranty_costs',
+        'warranty_timeline',
+      ]) {
+        expect(afterNames).toContain(tabela);
+      }
+
+      /**
+       * NENHUM SISTEMA DE RECALL, COMUNICACAO OU REGRA (itens 89 e 131). O
+       * Prompt 13 prepara o terreno para campanha tecnica sem implementa-la.
+       */
+      for (const proibida of [
+        'recall_campaigns',
+        'warranty_notifications',
+        'communication_queue',
+        'rule_definitions',
+      ]) {
+        expect(afterNames).not.toContain(proibida);
+      }
+
+      // --- TUDO do Prompt 12 continua exatamente onde estava -----------------
+      const preservados: Array<[string, string, Record<string, unknown>]> = [
+        ['service_orders', 'so-p12', { status: 'completed', number: 1 }],
+        ['financial_titles', 'tit-p12b', { status: 'settled', settled_amount: '900.00' }],
+        ['financial_movements', 'mv-p12b', { direction: 'inflow', amount: '900.00' }],
+        ['customers', 'cli-p12', { name: 'Cliente do Prompt 12' }],
+        ['equipment', 'eq-p12', { kind: 'Receiver' }],
+      ];
+
+      for (const [tabela, id, esperado] of preservados) {
+        const [linhas] = await connection.query<mysql.RowDataPacket[]>(
+          `SELECT * FROM \`${tabela}\` WHERE id = ?`,
+          [id],
+        );
+        expect(linhas, `${tabela}/${id} sumiu no upgrade`).toHaveLength(1);
+        expect(linhas[0]).toMatchObject(esperado);
+      }
+
+      /**
+       * A COLUNA NOVA NAO REESCREVEU NADA (item 94).
+       *
+       * Toda OS que ja existia virou `standard` pelo DEFAULT, sem `UPDATE` na
+       * migration — e as colunas de vinculo nasceram nulas, como devem.
+       */
+      const [osDepois] = await connection.query<mysql.RowDataPacket[]>(
+        `SELECT classification, warranty_id, original_service_order_id FROM service_orders WHERE id = 'so-p12'`,
+      );
+      expect(osDepois[0]).toMatchObject({
+        classification: 'standard',
+        warranty_id: null,
+        original_service_order_id: null,
+      });
+
+      // --- e Garantias ja funciona sobre esse banco --------------------------
+      await connection.query(`
+        INSERT INTO warranty_policies
+          (id, tenant_id, name, name_search, type, duration_amount, duration_unit,
+           coverage_summary, status, version, created_by, created_at, updated_at)
+        VALUES ('pol-p13', 'tenant-p12', 'Reparo padrao', 'reparo padrao', 'internal', 90, 'days',
+                'Mao de obra do reparo.', 'active', 1, 'user-p12', NOW(3), NOW(3));
+
+        INSERT INTO warranties
+          (id, tenant_id, unit_id, number, type, policy_id, customer_id, equipment_id,
+           service_order_id, duration_amount, duration_unit, covers_whole_service,
+           starts_on, ends_on, status, version, created_by, created_at, updated_at)
+        VALUES ('gar-p13', 'tenant-p12', 'unit-p12', 1, 'internal', 'pol-p13', 'cli-p12', 'eq-p12',
+                'so-p12', 90, 'days', 1, '2026-09-01', '2026-11-30', 'active', 1,
+                'user-p12', NOW(3), NOW(3));
+
+        INSERT INTO warranty_coverage_items
+          (id, tenant_id, warranty_id, kind, description, position, created_at, updated_at)
+        VALUES ('cob-p13', 'tenant-p12', 'gar-p13', 'labor', 'Reparo da fonte', 0, NOW(3), NOW(3));
+
+        INSERT INTO service_orders
+          (id, tenant_id, unit_id, number, customer_id, equipment_id, status, classification,
+           warranty_id, original_service_order_id, customer_report, opened_at, version,
+           created_by, created_at, updated_at)
+        VALUES ('so-gar-p13', 'tenant-p12', 'unit-p12', 2, 'cli-p12', 'eq-p12', 'awaiting_repair',
+                'warranty_internal', 'gar-p13', 'so-p12', 'Voltou a desligar.', NOW(3), 1,
+                'user-p12', NOW(3), NOW(3));
+
+        INSERT INTO warranty_returns
+          (id, tenant_id, warranty_id, unit_id, equipment_id, customer_id,
+           original_service_order_id, return_service_order_id, customer_report, reference_date,
+           coverage_assessment, was_enforceable, registered_at, created_by, created_at, updated_at)
+        VALUES ('ret-p13', 'tenant-p12', 'gar-p13', 'unit-p12', 'eq-p12', 'cli-p12',
+                'so-p12', 'so-gar-p13', 'Voltou a desligar.', '2026-10-01', 'covered', 1,
+                NOW(3), 'user-p12', NOW(3), NOW(3));
+      `);
+
+      /** A OS de garantia nasceu vinculada, e a ORIGINAL ficou intacta. */
+      const [nova] = await connection.query<mysql.RowDataPacket[]>(
+        `SELECT status, classification, warranty_id, original_service_order_id
+           FROM service_orders WHERE id = 'so-gar-p13'`,
+      );
+      expect(nova[0]).toMatchObject({
+        status: 'awaiting_repair',
+        classification: 'warranty_internal',
+        warranty_id: 'gar-p13',
+        original_service_order_id: 'so-p12',
+      });
+
+      const [original] = await connection.query<mysql.RowDataPacket[]>(
+        `SELECT status, classification FROM service_orders WHERE id = 'so-p12'`,
+      );
+      expect(original[0]).toMatchObject({ status: 'completed', classification: 'standard' });
+
+      // --- as invariantes novas valem NO BANCO (item 93) ---------------------
+
+      /** Vigencia invertida e recusada pela CHECK. */
+      await expect(
+        connection.query(`
+          INSERT INTO warranties
+            (id, tenant_id, unit_id, number, type, customer_id, equipment_id,
+             duration_amount, duration_unit, covers_whole_service, starts_on, ends_on,
+             status, version, created_by, created_at, updated_at)
+          VALUES ('gar-x', 'tenant-p12', 'unit-p12', 99, 'internal', 'cli-p12', 'eq-p12',
+                  90, 'days', 1, '2026-12-31', '2026-01-01', 'active', 1,
+                  'user-p12', NOW(3), NOW(3))
+        `),
+      ).rejects.toThrow();
+
+      /** Duracao zero e recusada. */
+      await expect(
+        connection.query(`
+          INSERT INTO warranties
+            (id, tenant_id, unit_id, number, type, customer_id, equipment_id,
+             duration_amount, duration_unit, covers_whole_service, starts_on, ends_on,
+             status, version, created_by, created_at, updated_at)
+          VALUES ('gar-y', 'tenant-p12', 'unit-p12', 98, 'internal', 'cli-p12', 'eq-p12',
+                  0, 'days', 1, '2026-01-01', '2026-12-31', 'active', 1,
+                  'user-p12', NOW(3), NOW(3))
+        `),
+      ).rejects.toThrow();
+
+      /** Custo negativo e recusado. */
+      await expect(
+        connection.query(`
+          INSERT INTO warranty_costs
+            (id, tenant_id, warranty_id, kind, description, amount,
+             created_by, created_at, updated_at)
+          VALUES ('cst-x', 'tenant-p12', 'gar-p13', 'part', 'Invalido', '-1.00',
+                  'user-p12', NOW(3), NOW(3))
+        `),
+      ).rejects.toThrow();
+
+      /** Uma OS de retorno pertence a UM retorno: o segundo vinculo e recusado. */
+      await expect(
+        connection.query(`
+          INSERT INTO warranty_returns
+            (id, tenant_id, warranty_id, unit_id, equipment_id, customer_id,
+             return_service_order_id, customer_report, reference_date,
+             coverage_assessment, was_enforceable, registered_at, created_by, created_at, updated_at)
+          VALUES ('ret-x', 'tenant-p12', 'gar-p13', 'unit-p12', 'eq-p12', 'cli-p12',
+                  'so-gar-p13', 'Duplicado.', '2026-10-02', 'covered', 1,
+                  NOW(3), 'user-p12', NOW(3), NOW(3))
+        `),
+      ).rejects.toThrow();
+
+      /** Garantia de outra empresa e recusada pela FK composta. */
+      await expect(
+        connection.query(`
+          INSERT INTO warranty_coverage_items
+            (id, tenant_id, warranty_id, kind, description, position, created_at, updated_at)
+          VALUES ('cob-x', 'tenant-outro', 'gar-p13', 'labor', 'Invalido', 0, NOW(3), NOW(3))
         `),
       ).rejects.toThrow();
     } finally {

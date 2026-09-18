@@ -2,7 +2,8 @@ import 'server-only';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { getDb } from '@/core/db/client';
-import { runInTransaction, type TransactionExecutor } from '@/core/db/unit-of-work';
+import { isDuplicateKeyError } from '@/core/db/duplicate-key';
+import { runInTransaction, type EmitFn, type TransactionExecutor } from '@/core/db/unit-of-work';
 import { BusinessRuleError, NotFoundError, ValidationError } from '@/core/errors';
 import { newId } from '@/core/ids/id';
 import { civilDaysFromNow } from '@/core/time/civil-date';
@@ -19,8 +20,14 @@ import {
 } from '@/modules/service-orders/domain/service-order';
 import {
   FOLLOW_UP_ON_CREATION_DAYS,
-  SERVICE_ORDER_INITIAL_STATUS,
+  initialStatusForOrigin,
+  type ServiceOrderOrigin,
+  type ServiceOrderStatus,
 } from '@/modules/service-orders/domain/workflow';
+import {
+  DEFAULT_SERVICE_ORDER_CLASSIFICATION,
+  type ServiceOrderClassification,
+} from '@/modules/warranties/domain/warranty';
 import {
   serviceOrderTimeline,
   serviceOrders,
@@ -91,19 +98,6 @@ async function findByIntake(
   return existing ?? null;
 }
 
-/** Detecta a violacao de UNIQUE do MySQL sem depender da mensagem em ingles. */
-function isDuplicateKeyError(error: unknown): boolean {
-  let current: unknown = error;
-  for (let depth = 0; depth < 6 && current; depth += 1) {
-    if (typeof current !== 'object' || current === null) return false;
-    const code = (current as { code?: string }).code;
-    const errno = (current as { errno?: number }).errno;
-    if (code === 'ER_DUP_ENTRY' || errno === 1062) return true;
-    current = (current as { cause?: unknown }).cause;
-  }
-  return false;
-}
-
 /**
  * Abre uma Ordem de Servico.
  *
@@ -121,25 +115,66 @@ function isDuplicateKeyError(error: unknown): boolean {
  * satisfazer o sistema. Quando ha recebimento, o vinculo e historico e a
  * unidade tem de bater (item 11).
  */
-export async function createServiceOrder(
-  context: TenantContext,
-  rawInput: unknown,
-): Promise<CreatedServiceOrder> {
-  const parsed = serviceOrderInputSchema.safeParse(rawInput);
-  if (!parsed.success) {
-    throw new ValidationError(parsed.error.issues[0]?.message ?? 'Dados invalidos.');
-  }
-  const input = parsed.data;
+export interface ServiceOrderCreationPlan {
+  serviceOrderId: string;
+  unitId: string;
+  customerId: string;
+  equipmentId: string;
+  intakeId: string | null;
+  customerReport: string;
+  internalNotes: string | null;
+  idempotencyKey: string | null;
+  origin: ServiceOrderOrigin;
+  classification: ServiceOrderClassification;
+  initialStatus: ServiceOrderStatus;
+  /**
+   * OS que ja existe com esta chave de comando.
+   *
+   * Quando presente, `applyServiceOrderCreation` NAO grava nada e devolve a
+   * que ja existia — e o retry que nao abre a segunda ordem.
+   */
+  existing: { id: string; number: number } | null;
+}
 
-  const unitId = context.activeUnitId;
+export interface ServiceOrderCreationCommand {
+  equipmentId: string;
+  intakeId?: string | null;
+  customerReport: string;
+  internalNotes?: string | null;
+  idempotencyKey?: string | null;
+  /** Unidade que vai executar. Omitida, usa a unidade ativa da sessao. */
+  unitId?: string;
+  /** A origem decide o estado inicial. Nunca se passa `status` (item 27). */
+  origin?: ServiceOrderOrigin;
+}
+
+/**
+ * Valida a abertura SEM gravar nada.
+ *
+ * Existe separada de `applyServiceOrderCreation` pelo mesmo motivo que
+ * `planStockEntry` existe separada de `applyStockEntry` (ADR-049): quem precisa
+ * criar uma OS DENTRO da propria transacao — hoje o retorno em garantia — nao
+ * pode abrir uma transacao aninhada, e muito menos reimplementar a abertura.
+ * Duas copias da criacao de OS divergiriam na primeira regra nova.
+ */
+export async function planServiceOrderCreation(
+  context: TenantContext,
+  command: ServiceOrderCreationCommand,
+): Promise<ServiceOrderCreationPlan> {
+  const origin = command.origin ?? { kind: 'standard' };
+
+  const unitId = command.unitId ?? context.activeUnitId;
   if (!unitId) {
     throw new ValidationError(
       'Selecione a unidade que vai executar o servico antes de abrir a Ordem de Servico.',
     );
   }
+  if (!context.authorizedUnitIds.includes(unitId)) {
+    throw new NotFoundError('Unidade nao encontrada.');
+  }
 
-  const idempotencyKey = input.idempotencyKey || null;
-  const intakeId = input.intakeId || null;
+  const idempotencyKey = command.idempotencyKey || null;
+  const intakeId = command.intakeId || null;
 
   /**
    * IDEMPOTENCIA, PRIMEIRA CAMADA (itens 32, 93 e 127).
@@ -147,21 +182,18 @@ export async function createServiceOrder(
    * A consulta antecipada resolve o caso comum — duplo clique, F5, retentativa
    * depois de queda de rede — sem gastar um numero da sequencia. A corrida
    * real (dois envios simultaneos) escapa daqui e e barrada pelo UNIQUE do
-   * banco, tratado no final desta funcao.
+   * banco, tratado em `createServiceOrder` e em quem chamar a primitiva.
    */
-  if (idempotencyKey) {
-    const existing = await findByIdempotencyKey(context.tenantId, idempotencyKey);
-    if (existing) {
-      return { serviceOrderId: existing.id, number: existing.number, reused: true };
-    }
-  }
+  const existing = idempotencyKey
+    ? await findByIdempotencyKey(context.tenantId, idempotencyKey)
+    : null;
 
   const db = getDb();
 
   const [targetEquipment] = await db
     .select({ id: equipment.id, customerId: equipment.customerId })
     .from(equipment)
-    .where(and(eq(equipment.tenantId, context.tenantId), eq(equipment.id, input.equipmentId)))
+    .where(and(eq(equipment.tenantId, context.tenantId), eq(equipment.id, command.equipmentId)))
     .limit(1);
 
   // Equipamento de outra empresa e equipamento inexistente terminam igual.
@@ -195,7 +227,7 @@ export async function createServiceOrder(
       );
     }
 
-    if (intake.equipmentId !== input.equipmentId) {
+    if (intake.equipmentId !== command.equipmentId) {
       throw new BusinessRuleError('O recebimento informado nao e deste equipamento.');
     }
 
@@ -208,9 +240,188 @@ export async function createServiceOrder(
     }
   }
 
-  const customerReport = normalizeCustomerReport(input.customerReport);
-  const serviceOrderId = newId();
-  const now = new Date();
+  return {
+    serviceOrderId: newId(),
+    unitId,
+    customerId: targetEquipment.customerId,
+    equipmentId: command.equipmentId,
+    intakeId,
+    customerReport: normalizeCustomerReport(command.customerReport),
+    internalNotes: command.internalNotes || null,
+    idempotencyKey,
+    origin,
+    classification:
+      origin.kind === 'warranty_return'
+        ? 'warranty_internal'
+        : DEFAULT_SERVICE_ORDER_CLASSIFICATION,
+    /** O ESTADO INICIAL VEM DA ORIGEM, nunca do formulario (itens 27 e 110). */
+    initialStatus: initialStatusForOrigin(origin),
+    existing,
+  };
+}
+
+/**
+ * Grava a abertura planejada, na transacao de quem chamou.
+ *
+ * ESTE E O UNICO LUGAR DO SISTEMA QUE FAZ `INSERT INTO service_orders`.
+ */
+export async function applyServiceOrderCreation(
+  tx: TransactionExecutor,
+  emit: EmitFn,
+  context: TenantContext,
+  plan: ServiceOrderCreationPlan,
+  now: Date = new Date(),
+): Promise<CreatedServiceOrder> {
+  if (plan.existing) {
+    return { serviceOrderId: plan.existing.id, number: plan.existing.number, reused: true };
+  }
+
+  const allocated = await allocateSequenceNumber(
+    tx,
+    context.tenantId,
+    SEQUENCE_TYPES.SERVICE_ORDER,
+    {
+      prefix: SERVICE_ORDER_NUMBER_PREFIX,
+      padding: SERVICE_ORDER_NUMBER_PADDING,
+    },
+  );
+
+  /**
+   * Guardado como CONSTANTE ESTREITADA, e nao como booleano.
+   *
+   * `const x = plan.origin.kind === '...'` nao estreita o tipo depois — o
+   * TypeScript perde o vinculo entre o booleano e a uniao discriminada, e
+   * `plan.origin.warrantyId` volta a ser erro. Guardar a variante em si
+   * mantem o estreitamento e deixa impossivel ler os campos da garantia numa
+   * abertura comum.
+   */
+  const retorno = plan.origin.kind === 'warranty_return' ? plan.origin : null;
+
+  await tx.insert(serviceOrders).values({
+    id: plan.serviceOrderId,
+    tenantId: context.tenantId,
+    unitId: plan.unitId,
+    number: allocated.value,
+    customerId: plan.customerId,
+    equipmentId: plan.equipmentId,
+    intakeId: plan.intakeId,
+    status: plan.initialStatus,
+    classification: plan.classification,
+    warrantyId: retorno?.warrantyId ?? null,
+    originalServiceOrderId: retorno?.originalServiceOrderId ?? null,
+    statusChangedAt: now,
+    /**
+     * FOLLOW-UP PADRAO DA ABERTURA: +2 dias corridos (Prompt 08, item 34).
+     *
+     * Gravado aqui, na MESMA transacao da criacao, e nao por um handler de
+     * evento: uma ordem que nasce sem prazo e uma ordem que ninguem
+     * acompanha, e a janela entre criar e reagir seria justamente quando o
+     * atendente fecha a tela.
+     *
+     * Data CIVIL no fuso do tenant — "daqui a dois dias" e um dia inteiro,
+     * nao um instante.
+     */
+    followUpAt: civilDaysFromNow(context.tenantTimezone, FOLLOW_UP_ON_CREATION_DAYS, now),
+    customerReport: plan.customerReport,
+    internalNotes: plan.internalNotes,
+    openedAt: now,
+    idempotencyKey: plan.idempotencyKey,
+    createdBy: context.userId,
+    updatedBy: context.userId,
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  await tx.insert(serviceOrderTimeline).values({
+    id: newId(),
+    tenantId: context.tenantId,
+    serviceOrderId: plan.serviceOrderId,
+    kind: TIMELINE_KINDS.CREATED,
+    summary: retorno
+      ? 'Ordem de Servico aberta por retorno em garantia'
+      : 'Ordem de Servico aberta',
+    // Sem PII: referencias e contagens, nunca o relato do cliente.
+    metadata: {
+      number: allocated.value,
+      fromIntake: plan.intakeId !== null,
+      classification: plan.classification,
+      initialStatus: plan.initialStatus,
+    },
+    actorId: context.userId,
+    occurredAt: now,
+  });
+
+  await recordAudit(
+    {
+      action: AUDIT_ACTIONS.SERVICE_ORDER_CREATED,
+      entityType: 'service_order',
+      entityId: plan.serviceOrderId,
+      tenantId: context.tenantId,
+      unitId: plan.unitId,
+      userId: context.userId,
+      after: {
+        number: allocated.value,
+        equipmentId: plan.equipmentId,
+        customerId: plan.customerId,
+        intakeId: plan.intakeId,
+        status: plan.initialStatus,
+        classification: plan.classification,
+        warrantyId: retorno?.warrantyId ?? null,
+        followUpDays: FOLLOW_UP_ON_CREATION_DAYS,
+        // Tamanho, nao conteudo: o relato pode conter dado pessoal.
+        customerReportLength: plan.customerReport.length,
+      },
+    },
+    tx,
+  );
+
+  await emit({
+    type: EVENT_TYPES.SERVICE_ORDER_CREATED,
+    tenantId: context.tenantId,
+    payload: {
+      serviceOrderId: plan.serviceOrderId,
+      number: allocated.value,
+      unitId: plan.unitId,
+      customerId: plan.customerId,
+      equipmentId: plan.equipmentId,
+      intakeId: plan.intakeId,
+      classification: plan.classification,
+      openedBy: context.userId,
+    },
+  });
+
+  return { serviceOrderId: plan.serviceOrderId, number: allocated.value, reused: false };
+}
+
+export async function createServiceOrder(
+  context: TenantContext,
+  rawInput: unknown,
+): Promise<CreatedServiceOrder> {
+  const parsed = serviceOrderInputSchema.safeParse(rawInput);
+  if (!parsed.success) {
+    throw new ValidationError(parsed.error.issues[0]?.message ?? 'Dados invalidos.');
+  }
+  const input = parsed.data;
+
+  /**
+   * A ABERTURA COMUM NAO ACEITA ORIGEM (itens 27 e 110).
+   *
+   * Nenhum campo do formulario chega ate `origin`: esta funcao nao o repassa,
+   * e o schema de entrada nao o conhece. Uma OS aberta pelo balcao nasce
+   * sempre em Aguardando Parecer Tecnico, e nao ha combinacao de dados que
+   * mude isso.
+   */
+  const plan = await planServiceOrderCreation(context, {
+    equipmentId: input.equipmentId,
+    intakeId: input.intakeId,
+    customerReport: input.customerReport,
+    internalNotes: input.internalNotes,
+    idempotencyKey: input.idempotencyKey,
+  });
+
+  if (plan.existing) {
+    return { serviceOrderId: plan.existing.id, number: plan.existing.number, reused: true };
+  }
 
   try {
     /**
@@ -218,98 +429,9 @@ export async function createServiceOrder(
      * auditoria e evento. Se qualquer parte falhar, nao sobra nem numero
      * alocado sem documento nem documento sem trilha.
      */
-    const number = await runInTransaction(async (tx, emit) => {
-      const allocated = await allocateSequenceNumber(
-        tx as TransactionExecutor,
-        context.tenantId,
-        SEQUENCE_TYPES.SERVICE_ORDER,
-        { prefix: SERVICE_ORDER_NUMBER_PREFIX, padding: SERVICE_ORDER_NUMBER_PADDING },
-      );
-
-      await tx.insert(serviceOrders).values({
-        id: serviceOrderId,
-        tenantId: context.tenantId,
-        unitId,
-        number: allocated.value,
-        customerId: targetEquipment.customerId,
-        equipmentId: input.equipmentId,
-        intakeId,
-        status: SERVICE_ORDER_INITIAL_STATUS,
-        statusChangedAt: now,
-        /**
-         * FOLLOW-UP PADRAO DA ABERTURA: +2 dias corridos (Prompt 08, item 34).
-         *
-         * Gravado aqui, na MESMA transacao da criacao, e nao por um handler de
-         * evento: uma ordem que nasce sem prazo e uma ordem que ninguem
-         * acompanha, e a janela entre criar e reagir seria justamente quando o
-         * atendente fecha a tela.
-         *
-         * Data CIVIL no fuso do tenant — "daqui a dois dias" e um dia inteiro,
-         * nao um instante.
-         */
-        followUpAt: civilDaysFromNow(context.tenantTimezone, FOLLOW_UP_ON_CREATION_DAYS, now),
-        customerReport,
-        internalNotes: input.internalNotes || null,
-        openedAt: now,
-        idempotencyKey,
-        createdBy: context.userId,
-        updatedBy: context.userId,
-        createdAt: now,
-        updatedAt: now,
-      });
-
-      await tx.insert(serviceOrderTimeline).values({
-        id: newId(),
-        tenantId: context.tenantId,
-        serviceOrderId,
-        kind: TIMELINE_KINDS.CREATED,
-        summary: 'Ordem de Servico aberta',
-        // Sem PII: referencias e contagens, nunca o relato do cliente.
-        metadata: { number: allocated.value, fromIntake: intakeId !== null },
-        actorId: context.userId,
-        occurredAt: now,
-      });
-
-      await recordAudit(
-        {
-          action: AUDIT_ACTIONS.SERVICE_ORDER_CREATED,
-          entityType: 'service_order',
-          entityId: serviceOrderId,
-          tenantId: context.tenantId,
-          unitId,
-          userId: context.userId,
-          after: {
-            number: allocated.value,
-            equipmentId: input.equipmentId,
-            customerId: targetEquipment.customerId,
-            intakeId,
-            status: SERVICE_ORDER_INITIAL_STATUS,
-            followUpDays: FOLLOW_UP_ON_CREATION_DAYS,
-            // Tamanho, nao conteudo: o relato pode conter dado pessoal.
-            customerReportLength: customerReport.length,
-          },
-        },
-        tx,
-      );
-
-      await emit({
-        type: EVENT_TYPES.SERVICE_ORDER_CREATED,
-        tenantId: context.tenantId,
-        payload: {
-          serviceOrderId,
-          number: allocated.value,
-          unitId,
-          customerId: targetEquipment.customerId,
-          equipmentId: input.equipmentId,
-          intakeId,
-          openedBy: context.userId,
-        },
-      });
-
-      return allocated.value;
-    });
-
-    return { serviceOrderId, number, reused: false };
+    return await runInTransaction(async (tx, emit) =>
+      applyServiceOrderCreation(tx as TransactionExecutor, emit, context, plan),
+    );
   } catch (error) {
     /**
      * IDEMPOTENCIA, SEGUNDA CAMADA.
@@ -319,14 +441,14 @@ export async function createServiceOrder(
      * duas vezes, reencontramos a OS que o primeiro criou.
      */
     if (isDuplicateKeyError(error)) {
-      if (idempotencyKey) {
-        const existing = await findByIdempotencyKey(context.tenantId, idempotencyKey);
+      if (plan.idempotencyKey) {
+        const existing = await findByIdempotencyKey(context.tenantId, plan.idempotencyKey);
         if (existing) {
           return { serviceOrderId: existing.id, number: existing.number, reused: true };
         }
       }
-      if (intakeId) {
-        const existing = await findByIntake(context.tenantId, intakeId);
+      if (plan.intakeId) {
+        const existing = await findByIntake(context.tenantId, plan.intakeId);
         if (existing) {
           throw new BusinessRuleError(
             'Este recebimento ja possui uma Ordem de Servico. Abra a Ordem existente em vez de criar outra.',

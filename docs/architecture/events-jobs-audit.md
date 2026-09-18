@@ -19,6 +19,12 @@ Ações auditadas na fundação:
 `tenant.created` · `unit.created` · `user.created` · `feature.enabled` ·
 `feature.disabled`
 
+Ações de Garantias (Prompt 13), todas registradas **dentro da transação** que
+as causou: `warranty_policy.changed` · `warranty.created` ·
+`warranty.activated` · `warranty.cancelled` · `warranty.revoked` ·
+`warranty_certificate.issued` · `warranty_return.registered` ·
+`warranty_return.reclassified` · `warranty_cost.recorded`
+
 Reservadas para a Central de Módulos completa: `module.enabled`,
 `module.disabled`, `plan.entitlement_changed`.
 
@@ -43,12 +49,30 @@ dos módulos de negócio — Clientes, Equipamentos, Ordem de Serviço, workflow
 Orçamentos e, no Prompt 10, `PART_CREATED`, `PART_UPDATED`, `STOCK_RECEIVED`,
 `STOCK_ISSUED`, `STOCK_ADJUSTED`, `STOCK_TRANSFERRED`, `STOCK_RESERVED`,
 `STOCK_RESERVATION_RELEASED`, `STOCK_RESERVATION_CONSUMED` e
-`LOW_STOCK_DETECTED`.
+`LOW_STOCK_DETECTED`; os de Compras e Financeiro; e, no Prompt 13,
+`WARRANTY_CREATED`, `WARRANTY_ACTIVATED`, `WARRANTY_CERTIFICATE_ISSUED`,
+`WARRANTY_RETURN_REGISTERED`, `WARRANTY_RETURN_SERVICE_ORDER_CREATED`,
+`WARRANTY_RETURN_RECLASSIFIED_TO_QUOTE`, `WARRANTY_CANCELLED` e
+`WARRANTY_REVOKED`.
+
+Os eventos de Garantias levam identificadores (`warrantyId`, `returnId`,
+`serviceOrderId`, `unitId`) e o tipo — **nunca** os termos do que foi
+prometido, o relato do cliente nem o custo do conserto.
 
 **Nenhum evento é consumido.** Não há handler de negócio, automação nem Rule
 Engine (Prompt 19). O outbox existe para que esses módulos encontrem o gancho
 pronto — e é por isso que "estoque baixo" **não notifica ninguém** e **não cria
 pedido de compra**.
+
+Pelo mesmo motivo, `SERVICE_ORDER_FINANCIAL_SETTLED` (Prompt 12) **não é
+consumido** por Garantias: pagar não é retirar o aparelho, e a garantia interna
+começa na entrega
+([ADR-063](../adr/ADR-063-garantia-interna-comeca-na-entrega.md)). O comentário
+do evento registra que a omissão é deliberada, para que ninguém a "conserte"
+depois achando que é esquecimento.
+
+E `WARRANTY_RETURN_REGISTERED` **não envia** WhatsApp, e-mail nem SMS: avisar o
+cliente continua sendo ato humano.
 
 ## Jobs
 

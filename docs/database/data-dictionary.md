@@ -730,6 +730,141 @@ o que a pessoa lê para entender por que o saldo é esse.
 
 ---
 
+## `warranty_policies` (Prompt 13)
+
+O padrão que a casa oferece. **Não é a verdade da garantia emitida**
+([ADR-062](../adr/ADR-062-politica-e-padrao-garantia-e-snapshot.md)).
+
+| Coluna                                      | Observação                                                   |
+| ------------------------------------------- | ------------------------------------------------------------ |
+| `name` / `name_search`                      | nome interno; `name_search` normaliza para busca e ordenação |
+| `type`                                      | `internal` \| `factory` \| `part` \| `extended`              |
+| `duration_amount` / `duration_unit`         | 1 a 120; `days` ou `months`. CHECK `duration_amount > 0`     |
+| `coverage_summary` / `exclusions` / `terms` | textos **copiados** na emissão, nunca lidos depois           |
+| `status`                                    | `active` \| `inactive`. Desativar não apaga                  |
+| `version`                                   | concorrência otimista (CAS)                                  |
+
+---
+
+## `warranties` (Prompt 13)
+
+A garantia em si. Snapshot dos termos no momento da emissão.
+
+| Coluna                                       | Observação                                                                 |
+| -------------------------------------------- | -------------------------------------------------------------------------- |
+| `number`                                     | de `tenant_sequences`. `GAR 000042`                                        |
+| `type`                                       | `internal` \| `factory` \| `part` \| `extended`. Só `internal` gera OS     |
+| `policy_id`                                  | **procedência**, nunca fonte de leitura                                    |
+| `customer_id` / `equipment_id`               | FK composta com `tenant_id`                                                |
+| `service_order_id`                           | FK composta com `unit_id`. Nulo nas garantias registradas sobre o aparelho |
+| `duration_amount` / `duration_unit`          | copiados da política ou informados                                         |
+| `coverage_summary` / `exclusions` / `terms`  | **copiados**. A política pode mudar; isto não                              |
+| `covers_whole_service`                       | `tinyint`. 0 = cobertura parcial, e a lista passa a ser a verdade          |
+| `starts_on` / `ends_on`                      | data civil `VARCHAR(10)`. Fim **inclusivo**                                |
+| `status`                                     | `draft` \| `active` \| `cancelled` \| `revoked`. **Não existe `expired`**  |
+| `manufacturer` / `external_reference`        | a quem recorrer numa garantia de fábrica                                   |
+| `part_id` / `part_description` / `part_code` | garantia de peça. Funciona **sem** o módulo de Estoque                     |
+| `installed_on` / `stock_movement_id`         | quando a peça saiu do estoque                                              |
+| `supplier_id`                                | de quem veio a peça. Leitura, não integração                               |
+| `idempotency_key`                            | `UNIQUE`. Duplo clique reencontra em vez de duplicar                       |
+| `version`                                    | concorrência otimista (CAS)                                                |
+
+CHECKs: `ck_warranty_period_ordered` (`starts_on <= ends_on`),
+`ck_warranty_duration_positive`.
+
+---
+
+## `warranty_coverage_items` (Prompt 13)
+
+O que exatamente está coberto. Existe porque um booleano "tem garantia"
+transformaria o retorno pela placa em garantia aceita quando a loja garantiu
+apenas a fonte.
+
+| Coluna        | Observação                                               |
+| ------------- | -------------------------------------------------------- |
+| `kind`        | `labor` \| `service` \| `part` \| `component` \| `other` |
+| `description` | até 200 caracteres                                       |
+| `part_id`     | opcional, quando o Estoque está ativo                    |
+| `position`    | ordem de exibição                                        |
+
+---
+
+## `warranty_certificates` (Prompt 13)
+
+Snapshot do documento, com soma de verificação
+([ADR-070](../adr/ADR-070-certificado-e-snapshot-com-token-opaco.md)).
+
+| Coluna     | Observação                                                          |
+| ---------- | ------------------------------------------------------------------- |
+| `snapshot` | JSON completo. Montado a partir da **garantia**, nunca da política  |
+| `checksum` | SHA-256 do conteúdo                                                 |
+| `token`    | 24 bytes aleatórios em base64url. Opaco, não enumerável, **UNIQUE** |
+| `format`   | `html`. Coluna preparada para `pdf`, que **não existe** hoje        |
+
+`UNIQUE (tenant_id, warranty_id)` — um certificado por garantia. Gerar de novo
+devolve o mesmo documento e o mesmo token.
+
+**O token identifica; ele não autoriza.** Nunca carrega dado pessoal.
+
+---
+
+## `warranty_returns` (Prompt 13)
+
+O aparelho voltou. A OS original **nunca reabre**
+([ADR-065](../adr/ADR-065-retorno-cria-os-nova.md)).
+
+| Coluna                      | Observação                                                    |
+| --------------------------- | ------------------------------------------------------------- |
+| `warranty_id`               | qual garantia foi acionada                                    |
+| `original_service_order_id` | de onde veio                                                  |
+| `return_service_order_id`   | a OS nova. `UNIQUE` — dois retornos não apontam a mesma ordem |
+| `reference_date`            | data civil do dia, **congelada**                              |
+| `was_enforceable`           | a garantia valia **naquele** dia. Não é recalculado           |
+| `coverage_assessment`       | `covered` \| `not_covered` \| `undetermined`                  |
+| `customer_report`           | o relato de quem trouxe o aparelho                            |
+| `idempotency_key`           | `UNIQUE`. Dois atendentes clicando juntos criam **uma** OS    |
+
+---
+
+## `warranty_costs` (Prompt 13)
+
+Quanto a garantia custou à loja. **Não gera lançamento financeiro**
+([ADR-071](../adr/ADR-071-custo-de-garantia-nao-toca-o-financeiro.md)).
+
+| Coluna               | Observação                                                |
+| -------------------- | --------------------------------------------------------- |
+| `kind`               | `labor` \| `part` \| `outsourced` \| `freight` \| `other` |
+| `amount`             | `DECIMAL(14,2)`. CHECK `amount >= 0`                      |
+| `warranty_return_id` | opcional — liga o custo ao atendimento                    |
+
+Permissão de leitura separada (`warranties.costs.view`): o atendente precisa da
+cobertura, não da margem.
+
+---
+
+## `warranty_timeline` (Prompt 13)
+
+A história da garantia em português, com ator e instante. Emissão, ativação,
+certificado, retorno, reclassificação, cancelamento e revogação.
+
+---
+
+## Colunas adicionadas a `service_orders` (Prompt 13)
+
+Três `ADD COLUMN` puros, com default seguro. Nenhuma migration histórica foi
+tocada.
+
+| Coluna                      | Observação                                                                                                                        |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `classification`            | `standard` \| `warranty_internal`, default `standard`. **Não é status** ([ADR-067](../adr/ADR-067-classificacao-nao-e-status.md)) |
+| `warranty_id`               | a garantia que originou esta OS. Sem FK por ordem de criação de tabelas                                                           |
+| `original_service_order_id` | a OS de onde o retorno veio                                                                                                       |
+
+A integridade do vínculo é garantida do outro lado, em `warranty_returns`, que
+tem FK composta para as duas ordens.
+
+---
+
 ## Tipos monetários e de quantidade
 
 Definidos como convenção em `src/core/db/columns.ts`, aplicáveis assim que

@@ -144,3 +144,26 @@ e listas. Coberto por teste.
 14. **O motivo de estorno e de cancelamento é texto livre escrito por uma
     pessoa** (Prompt 12). Ele vai para o histórico do título e para a auditoria,
     onde a autorização o protege — nunca para o log da aplicação.
+15. **O QR do certificado carrega APENAS um token opaco** (Prompt 13, item 21).
+    Nunca CPF, telefone, endereço, e-mail, serial completo nem o id do cliente:
+    um QR é uma imagem que qualquer pessoa na fila do balcão consegue
+    fotografar, e o que estiver dentro dele vazou no instante em que foi
+    impresso. O token tem 24 bytes aleatórios, não é enumerável e **não
+    autoriza** — resolvê-lo exige sessão válida, feature disponível e
+    `warranties.view`. Há teste que verifica que o token não contém o número da
+    garantia nem é derivável dele.
+16. **O snapshot do certificado guarda o nome do cliente e mais nada dele**
+    (Prompt 13). O documento é do cliente, então o nome entra; documento,
+    contato e endereço não.
+17. **Relato do cliente no retorno e motivo de reclassificação não vão para
+    log** (Prompt 13). São texto livre escrito por pessoas sobre um atendimento
+    concreto: vão para a timeline e para a auditoria, onde a autorização os
+    protege, nunca para o log estruturado.
+18. **Payload de evento de Garantias não carrega termos, cobertura nem valores**
+    (Prompt 13). Os eventos levam `warrantyId`, `returnId`, `serviceOrderId`,
+    `unitId` e o tipo — nunca o texto do que foi prometido nem o custo do
+    conserto.
+19. **Custo de garantia tem permissão de leitura própria** (Prompt 13,
+    `warranties.costs.view`). Quanto a loja gastou consertando de graça é
+    informação comercial da empresa; o atendente que precisa saber se a
+    cobertura vale não precisa saber a margem.

@@ -118,6 +118,25 @@ três do caixa (`open`, `close`, `adjust`) porque quem abre a gaveta de manhã n
 
 Todas são avaliadas **na unidade DO TÍTULO**, nunca na unidade ativa da sessão.
 
+O Prompt 13 acrescentou as dez de **Garantias**, sob a feature OPCIONAL
+`operations.warranties`. O corte separa atos que costumam ser de pessoas
+diferentes: **consultar** (`warranties.view`), **preparar**
+(`warranties.create`), **emitir** (`warranties.issue`), **registrar retorno**
+(`warranties.return.create`), **reclassificar** (`warranties.reclassify`),
+**encerrar** (`warranties.cancel`, `warranties.revoke`), **ver e lançar custo**
+(`warranties.costs.view`, `warranties.costs.manage`) e **definir o padrão da
+casa** (`warranties.settings.manage`).
+
+Criar rascunho é trabalho de balcão; **emitir** é o ato que passa a valer contra
+a loja. `warranties.reclassify` é separada porque contraria uma decisão anterior
+da própria empresa e tira do cliente um conserto que ele veio buscar de graça —
+exige autoridade técnica, verificada **pela chave**, nunca pelo nome textual do
+cargo. As duas de custo são separadas de `warranties.view` porque o atendente
+precisa saber se a cobertura vale e **não** precisa saber a margem da loja.
+
+Todas são avaliadas **na unidade DA GARANTIA**, nunca na unidade ativa da
+sessão.
+
 ---
 
 ## 2. Perfis de origem
@@ -179,6 +198,13 @@ Todas são avaliadas **na unidade DO TÍTULO**, nunca na unidade ativa da sessã
 | `/financeiro/titulos/[titleId]`                | `finance.view` + título em unidade autorizada                         |
 | `/financeiro/caixa`                            | `finance.cash.open` + unidade ativa                                   |
 | `/financeiro/configuracoes`                    | `finance.settings.manage`                                             |
+| `/garantias`                                   | `warranties.view` + feature `operations.warranties`                   |
+| `/garantias/lista`                             | `warranties.view`                                                     |
+| `/garantias/[warrantyId]`                      | `warranties.view` + garantia em unidade autorizada                    |
+| `/garantias/retornos`                          | `warranties.view`                                                     |
+| `/garantias/novo-retorno`                      | `warranties.return.create`                                            |
+| `/garantias/politicas`                         | `warranties.settings.manage`                                          |
+| `/garantias/certificado/[token]`               | `warranties.view` + certificado do mesmo tenant                       |
 | `/acesso-negado`                               | — (página de explicação)                                              |
 
 **`purchases.receive` é verificada na unidade DO PEDIDO**, não na unidade ativa
@@ -229,6 +255,12 @@ exige `users.view`; conceder-lhe um perfil exige `users.manage_access`.
 | 27  | Usuário com `finance.view` vê o saldo devedor do cliente sem poder emitir cobrança                  | permitido |
 | 28  | Gerar a cobrança da mesma OS duas vezes: devolve a mesma cobrança, com aviso                        | permitido |
 | 29  | Pedido de compra com duas entregas parciais gera DUAS contas a pagar que somam o recebido           | permitido |
+| 30  | Atendente com `warranties.return.create` registra retorno de garantia VENCIDA, sem criar OS         | permitido |
+| 31  | Reenviar o mesmo formulário de retorno devolve o MESMO retorno e a MESMA OS                         | permitido |
+| 32  | Dois retornos com chaves DIFERENTES na mesma garantia geram dois atendimentos                       | permitido |
+| 33  | Usuário com `warranties.view` lê a cobertura sem ver o custo da loja                                | permitido |
+| 34  | Gerar o certificado duas vezes devolve o mesmo documento, com o mesmo token                         | permitido |
+| 35  | A MESMA OS recebe duas garantias de escopos diferentes (mão de obra e peça)                         | permitido |
 
 ---
 
@@ -310,6 +342,22 @@ exige `users.view`; conceder-lhe um perfil exige `users.manage_access`.
 | 72  | Abrir título de outra empresa com o UUID em mãos                                      | fora do tenant                                                    | "não encontrado" (nunca 403)               |
 | 73  | Liquidar com papel concedido só na outra unidade                                      | escopo da **unidade do título**                                   | erro de autorização                        |
 | 74  | Financeiro tentar mudar `service_orders.status`                                       | fronteira de mão única                                            | **não existe código** que faça isso        |
+| 75  | Emitir garantia interna com a OS ainda em `awaiting_customer_pickup`                  | a cobertura começa na entrega (ADR-063)                           | erro de regra de negócio                   |
+| 76  | Forçar `status` ou `classification` pelo formulário de abertura de OS                 | o comando aceita ORIGEM, não estado (ADR-066)                     | a OS nasce em `awaiting_technical_opinion` |
+| 77  | Reabrir a OS original num retorno em garantia                                         | retorno cria ordem NOVA (ADR-065)                                 | **não existe código** que faça isso        |
+| 78  | Reaproveitar o número da OS original na OS de garantia                                | `allocateSequenceNumber` atômico                                  | número novo, sempre                        |
+| 79  | Dois retornos apontando para a MESMA OS de garantia                                   | `UNIQUE (return_service_order_id)`                                | recusa do InnoDB                           |
+| 80  | Retorno duplicado por retry com a mesma chave                                         | `UNIQUE (tenant_id, idempotency_key)`                             | devolve o mesmo retorno, sem duplicar      |
+| 81  | Reclassificar sem justificativa (ou com menos de 15 caracteres)                       | validação de domínio                                              | erro de validação em português             |
+| 82  | Reclassificar pelo seletor genérico de status                                         | regra `actionOnly` + `via` obrigatório                            | a transição não é oferecida                |
+| 83  | Reclassificar sem `warranties.reclassify`, tendo só `service_orders.transition`       | permissão própria do ato                                          | erro de autorização                        |
+| 84  | Ver custo de garantia tendo apenas `warranties.view`                                  | `warranties.costs.view` separada                                  | erro de autorização                        |
+| 85  | Abrir garantia de outra empresa com o UUID em mãos                                    | fora do tenant                                                    | "não encontrado" (nunca 403)               |
+| 86  | Abrir certificado pelo token sem sessão válida                                        | o token identifica, **não autoriza** (ADR-070)                    | redireciona para `/login`                  |
+| 87  | Abrir certificado com token de outra empresa                                          | fora do tenant                                                    | "não encontrado"                           |
+| 88  | Garantia criar cobrança em retorno coberto                                            | garantia válida é gratuita (ADR-071)                              | **não existe código** que faça isso        |
+| 89  | Garantia escrever em `stock_balances`, `stock_movements` ou `financial_movements`     | fronteira de mão única                                            | **build vermelho** no teste de boundary    |
+| 90  | Alterar a política e esperar que o certificado histórico mude                         | a garantia é snapshot (ADR-062)                                   | o documento antigo permanece idêntico      |
 
 **Por que o item 3 responde 404 e não 403:** responder "sem permissão"
 confirmaria que aquele registro existe. Para quem está do lado de fora, um ID
@@ -319,22 +367,27 @@ de outra empresa e um ID inexistente são indistinguíveis.
 
 ## 6. Onde cada linha é verificada
 
-| Bloco                                   | Teste                                                                                                                               |
-| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| Permitidos 1–5, negados 6, 11, 12, 13   | `tests/integration/role-scope.test.ts`                                                                                              |
-| Negados 3, 4, 5, 10, 22                 | `tests/integration/privilege-escalation.test.ts`                                                                                    |
-| Negados 7, 8, 9                         | `tests/integration/last-admin.test.ts`                                                                                              |
-| Permitidos 6, 7, 8; negados 14–19       | `tests/integration/account-security.test.ts`                                                                                        |
-| Permitidos 1, 2, 3; perfis de origem    | `tests/integration/user-administration.test.ts`                                                                                     |
-| Negados 14, 15, 20                      | `tests/integration/auth.test.ts`                                                                                                    |
-| Negados 1, 2, 21                        | `tests/integration/effective-access.test.ts` + navegador                                                                            |
-| Negado 20 (janela e contagem)           | `tests/unit/rate-limit.test.ts`                                                                                                     |
-| Negado 22                               | `tests/integration/cross-tenant-constraints.test.ts`                                                                                |
-| Permitidos 10–12; negados 23–25         | `tests/integration/equipment.test.ts` + `equipment-authorization.test.ts`                                                           |
-| Negados 27, 28                          | `tests/integration/equipment.test.ts` (bloco fotos)                                                                                 |
-| Negado 26; permitido 12                 | navegador real contra o build de produção                                                                                           |
-| Negado 29                               | `tests/integration/equipment.test.ts` (FK composta)                                                                                 |
-| Permitidos 13–15; negados 30–32, 34, 35 | `tests/integration/service-orders.test.ts` + `service-order-authorization.test.ts`                                                  |
-| Negado 33                               | `tests/integration/service-order-sequence.test.ts`                                                                                  |
-| Permitidos 24–29; negados 63–74         | `tests/integration/finance.test.ts`, `finance-concurrency.test.ts`, `finance-authorization.test.ts`, `finance-integrations.test.ts` |
-| Negado 67                               | `tests/unit/finance-boundary.test.ts` (varredura do código-fonte)                                                                   |
+| Bloco                                                  | Teste                                                                                                                               |
+| ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Permitidos 1–5, negados 6, 11, 12, 13                  | `tests/integration/role-scope.test.ts`                                                                                              |
+| Negados 3, 4, 5, 10, 22                                | `tests/integration/privilege-escalation.test.ts`                                                                                    |
+| Negados 7, 8, 9                                        | `tests/integration/last-admin.test.ts`                                                                                              |
+| Permitidos 6, 7, 8; negados 14–19                      | `tests/integration/account-security.test.ts`                                                                                        |
+| Permitidos 1, 2, 3; perfis de origem                   | `tests/integration/user-administration.test.ts`                                                                                     |
+| Negados 14, 15, 20                                     | `tests/integration/auth.test.ts`                                                                                                    |
+| Negados 1, 2, 21                                       | `tests/integration/effective-access.test.ts` + navegador                                                                            |
+| Negado 20 (janela e contagem)                          | `tests/unit/rate-limit.test.ts`                                                                                                     |
+| Negado 22                                              | `tests/integration/cross-tenant-constraints.test.ts`                                                                                |
+| Permitidos 10–12; negados 23–25                        | `tests/integration/equipment.test.ts` + `equipment-authorization.test.ts`                                                           |
+| Negados 27, 28                                         | `tests/integration/equipment.test.ts` (bloco fotos)                                                                                 |
+| Negado 26; permitido 12                                | navegador real contra o build de produção                                                                                           |
+| Negado 29                                              | `tests/integration/equipment.test.ts` (FK composta)                                                                                 |
+| Permitidos 13–15; negados 30–32, 34, 35                | `tests/integration/service-orders.test.ts` + `service-order-authorization.test.ts`                                                  |
+| Negado 33                                              | `tests/integration/service-order-sequence.test.ts`                                                                                  |
+| Permitidos 24–29; negados 63–74                        | `tests/integration/finance.test.ts`, `finance-concurrency.test.ts`, `finance-authorization.test.ts`, `finance-integrations.test.ts` |
+| Negado 67                                              | `tests/unit/finance-boundary.test.ts` (varredura do código-fonte)                                                                   |
+| Permitidos 30–35; negados 75, 77–81, 83–85, 87, 88, 90 | `tests/integration/warranties.test.ts`, `warranty-concurrency.test.ts`, `warranty-authorization.test.ts`                            |
+| Negado 89                                              | `tests/unit/warranty-boundary.test.ts` (varredura do código-fonte)                                                                  |
+| Negados 76 e 82                                        | `tests/integration/warranties.test.ts` (campos extras) + `tests/unit/service-order-workflow.test.ts` (seletor genérico)             |
+| Negado 86                                              | navegador real contra o build de produção — o token sem sessão cai em `/login`                                                      |
+| Interface: 75, 84 e as não-promessas                   | `tests/component/warranty-forms.test.tsx`                                                                                           |

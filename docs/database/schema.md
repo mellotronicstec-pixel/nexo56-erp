@@ -310,9 +310,42 @@ Acrescentadas pelos módulos de negócio:
 | `fk_media_equipment_tenant`             | foto em equipamento de outro tenant                |
 | `fk_media_intake_tenant`                | foto em recebimento de outro tenant                |
 | `fk_label_reading_equipment_tenant`     | leitura de etiqueta de equipamento de outro tenant |
+| `fk_warranty_customer_tenant`           | garantia ligada a cliente de outro tenant          |
+| `fk_warranty_equipment_tenant`          | garantia sobre equipamento de outro tenant         |
+| `fk_warranty_unit_tenant`               | garantia emitida por unidade de outro tenant       |
+| `fk_warranty_service_order_unit`        | garantia ligada a OS de outra unidade              |
+| `fk_warranty_uses_policy_tenant`        | garantia usando política de outro tenant           |
+| `fk_warranty_return_original_unit`      | retorno apontando OS original de outra unidade     |
+| `fk_warranty_return_new_unit`           | retorno apontando OS de garantia de outra unidade  |
+| `fk_warranty_cost_return_tenant`        | custo ligado a retorno de outro tenant             |
 
 Antes do Prompt 02 essas associações eram aceitas pelo banco (bloqueadas apenas
 pela aplicação). Testes em `tests/integration/cross-tenant-constraints.test.ts`.
+
+### Nota sobre nomes de constraint no MariaDB
+
+Nome de FK é único **por banco de dados**, não por tabela. O Prompt 13 tropeçou
+nisso: `fk_warranty_policy_tenant` foi usado em `warranty_policies → tenants` e,
+por descuido, também em `warranties → warranty_policies` — o segundo passou a se
+chamar `fk_warranty_uses_policy_tenant`.
+
+E uma FK composta só é aceita se a tabela referenciada tiver um UNIQUE composto
+correspondente. `fk_warranty_cost_return_tenant` só passou depois de
+`warranty_returns` ganhar `uq_warranty_return_id_tenant (id, tenant_id)`; sem
+ele, o InnoDB responde `errno 150 "Foreign key constraint is incorrectly
+formed"`, que não diz qual é o problema.
+
+### Colunas adicionadas a `service_orders` na migration 0011
+
+Três `ADD COLUMN` puros — `classification` (default `'standard'`),
+`warranty_id` e `original_service_order_id`. Nenhum `DROP`, `MODIFY` ou
+`TRUNCATE`; as migrations `0000`–`0010` não foram tocadas.
+
+`warranty_id` e `original_service_order_id` ficam **sem FK**: `service_orders`
+nasce na `0007` e `warranties` só existe a partir da `0011`, então a FK teria de
+apontar para uma tabela que não existia quando a coluna foi criada. A
+integridade do vínculo é garantida do outro lado, em `warranty_returns`, que tem
+FK composta para as duas ordens e `UNIQUE (return_service_order_id)`.
 
 ---
 

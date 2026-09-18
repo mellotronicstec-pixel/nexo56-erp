@@ -253,6 +253,18 @@ export const TIMELINE_KINDS = {
   PART_RESERVED: 'part_reserved',
   PART_RESERVATION_RELEASED: 'part_reservation_released',
   PART_CONSUMED: 'part_consumed',
+
+  // --- Prompt 13: garantias -------------------------------------------------
+  /**
+   * Na OS ORIGINAL: o aparelho voltou, e ha uma nova OS cuidando disso.
+   *
+   * E um FATO acrescentado a historia, nao uma mudanca: a OS original continua
+   * finalizada, com o mesmo parecer e o mesmo numero (item 24). O vinculo
+   * estrutural mora em `warranty_returns`; esta linha e o que a pessoa le.
+   */
+  WARRANTY_RETURN_LINKED: 'warranty_return_linked',
+  /** Na OS DE GARANTIA: o defeito nao estava coberto, e virou orcamento. */
+  WARRANTY_RECLASSIFIED: 'warranty_reclassified',
 } as const;
 
 export type TimelineKind = (typeof TIMELINE_KINDS)[keyof typeof TIMELINE_KINDS];
@@ -266,6 +278,8 @@ export const TIMELINE_LABEL: Readonly<Record<string, string>> = {
   [TIMELINE_KINDS.FOLLOW_UP_RESCHEDULED]: 'Acompanhamento reagendado',
   [TIMELINE_KINDS.PART_PICKUP_REQUESTED]: 'Busca de peca registrada',
   [TIMELINE_KINDS.TASK_COMPLETED]: 'Tarefa concluida',
+  [TIMELINE_KINDS.WARRANTY_RETURN_LINKED]: 'Retorno em garantia registrado',
+  [TIMELINE_KINDS.WARRANTY_RECLASSIFIED]: 'Reclassificada para orcamento',
   [TIMELINE_KINDS.CUSTOMER_NOTIFICATION_REQUESTED]: 'Cliente marcado como avisado',
   [TIMELINE_KINDS.PART_RESERVED]: 'Peca reservada',
   [TIMELINE_KINDS.PART_RESERVATION_RELEASED]: 'Reserva de peca liberada',

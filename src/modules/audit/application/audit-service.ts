@@ -141,6 +141,17 @@ export const AUDIT_ACTIONS = {
   FINANCIAL_ACCOUNT_CHANGED: 'financial_account.changed',
   PAYMENT_METHOD_CHANGED: 'payment_method.changed',
   FINANCIAL_CATEGORY_CHANGED: 'financial_category.changed',
+
+  // --- Garantias (Prompt 13) ------------------------------------------------
+  WARRANTY_POLICY_CHANGED: 'warranty_policy.changed',
+  WARRANTY_CREATED: 'warranty.created',
+  WARRANTY_ACTIVATED: 'warranty.activated',
+  WARRANTY_CANCELLED: 'warranty.cancelled',
+  WARRANTY_REVOKED: 'warranty.revoked',
+  WARRANTY_CERTIFICATE_ISSUED: 'warranty_certificate.issued',
+  WARRANTY_RETURN_REGISTERED: 'warranty_return.registered',
+  WARRANTY_RETURN_RECLASSIFIED: 'warranty_return.reclassified',
+  WARRANTY_COST_RECORDED: 'warranty_cost.recorded',
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];

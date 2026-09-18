@@ -3,8 +3,8 @@
 Plataforma ERP/SaaS multiempresa para gestão de assistência técnica e reparo.
 
 **Estado atual: fundação completa + módulos de negócio Clientes, Equipamentos,
-Ordens de Serviço com workflow, Orçamentos, Estoque, Compras e Financeiro
-(Prompts 01 a 12).** Autenticação, sessões,
+Ordens de Serviço com workflow, Orçamentos, Estoque, Compras, Financeiro e
+Garantias (Prompts 01 a 13).** Autenticação, sessões,
 usuários, perfis, permissões com **escopo por unidade**, multi-tenancy,
 modularidade, auditoria, eventos, jobs, Design System, interface responsiva,
 **Clientes**, **Equipamentos e Recebimento** (com fotos em storage privado), a
@@ -17,11 +17,15 @@ reservas e transferências) e **Fornecedores e Compras** (cadastro de
 fornecedor, necessidades, pedidos, recebimento parcial e histórico de custo) e
 o **Financeiro** (contas a receber e a pagar, parcelamento, recebimentos e
 pagamentos parciais, estorno controlado, razão append-only e caixa operacional)
-estão implementados e testados. Garantias e demais serão construídos nos
-prompts seguintes.
+estão implementados e testados. As **Garantias** (políticas, garantia interna,
+de fábrica, de peça e estendida, cobertura total e parcial, vigência,
+certificado com soma de verificação, retorno em garantia com Ordem de Serviço
+nova, reclassificação controlada e custos) também. Os demais módulos serão
+construídos nos prompts seguintes.
 
-**Estoque, Compras e Financeiro são módulos OPCIONAIS**
-(`operations.inventory`, `operations.purchasing`, `finance.core`): a empresa
+**Estoque, Compras, Financeiro e Garantias são módulos OPCIONAIS**
+(`operations.inventory`, `operations.purchasing`, `finance.core`,
+`operations.warranties`): a empresa
 pode desligá-los. Sem Estoque, o Orçamento continua inteiro com linha de peça
 escrita à mão ([modularidade do Estoque](docs/modules/inventory/modularity.md));
 sem Compras, o Estoque não percebe diferença nenhuma e a origem
@@ -29,7 +33,10 @@ sem Compras, o Estoque não percebe diferença nenhuma e a origem
 ([modularidade de Compras](docs/modules/purchasing/modularity.md)); sem
 Financeiro, a OS, o pedido de compra, o cliente e o fornecedor continuam
 inteiros — receber mercadoria nunca dependeu de haver financeiro
-([modularidade do Financeiro](docs/modules/finance/modularity.md)).
+([modularidade do Financeiro](docs/modules/finance/modularity.md)); sem
+Garantias, a ficha da Ordem de Serviço e a do equipamento ficam exatamente como
+eram antes do Prompt 13, e **nenhuma consulta é feita**
+([modularidade de Garantias](docs/modules/warranties/modularity.md)).
 
 **O Financeiro não fala com banco nenhum.** Não há conciliação bancária, não há
 PIX automático, não há integração com adquirente e não há emissão fiscal.
@@ -41,8 +48,24 @@ mostra a situação, quem decide é a pessoa no balcão
 A cobrança de uma Ordem de Serviço **nasce de um ato humano** na própria ficha,
 com o valor pré-preenchido do orçamento aprovado — não da aprovação do
 orçamento. Quando todos os recebíveis de uma OS são quitados, o Financeiro
-publica `SERVICE_ORDER_FINANCIAL_SETTLED`, e **esse evento não tem consumidor**:
-é o gancho preparado para Garantias (Prompt 13).
+publica `SERVICE_ORDER_FINANCIAL_SETTLED`, e **esse evento continua sem
+consumidor**. O Prompt 13 decidiu deliberadamente não consumi-lo: a garantia
+interna começa quando o cliente **retira** o aparelho, não quando paga — quem
+paga por PIX na terça e retira na sexta não pode perder três dias de cobertura
+([ADR-063](docs/adr/ADR-063-garantia-interna-comeca-na-entrega.md)).
+
+**O retorno em garantia cria uma Ordem de Serviço NOVA.** A original nunca
+reabre e o número dela nunca é reaproveitado: são dois atendimentos, com dois
+históricos íntegros
+([ADR-065](docs/adr/ADR-065-retorno-cria-os-nova.md)). O certificado é um
+snapshot dos termos da emissão, com soma de verificação e um QR que carrega
+**apenas um token opaco** — nunca CPF, telefone ou endereço. **Não há geração de
+PDF**: o certificado é HTML, e o navegador imprime
+([ADR-070](docs/adr/ADR-070-certificado-e-snapshot-com-token-opaco.md)).
+
+**Conserto em garantia válida não gera cobrança.** `warranty_costs` mede o gasto
+interno da loja e **não cria** título, movimento no razão nem cobrança
+([ADR-071](docs/adr/ADR-071-custo-de-garantia-nao-toca-o-financeiro.md)).
 
 **Nenhuma comunicação externa é enviada.** A ação "Informar Ordem Disponível"
 registra a intenção, publica o evento e diz isso em texto na própria tela; não
@@ -308,6 +331,26 @@ produção não depende de Docker.
 | Modularidade      | desativar não apaga nada, bloqueia operação nova e mantém o orçamento funcionando com linha manual                                                       |
 | Estoque mínimo    | alerta sai uma vez por queda; volta a ser possível quando o estoque se recupera; mínimo zero nunca alerta                                                |
 
+### Cobertura de Garantias (Prompt 13)
+
+| Área             | O que é testado                                                                                                                                            |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Vigência         | fim **inclusivo**; `addMonths` trunca 31/01 + 1 mês corretamente; classe temporal calculada no fuso da **empresa**, nunca no do navegador                  |
+| Acionável        | ativa **E** vigente; revogada dentro do prazo não vale; ativa e vencida não vale; a recusa vem com a frase que explica                                     |
+| Cobertura        | parcial recusa defeito fora da lista mesmo no prazo; `undetermined` não cria OS; a regra que decide a OS exige tipo interno + acionável + coberta          |
+| Snapshot         | mudar a política **não** altera garantia emitida nem certificado; o serviço de certificado **não importa** `warranty_policies` (varredura do código-fonte) |
+| Emissão          | exige OS `completed`; duplo clique com a mesma chave devolve a mesma garantia; numeração atômica sem `MAX+1`                                               |
+| Retorno          | cria OS **nova** em `awaiting_repair`, na mesma transação; a original não reabre nem tem o número reaproveitado; retorno recusado é registrado assim mesmo |
+| Estado inicial   | `status`, `classification` e `origin` passados pelo formulário público são descartados — a OS nasce em `awaiting_technical_opinion`                        |
+| **Concorrência** | **duas e cinco emissões simultâneas com a mesma chave; dois retornos simultâneos — em paralelo, no banco de verdade**                                      |
+| Reclassificação  | exige permissão própria e motivo de 15+ caracteres; passa pela máquina de estados; **não** aparece no seletor genérico de status                           |
+| Certificado      | gerar de novo devolve o mesmo token; o token não contém o número da garantia, não é derivável dele, tem entropia e nunca colide                            |
+| Boundary         | teste arquitetural sobre `src/`: Garantias não escreve `service_orders.status`, `stock_balances`, `stock_movements`, `stock_reservations` nem o Financeiro |
+| Autorização      | dez permissões verificadas na unidade **da garantia**; custo exige chave própria; garantia de outra empresa responde "não encontrado"                      |
+| Modularidade     | com a feature desligada, a ficha da OS e a do equipamento ficam idênticas ao que eram — e **nenhuma consulta é feita**                                     |
+| Migration        | upgrade real de um banco no estado do Prompt 12 para o 13, com dados preexistentes preservados                                                             |
+| Interface        | a recusa é dita, não escondida; nenhuma tela menciona WhatsApp, SMS, PDF, nota fiscal ou compra de peça (varredura do texto renderizado)                   |
+
 ---
 
 ## 9. Build e produção
@@ -372,6 +415,7 @@ docs/             arquitetura, ADRs, Hostinger
 - **Estoque e Peças:** [docs/modules/inventory/overview.md](docs/modules/inventory/overview.md)
 - **Fornecedores e Compras:** [docs/modules/purchasing/overview.md](docs/modules/purchasing/overview.md)
 - **Financeiro:** [docs/modules/finance/overview.md](docs/modules/finance/overview.md)
+- **Garantias:** [docs/modules/warranties/overview.md](docs/modules/warranties/overview.md)
 
 ---
 
@@ -432,46 +476,51 @@ produção** — não é tela de produto — e não lê nem grava dado algum.
 
 ## 14. Dívida técnica conhecida
 
-| Item                                             | Detalhe                                                                                                                                                                                 | Caminho                                                                                     |
-| ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| ESLint na linha 9.x                              | O `eslint-plugin-react` do `eslint-config-next@16` ainda não roda em ESLint 10                                                                                                          | atualizar quando o preset suportar                                                          |
-| 4 vulnerabilidades moderadas de dev              | Cadeia `drizzle-kit → @esbuild-kit → esbuild`; afetam apenas o servidor de desenvolvimento, não o runtime de produção                                                                   | aguardar atualização do drizzle-kit                                                         |
-| CSP com `'unsafe-inline'` em `script-src`        | O runtime do Next injeta scripts inline sem nonce em `next start`                                                                                                                       | CSP por nonce via middleware                                                                |
-| Rate limit por processo                          | Store em memória; conta por instância                                                                                                                                                   | implementar `RateLimitStore` com Redis                                                      |
-| Sem worker de outbox                             | Eventos são despachados em processo; a tabela já tem formato de outbox                                                                                                                  | worker lendo `published_at IS NULL`                                                         |
-| Build depende de rede para as fontes             | `next/font/google` baixa Sora e Inter no build                                                                                                                                          | versionar WOFF2 se houver build offline                                                     |
-| Sem 2FA                                          | Não há segundo fator; o pipeline de autorização comporta a condição adicional sem reconstrução                                                                                          | prompt futuro de segurança                                                                  |
-| Sem autoatendimento de redefinição               | Nenhum serviço de e-mail configurado; o código é gerado por um administrador e entregue pessoalmente                                                                                    | configurar canal de e-mail                                                                  |
-| Rate limit só no login                           | Troca de senha e ações administrativas não têm limite próprio                                                                                                                           | estender quando houver store compartilhado                                                  |
-| Leitura de etiqueta sem provider                 | Contrato, normalização e fluxo prontos; nenhum fornecedor de OCR contratado ou configurado — a interface declara isso                                                                   | implementar um `EquipmentLabelRecognitionProvider` e habilitar `platform.label_recognition` |
-| Código de barras não decodificado                | O campo existe no contrato; não há decoder embarcado                                                                                                                                    | avaliar decoder no navegador ou no provider                                                 |
-| HEIC depende do navegador                        | O servidor recusa HEIC com explicação; a conversão depende de o navegador decodificar o arquivo. Não validado com arquivo HEIC real                                                     | testar em iOS/Safari com aparelho                                                           |
-| Câmera física não exercitada em teste            | O navegador dos testes não tem câmera; só o caminho de arquivo é executado, com o mesmo código de preparo                                                                               | validação manual em aparelho                                                                |
-| Backup em duas partes                            | Banco e `STORAGE_ROOT` precisam ser copiados juntos, ou as fotos ficam órfãs                                                                                                            | rotina única de backup                                                                      |
-| Anonimização não remove mídia                    | A rotina de anonimização (ainda inexistente) terá de apagar arquivos do storage, não só limpar colunas                                                                                  | prompt de LGPD                                                                              |
-| Etiqueta física não imprimível                   | O contrato de dados existe e é testado, mas faltam o QR e a classificação de garantia; imprimir três dos cinco elementos seria pior que não imprimir                                    | Prompt 13 (garantia) + decisão de QR                                                        |
-| QR da OS não implementado                        | Princípios fixados (referência opaca; QR identifica mas não autoriza); formato do token e ciclo de vida ainda não decididos                                                             | prompt futuro                                                                               |
-| Ninguém é notificado de follow-up vencido        | O job publica `SERVICE_ORDER_FOLLOW_UP_OVERDUE`; **não há canal de comunicação nem central de notificação interna**. As pendências aparecem na tela, por consulta                       | Prompt 16 (comunicação) + prompt de notificação interna                                     |
-| "Informar Ordem Disponível" não envia nada       | Registra a intenção, muda o estado e publica evento com `delivered: false`. A interface declara isso                                                                                    | Prompt 16                                                                                   |
-| Eventos de workflow sem consumidor               | Seis tipos publicados no outbox, nenhum handler                                                                                                                                         | Prompt 19 (automações)                                                                      |
-| "Buscar Peça" guarda texto livre                 | O Prompt 10 trouxe o catálogo de peças, mas **manteve a tarefa como é** (item 48): buscar peça é trabalho, dar entrada é estoque. Fornecedor e local de retirada continuam sem entidade | Prompt 11                                                                                   |
-| Follow-up em dias corridos                       | A regra fixa +2 e +3 e não menciona dias úteis; não há calendário de feriados                                                                                                           | decisão de negócio (ADR-039)                                                                |
-| Orçamento sem PDF                                | Não há infraestrutura documental nem ativos de marca; os dados e a imutabilidade pós-envio já estão prontos para quando houver                                                          | prompt futuro de documentos                                                                 |
-| Aprovação de orçamento é interna                 | Registrada pela equipe depois de falar com o cliente; a origem gravada é `internal` e a ficha declara isso                                                                              | Prompt 17 (Portal)                                                                          |
-| Desconto de orçamento só em valor                | Percentual exigiria coluna de tipo e decisão sobre arredondamento; o item 39 pede não-ambiguidade                                                                                       | decisão de negócio                                                                          |
-| Orçamento complementar após aprovação            | Exigiria transição `Aguardando Conserto → Aguardando Aprovação`, que não existe na matriz do Prompt 08                                                                                  | decisão de negócio                                                                          |
-| Linha de peça pode citar o catálogo              | `quote_items.part_id` é aditiva e **anulável**; escolher a peça não reserva nem movimenta nada, e o orçamento continua sendo snapshot comercial (ADR-047)                               | —                                                                                           |
-| Transferência de estoque é imediata              | Não há estado `in_transit`: o sistema não acompanha o transporte, e fingir que acompanha deixaria saldo preso para sempre (ADR-046)                                                     | quando houver conferência no destino                                                        |
-| Estoque baixo não notifica ninguém               | O job marca o saldo e publica `LOW_STOCK_DETECTED`; **não há canal de comunicação nem pedido de compra automático**                                                                     | Prompt 11 (compras) + Prompt 16 (comunicação)                                               |
-| Sem leitor de código de barras                   | A coluna, a normalização e a busca existem; o scanner de câmera, não. A tela do cadastro declara isso                                                                                   | prompt futuro                                                                               |
-| Sem contagem de inventário                       | O ajuste com motivo obrigatório cobre a correção pós-contagem; um módulo de inventário cíclico seria arquitetura sem requisito (item 57)                                                | decisão de negócio                                                                          |
-| Sem lote, validade e série de peça               | Nem toda peça tem; impor faria o cadastro de um parafuso pedir número de série. A arquitetura aceita a extensão de forma aditiva                                                        | decisão de negócio                                                                          |
-| Sem FIFO/LIFO                                    | Média ponderada móvel, determinística e testada. Valuation contábil é requisito que ninguém pediu (item 71)                                                                             | Prompt 12 (financeiro), se houver requisito                                                 |
-| Sem compatibilidade peça × equipamento           | Nada no sistema afirma que uma peça serve num aparelho (item 113)                                                                                                                       | Prompt 21 (Nexo56 AI)                                                                       |
-| Financeiro não fala com banco                    | Sem conciliação bancária, sem OFX, sem PIX automático, sem integração com adquirente. "Cartão em 3x" é registro do combinado na maquininha                                              | prompt futuro de integrações                                                                |
-| Sem juros, multa ou desconto na baixa            | Calcular juros sem a política da empresa cadastrada seria inventar número; desconto na liquidação muda o valor devido e exige autorização própria                                       | decisão de negócio                                                                          |
-| Sem DRE, margem ou lucro                         | Receita menos algumas despesas não é lucro, e um KPI sem fonte da verdade engana quem decide com ele                                                                                    | prompt futuro de BI                                                                         |
-| Sem score, limite ou bloqueio de cliente         | O sistema mostra o que está em aberto e o que venceu; quem decide atender é a pessoa no balcão                                                                                          | decisão de negócio                                                                          |
-| Extrato de conta não pagina                      | `listAccountMovements` devolve no máximo 200 linhas. Basta para o extrato do caixa do dia, não para o histórico de um ano                                                               | paginação por cursor, quando houver uso                                                     |
-| `SERVICE_ORDER_FINANCIAL_SETTLED` sem consumidor | Emitido quando todos os recebíveis de uma OS são quitados; **nenhum handler o escuta** — é o gancho preparado para Garantias                                                            | Prompt 13 (Garantias)                                                                       |
-| Financeiro sem relatório exportável              | Não há CSV nem PDF; as telas respondem as perguntas do balcão, não a análise contábil                                                                                                   | prompt futuro de documentos/BI                                                              |
+| Item                                             | Detalhe                                                                                                                                                                                  | Caminho                                                                                     |
+| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| ESLint na linha 9.x                              | O `eslint-plugin-react` do `eslint-config-next@16` ainda não roda em ESLint 10                                                                                                           | atualizar quando o preset suportar                                                          |
+| 4 vulnerabilidades moderadas de dev              | Cadeia `drizzle-kit → @esbuild-kit → esbuild`; afetam apenas o servidor de desenvolvimento, não o runtime de produção                                                                    | aguardar atualização do drizzle-kit                                                         |
+| CSP com `'unsafe-inline'` em `script-src`        | O runtime do Next injeta scripts inline sem nonce em `next start`                                                                                                                        | CSP por nonce via middleware                                                                |
+| Rate limit por processo                          | Store em memória; conta por instância                                                                                                                                                    | implementar `RateLimitStore` com Redis                                                      |
+| Sem worker de outbox                             | Eventos são despachados em processo; a tabela já tem formato de outbox                                                                                                                   | worker lendo `published_at IS NULL`                                                         |
+| Build depende de rede para as fontes             | `next/font/google` baixa Sora e Inter no build                                                                                                                                           | versionar WOFF2 se houver build offline                                                     |
+| Sem 2FA                                          | Não há segundo fator; o pipeline de autorização comporta a condição adicional sem reconstrução                                                                                           | prompt futuro de segurança                                                                  |
+| Sem autoatendimento de redefinição               | Nenhum serviço de e-mail configurado; o código é gerado por um administrador e entregue pessoalmente                                                                                     | configurar canal de e-mail                                                                  |
+| Rate limit só no login                           | Troca de senha e ações administrativas não têm limite próprio                                                                                                                            | estender quando houver store compartilhado                                                  |
+| Leitura de etiqueta sem provider                 | Contrato, normalização e fluxo prontos; nenhum fornecedor de OCR contratado ou configurado — a interface declara isso                                                                    | implementar um `EquipmentLabelRecognitionProvider` e habilitar `platform.label_recognition` |
+| Código de barras não decodificado                | O campo existe no contrato; não há decoder embarcado                                                                                                                                     | avaliar decoder no navegador ou no provider                                                 |
+| HEIC depende do navegador                        | O servidor recusa HEIC com explicação; a conversão depende de o navegador decodificar o arquivo. Não validado com arquivo HEIC real                                                      | testar em iOS/Safari com aparelho                                                           |
+| Câmera física não exercitada em teste            | O navegador dos testes não tem câmera; só o caminho de arquivo é executado, com o mesmo código de preparo                                                                                | validação manual em aparelho                                                                |
+| Backup em duas partes                            | Banco e `STORAGE_ROOT` precisam ser copiados juntos, ou as fotos ficam órfãs                                                                                                             | rotina única de backup                                                                      |
+| Anonimização não remove mídia                    | A rotina de anonimização (ainda inexistente) terá de apagar arquivos do storage, não só limpar colunas                                                                                   | prompt de LGPD                                                                              |
+| Etiqueta física não imprimível                   | O contrato de dados existe e é testado. O Prompt 13 trouxe a classificação de garantia e o formato do token opaco do certificado; o QR **da OS** e a impressão em si continuam pendentes | prompt futuro de documentos                                                                 |
+| QR da OS não implementado                        | Princípios fixados (referência opaca; QR identifica mas não autoriza); formato do token e ciclo de vida ainda não decididos                                                              | prompt futuro                                                                               |
+| Ninguém é notificado de follow-up vencido        | O job publica `SERVICE_ORDER_FOLLOW_UP_OVERDUE`; **não há canal de comunicação nem central de notificação interna**. As pendências aparecem na tela, por consulta                        | Prompt 16 (comunicação) + prompt de notificação interna                                     |
+| "Informar Ordem Disponível" não envia nada       | Registra a intenção, muda o estado e publica evento com `delivered: false`. A interface declara isso                                                                                     | Prompt 16                                                                                   |
+| Eventos de workflow sem consumidor               | Seis tipos publicados no outbox, nenhum handler                                                                                                                                          | Prompt 19 (automações)                                                                      |
+| "Buscar Peça" guarda texto livre                 | O Prompt 10 trouxe o catálogo de peças, mas **manteve a tarefa como é** (item 48): buscar peça é trabalho, dar entrada é estoque. Fornecedor e local de retirada continuam sem entidade  | Prompt 11                                                                                   |
+| Follow-up em dias corridos                       | A regra fixa +2 e +3 e não menciona dias úteis; não há calendário de feriados                                                                                                            | decisão de negócio (ADR-039)                                                                |
+| Orçamento sem PDF                                | Não há infraestrutura documental nem ativos de marca; os dados e a imutabilidade pós-envio já estão prontos para quando houver                                                           | prompt futuro de documentos                                                                 |
+| Aprovação de orçamento é interna                 | Registrada pela equipe depois de falar com o cliente; a origem gravada é `internal` e a ficha declara isso                                                                               | Prompt 17 (Portal)                                                                          |
+| Desconto de orçamento só em valor                | Percentual exigiria coluna de tipo e decisão sobre arredondamento; o item 39 pede não-ambiguidade                                                                                        | decisão de negócio                                                                          |
+| Orçamento complementar após aprovação            | Exigiria transição `Aguardando Conserto → Aguardando Aprovação`, que não existe na matriz do Prompt 08                                                                                   | decisão de negócio                                                                          |
+| Linha de peça pode citar o catálogo              | `quote_items.part_id` é aditiva e **anulável**; escolher a peça não reserva nem movimenta nada, e o orçamento continua sendo snapshot comercial (ADR-047)                                | —                                                                                           |
+| Transferência de estoque é imediata              | Não há estado `in_transit`: o sistema não acompanha o transporte, e fingir que acompanha deixaria saldo preso para sempre (ADR-046)                                                      | quando houver conferência no destino                                                        |
+| Estoque baixo não notifica ninguém               | O job marca o saldo e publica `LOW_STOCK_DETECTED`; **não há canal de comunicação nem pedido de compra automático**                                                                      | Prompt 11 (compras) + Prompt 16 (comunicação)                                               |
+| Sem leitor de código de barras                   | A coluna, a normalização e a busca existem; o scanner de câmera, não. A tela do cadastro declara isso                                                                                    | prompt futuro                                                                               |
+| Sem contagem de inventário                       | O ajuste com motivo obrigatório cobre a correção pós-contagem; um módulo de inventário cíclico seria arquitetura sem requisito (item 57)                                                 | decisão de negócio                                                                          |
+| Sem lote, validade e série de peça               | Nem toda peça tem; impor faria o cadastro de um parafuso pedir número de série. A arquitetura aceita a extensão de forma aditiva                                                         | decisão de negócio                                                                          |
+| Sem FIFO/LIFO                                    | Média ponderada móvel, determinística e testada. Valuation contábil é requisito que ninguém pediu (item 71)                                                                              | Prompt 12 (financeiro), se houver requisito                                                 |
+| Sem compatibilidade peça × equipamento           | Nada no sistema afirma que uma peça serve num aparelho (item 113)                                                                                                                        | Prompt 21 (Nexo56 AI)                                                                       |
+| Financeiro não fala com banco                    | Sem conciliação bancária, sem OFX, sem PIX automático, sem integração com adquirente. "Cartão em 3x" é registro do combinado na maquininha                                               | prompt futuro de integrações                                                                |
+| Sem juros, multa ou desconto na baixa            | Calcular juros sem a política da empresa cadastrada seria inventar número; desconto na liquidação muda o valor devido e exige autorização própria                                        | decisão de negócio                                                                          |
+| Sem DRE, margem ou lucro                         | Receita menos algumas despesas não é lucro, e um KPI sem fonte da verdade engana quem decide com ele                                                                                     | prompt futuro de BI                                                                         |
+| Sem score, limite ou bloqueio de cliente         | O sistema mostra o que está em aberto e o que venceu; quem decide atender é a pessoa no balcão                                                                                           | decisão de negócio                                                                          |
+| Extrato de conta não pagina                      | `listAccountMovements` devolve no máximo 200 linhas. Basta para o extrato do caixa do dia, não para o histórico de um ano                                                                | paginação por cursor, quando houver uso                                                     |
+| `SERVICE_ORDER_FINANCIAL_SETTLED` sem consumidor | Emitido quando todos os recebíveis de uma OS são quitados; **nenhum handler o escuta** — é o gancho preparado para Garantias                                                             | Prompt 13 (Garantias)                                                                       |
+| Financeiro sem relatório exportável              | Não há CSV nem PDF; as telas respondem as perguntas do balcão, não a análise contábil                                                                                                    | prompt futuro de documentos/BI                                                              |
+| Certificado de garantia sem PDF                  | É HTML com snapshot e soma de verificação; o navegador imprime. `format` é coluna e o snapshot é determinístico, então um provider futuro lê o mesmo documento e grava `format = 'pdf'`  | prompt futuro de documentos                                                                 |
+| Garantia de fábrica não aciona o fabricante      | `manufacturer`, `external_reference` e `supplier_id` guardam a quem recorrer; abrir chamado é trabalho humano                                                                            | prompt futuro de integrações                                                                |
+| Retorno em garantia não avisa o cliente          | O evento é publicado e nenhum handler o consome; a tela diz, em texto, que avisar continua sendo ato humano                                                                              | Prompt 16 (comunicação)                                                                     |
+| Custo de garantia sem visão por período          | `sumWarrantyCosts` soma no banco e nenhuma tela o consome. Não há DRE, margem nem "índice de qualidade" — número com nome errado é pior que número nenhum                                | prompt futuro de BI, com a definição escrita antes do número                                |
+| Garantia estendida é só registro                 | O tipo `extended` existe e funciona; não há contrato, cobrança nem renovação                                                                                                             | decisão de negócio                                                                          |

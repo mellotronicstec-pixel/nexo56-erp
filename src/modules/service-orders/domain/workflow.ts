@@ -48,6 +48,37 @@ export type ServiceOrderStatus = (typeof SERVICE_ORDER_STATUSES)[number];
 /** Estado com que toda OS comum nasce (Prompt 07, formalizado aqui). */
 export const SERVICE_ORDER_INITIAL_STATUS: ServiceOrderStatus = 'awaiting_technical_opinion';
 
+/**
+ * A ORIGEM da ordem — e a UNICA coisa que decide o estado inicial.
+ *
+ * `standard`        : balcao, recebimento, cadastro. Nasce Aguardando Parecer.
+ * `warranty_return` : retorno de Garantia Interna VIGENTE e COBERTA, cuja
+ *                     cobertura ja foi avaliada por uma pessoa autorizada.
+ */
+export type ServiceOrderOrigin =
+  | { kind: 'standard' }
+  | { kind: 'warranty_return'; warrantyId: string; originalServiceOrderId: string };
+
+/**
+ * A EXCECAO FORMAL DO PROMPT 13 (itens 23, 27 e 110).
+ *
+ * Uma OS comum nasce em Aguardando Parecer Tecnico porque ninguem sabe ainda
+ * o que o aparelho tem. Uma OS de retorno em garantia nasce em Aguardando
+ * Conserto porque o parecer JA FOI DADO: o defeito foi diagnosticado na OS
+ * original, a loja reconheceu a cobertura e mandar o aparelho para a fila de
+ * parecer seria pedir de novo um trabalho que ja foi feito — e fazer o cliente
+ * esperar duas vezes pelo mesmo conserto.
+ *
+ * A EXCECAO E INEXPLORAVEL POR CONSTRUCAO. Esta funcao nao recebe um estado:
+ * recebe a ORIGEM, e nenhum caminho do sistema aceita `status` de fora na
+ * criacao. Quem quiser nascer em Aguardando Conserto precisa de um retorno em
+ * garantia de verdade — com garantia vigente, cobertura avaliada e permissao —
+ * e nao de um campo escondido no formulario.
+ */
+export function initialStatusForOrigin(origin: ServiceOrderOrigin): ServiceOrderStatus {
+  return origin.kind === 'warranty_return' ? 'awaiting_repair' : SERVICE_ORDER_INITIAL_STATUS;
+}
+
 export const SERVICE_ORDER_STATUS_LABEL: Record<ServiceOrderStatus, string> = {
   awaiting_technical_opinion: 'Aguardando Parecer Tecnico',
   awaiting_approval: 'Aguardando Aprovacao',
@@ -179,6 +210,36 @@ export const TRANSITIONS: readonly TransitionRule[] = [
     label: 'Concluir reparo',
     permission: PERMISSIONS.SERVICE_ORDERS_TRANSITION,
     hint: 'Conclusao TECNICA. O aparelho ainda nao esta pronto para entrega.',
+  },
+
+  {
+    /**
+     * RECLASSIFICACAO DE GARANTIA (Prompt 13, itens 29 a 32).
+     *
+     * A OS de retorno em garantia nasceu em Aguardando Conserto porque o
+     * parecer ja existia — o defeito fora diagnosticado na OS original. Quando
+     * o tecnico abre o aparelho e descobre que a causa e OUTRA (oxidacao
+     * posterior, queda, intervencao de terceiro), aquele parecer deixa de
+     * valer: e preciso um novo, e dele sai o orcamento.
+     *
+     * POR QUE `actionOnly`. Esta transicao NAO aparece no seletor generico de
+     * situacao. Ela so acontece pela acao de reclassificar, que exige
+     * `warranties.reclassify` alem desta permissao, e justificativa tecnica
+     * escrita. Sem `actionOnly`, qualquer pessoa com permissao de transicao
+     * poderia devolver uma OS de Aguardando Conserto para a fila de parecer
+     * pelo botao comum — o que nao e o que esta regra descreve.
+     *
+     * POR QUE NAO IR DIRETO PARA Aguardando Aprovacao: nao ha orcamento ainda.
+     * Pular o parecer criaria uma OS esperando o cliente aprovar um valor que
+     * ninguem calculou.
+     */
+    from: 'awaiting_repair',
+    to: 'awaiting_technical_opinion',
+    label: 'Reclassificar para orcamento',
+    permission: PERMISSIONS.SERVICE_ORDERS_TRANSITION,
+    requiresReason: true,
+    actionOnly: true,
+    hint: 'O defeito nao esta coberto pela garantia e precisa de novo parecer.',
   },
 
   // --- peca -----------------------------------------------------------------

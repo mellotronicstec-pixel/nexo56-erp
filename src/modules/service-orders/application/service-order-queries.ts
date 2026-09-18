@@ -284,6 +284,15 @@ export interface ServiceOrderDetail {
     version: number;
     followUpAt: string | null;
     assignedTechnicianId: string | null;
+    /**
+     * Classificacao da ordem (Prompt 13, item 30). `standard` ou
+     * `warranty_internal`.
+     *
+     * NAO E STATUS e nao entra na maquina de estados: e o que a ordem E, nao
+     * onde ela esta. Uma OS de garantia percorre o mesmo fluxo de qualquer
+     * outra — o que muda e por que ela nasceu e onde ela comeca.
+     */
+    classification: string;
   };
   customer: { id: string; name: string; kind: string };
   equipmentItem: {
@@ -356,6 +365,7 @@ export async function findServiceOrderDetail(
       version: serviceOrders.version,
       followUpAt: serviceOrders.followUpAt,
       assignedTechnicianId: serviceOrders.assignedTechnicianId,
+      classification: serviceOrders.classification,
       createdBy: serviceOrders.createdBy,
       customerId: customers.id,
       customerName: customers.name,
@@ -562,6 +572,7 @@ export async function findServiceOrderDetail(
       version: row.version,
       followUpAt: row.followUpAt,
       assignedTechnicianId: row.assignedTechnicianId,
+      classification: row.classification,
     },
     customer: { id: row.customerId, name: row.customerName, kind: row.customerKind },
     equipmentItem: {

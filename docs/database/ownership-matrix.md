@@ -174,10 +174,28 @@ ativa da sessão: quem recebe cria saldo naquela unidade e só naquela
 | `financial_movements`      | **TENANT + UNIT**                     | o extrato responde "quanto entrou aqui"                                                                                         |
 | `financial_title_timeline` | **TENANT** (via título)               | a história pertence ao título                                                                                                   |
 
+| `warranty_policies` | **TENANT** | o padrão da casa vale na empresa inteira; a loja não tem política própria |
+| `warranties` | **TENANT + UNIT** | quem garantiu foi a loja que consertou, e é ela que vai honrar |
+| `warranty_coverage_items` | **TENANT** (via garantia) | a cobertura pertence à garantia |
+| `warranty_certificates` | **TENANT** (via garantia) | o documento pertence à garantia |
+| `warranty_returns` | **TENANT + UNIT** | o aparelho voltou para uma loja concreta |
+| `warranty_costs` | **TENANT** (via garantia) | o custo é da garantia que o gerou |
+| `warranty_timeline` | **TENANT** (via garantia) | a história pertence à garantia |
+
 O título pertence à unidade **em que foi criado** — não à unidade ativa da
 sessão de quem o liquida. A autorização de liquidação é conferida **na unidade
 do título**, e a conta usada precisa servir aquela unidade
 ([ADR-053](../adr/ADR-053-titulo-unico-com-direcao.md)).
+
+A garantia segue a mesma regra: ela pertence à unidade **que a emitiu**, e toda
+autorização sobre ela usa o `unit_id` da garantia, nunca o da unidade ativa.
+Um retorno pode ser registrado em outra unidade da mesma empresa — e é por isso
+que `warranty_returns` tem `unit_id` próprio, que responde "onde o aparelho
+voltou".
+
+`warranty_policies` é do **tenant**: o padrão de garantia da empresa não muda de
+loja para loja. Quando mudar, será decisão de um prompt futuro, com migration
+própria.
 
 ---
 
@@ -192,6 +210,8 @@ Entidade cuja operação pertence necessariamente a uma unidade:
   `financial_titles`, `financial_movements`, Prompt 12) — implementados
 - **Compra e recebimento** (`purchase_orders`, `purchase_receipts`,
   `purchase_needs`, Prompt 11) — implementados
+- **Garantia e retorno em garantia** (`warranties`, `warranty_returns`,
+  Prompt 13) — implementados
 - Agenda operacional vinculada a unidade
 
 Toda unidade pertence a um tenant, e **todo tenant tem pelo menos uma unidade**

@@ -100,7 +100,16 @@ describe('matriz de transicoes (itens 8 e 105)', () => {
   const esperado: Record<string, string[]> = {
     awaiting_technical_opinion: ['awaiting_repair', 'awaiting_approval'],
     awaiting_approval: ['awaiting_repair'],
-    awaiting_repair: ['awaiting_part', 'repair_completed'],
+    /**
+     * `awaiting_technical_opinion` entrou aqui no Prompt 13: e a
+     * RECLASSIFICACAO de uma OS de garantia cujo defeito nao estava coberto.
+     *
+     * Ela e `actionOnly`, entao NAO aparece no seletor generico de status — o
+     * teste logo abaixo trava isso. Esta linha existe para que adicionar a
+     * regra tenha sido uma decisao escrita, e nao um efeito colateral que
+     * passou despercebido.
+     */
+    awaiting_repair: ['awaiting_part', 'repair_completed', 'awaiting_technical_opinion'],
     awaiting_part: ['awaiting_repair'],
     repair_completed: ['awaiting_delivery_preparation'],
     awaiting_delivery_preparation: ['awaiting_customer_pickup'],
@@ -116,6 +125,24 @@ describe('matriz de transicoes (itens 8 e 105)', () => {
       const comCancelamento = previstos.length === 0 ? [] : [...previstos, 'cancelled'];
       expect(destinos).toEqual(comCancelamento);
     }
+  });
+
+  it('a reclassificacao de garantia NAO aparece no seletor generico de status', () => {
+    /**
+     * `transitionsFrom` conhece a regra; `manualTransitionsFrom` — que e o que
+     * a tela usa para montar o seletor — nao a oferece.
+     *
+     * Se um dia alguem remover o `actionOnly`, qualquer pessoa com permissao
+     * de transicao mandaria uma OS de conserto de volta para parecer tecnico
+     * pelo dropdown, sem motivo e sem a permissao propria de reclassificar.
+     */
+    const manuais = manualTransitionsFrom('awaiting_repair').map((rule) => rule.to);
+    expect(manuais).not.toContain('awaiting_technical_opinion');
+    expect(manuais).toEqual(['awaiting_part', 'repair_completed', 'cancelled']);
+
+    const regra = findTransition('awaiting_repair', 'awaiting_technical_opinion');
+    expect(regra?.actionOnly).toBe(true);
+    expect(regra?.requiresReason).toBe(true);
   });
 
   it('salto de etapa e recusado com explicacao, nao com erro tecnico', () => {

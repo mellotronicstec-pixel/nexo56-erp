@@ -1,6 +1,7 @@
 import 'server-only';
 import { and, eq, lte, or, sql } from 'drizzle-orm';
 import { getDb } from '@/core/db/client';
+import { isDuplicateKeyError } from '@/core/db/duplicate-key';
 import { getContext } from '@/core/context/request-context';
 import { newId } from '@/core/ids/id';
 import { logger } from '@/core/logging/logger';
@@ -30,25 +31,6 @@ export interface EnqueueResult {
   jobId: string;
   /** true quando a chave de idempotencia ja existia e nada foi criado. */
   deduplicated: boolean;
-}
-
-/**
- * O Drizzle encapsula o erro do driver, entao o codigo do MariaDB pode estar
- * na causa e nao no erro de topo. Percorremos a cadeia de `cause`.
- */
-function isDuplicateKeyError(error: unknown): boolean {
-  let current: unknown = error;
-
-  for (let depth = 0; depth < 5 && current; depth += 1) {
-    if (typeof current === 'object' && current !== null) {
-      if ((current as { code?: string }).code === 'ER_DUP_ENTRY') return true;
-      current = (current as { cause?: unknown }).cause;
-    } else {
-      return false;
-    }
-  }
-
-  return false;
 }
 
 export async function enqueue(input: EnqueueInput): Promise<EnqueueResult> {

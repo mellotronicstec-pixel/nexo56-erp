@@ -31,6 +31,7 @@ import {
   IconUsers,
   type IconProps,
   IconCashRegister,
+  IconWarranty,
   IconFinance,
   IconInventory,
   IconPurchase,
@@ -63,6 +64,7 @@ const NAV_ICONS: Record<NavIconKey, ComponentType<IconProps>> = {
   purchase: IconPurchase,
   finance: IconFinance,
   'cash-register': IconCashRegister,
+  warranty: IconWarranty,
 };
 
 /**

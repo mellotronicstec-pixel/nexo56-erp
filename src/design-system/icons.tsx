@@ -327,3 +327,17 @@ export const IconCashRegister = (props: IconProps) => (
     <path d="M9.5 14.5h5" />
   </Icon>
 );
+
+/**
+ * Garantias: o selo com as fitas — o carimbo que o balcao entrega ao cliente.
+ *
+ * Evita de proposito o escudo, que ja e o icone de Perfis de Acesso, e evita o
+ * relogio, que prometeria "prazo" quando garantia e cobertura antes de ser
+ * vigencia.
+ */
+export const IconWarranty = (props: IconProps) => (
+  <Icon {...props}>
+    <circle cx="12" cy="9" r="5.5" />
+    <path d="M9.5 13.8L8 21l4-2.2L16 21l-1.5-7.2" />
+  </Icon>
+);

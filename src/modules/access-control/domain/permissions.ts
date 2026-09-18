@@ -185,6 +185,29 @@ export const PERMISSIONS = {
   /** Suprimento e sangria: dinheiro entrando e saindo da gaveta sem titulo. */
   FINANCE_CASH_ADJUST: 'finance.cash.adjust',
   FINANCE_SETTINGS_MANAGE: 'finance.settings.manage',
+
+  // --- Garantias (Prompt 13, item 68) --------------------------------------
+  /**
+   * DEZ CHAVES, e a granularidade tem uma razao por linha.
+   *
+   * Ver uma garantia e trabalho de balcao. EMITIR e o ato que passa a valer
+   * contra a loja. RECLASSIFICAR exige autoridade tecnica — e a permissao
+   * existe justamente para que essa autoridade NAO seja verificada pelo nome
+   * do cargo (item 69), que muda de empresa para empresa e nao e autorizacao.
+   *
+   * Os CUSTOS ficam separados de propósito (item 70): quem atende o cliente
+   * precisa saber se a garantia vale, e nao precisa saber quanto ela custou.
+   */
+  WARRANTIES_VIEW: 'warranties.view',
+  WARRANTIES_CREATE: 'warranties.create',
+  WARRANTIES_ISSUE: 'warranties.issue',
+  WARRANTIES_RETURN_CREATE: 'warranties.return.create',
+  WARRANTIES_RECLASSIFY: 'warranties.reclassify',
+  WARRANTIES_CANCEL: 'warranties.cancel',
+  WARRANTIES_REVOKE: 'warranties.revoke',
+  WARRANTIES_COSTS_VIEW: 'warranties.costs.view',
+  WARRANTIES_COSTS_MANAGE: 'warranties.costs.manage',
+  WARRANTIES_SETTINGS_MANAGE: 'warranties.settings.manage',
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -588,6 +611,69 @@ export const PERMISSION_CATALOG: readonly PermissionDefinition[] = [
     description: 'Administra contas financeiras, formas de pagamento e categorias.',
     featureKey: 'finance.core',
   },
+
+  {
+    key: PERMISSIONS.WARRANTIES_VIEW,
+    name: 'Ver garantias',
+    description: 'Consulta garantias, vigencia, cobertura e retornos.',
+    featureKey: 'operations.warranties',
+  },
+  {
+    key: PERMISSIONS.WARRANTIES_CREATE,
+    name: 'Criar garantias',
+    description: 'Cria garantias e define a cobertura antes da emissao.',
+    featureKey: 'operations.warranties',
+  },
+  {
+    key: PERMISSIONS.WARRANTIES_ISSUE,
+    name: 'Emitir garantias',
+    description: 'Emite a garantia e gera o certificado. E o ato que passa a valer contra a loja.',
+    featureKey: 'operations.warranties',
+  },
+  {
+    key: PERMISSIONS.WARRANTIES_RETURN_CREATE,
+    name: 'Registrar retorno em garantia',
+    description:
+      'Registra que o aparelho voltou e cria a Ordem de Servico de garantia quando cabivel.',
+    featureKey: 'operations.warranties',
+  },
+  {
+    key: PERMISSIONS.WARRANTIES_RECLASSIFY,
+    name: 'Reclassificar garantia para orcamento',
+    description:
+      'Autoridade TECNICA para concluir que o defeito nao esta coberto e mandar a Ordem de Servico para o fluxo comercial.',
+    featureKey: 'operations.warranties',
+  },
+  {
+    key: PERMISSIONS.WARRANTIES_CANCEL,
+    name: 'Cancelar garantia',
+    description: 'Cancela garantia emitida por engano, antes de produzir efeito.',
+    featureKey: 'operations.warranties',
+  },
+  {
+    key: PERMISSIONS.WARRANTIES_REVOKE,
+    name: 'Revogar garantia',
+    description: 'Revoga cobertura vigente por fato posterior, como violacao de lacre.',
+    featureKey: 'operations.warranties',
+  },
+  {
+    key: PERMISSIONS.WARRANTIES_COSTS_VIEW,
+    name: 'Ver custos de garantia',
+    description: 'Consulta quanto o atendimento em garantia custou a loja.',
+    featureKey: 'operations.warranties',
+  },
+  {
+    key: PERMISSIONS.WARRANTIES_COSTS_MANAGE,
+    name: 'Registrar custos de garantia',
+    description: 'Registra mao de obra, peca, terceirizado e frete gastos em garantia.',
+    featureKey: 'operations.warranties',
+  },
+  {
+    key: PERMISSIONS.WARRANTIES_SETTINGS_MANAGE,
+    name: 'Configurar garantias',
+    description: 'Administra as politicas de garantia da empresa.',
+    featureKey: 'operations.warranties',
+  },
 ];
 
 /** Papeis estruturais criados no bootstrap de cada tenant. */
@@ -804,6 +890,24 @@ export const PERMISSION_GROUPS = [
     ],
   },
   {
+    key: 'garantias',
+    name: 'Garantias',
+    description:
+      'Politicas, emissao, certificados, retornos em garantia, reclassificacao e custos.',
+    permissions: [
+      PERMISSIONS.WARRANTIES_VIEW,
+      PERMISSIONS.WARRANTIES_CREATE,
+      PERMISSIONS.WARRANTIES_ISSUE,
+      PERMISSIONS.WARRANTIES_RETURN_CREATE,
+      PERMISSIONS.WARRANTIES_RECLASSIFY,
+      PERMISSIONS.WARRANTIES_CANCEL,
+      PERMISSIONS.WARRANTIES_REVOKE,
+      PERMISSIONS.WARRANTIES_COSTS_VIEW,
+      PERMISSIONS.WARRANTIES_COSTS_MANAGE,
+      PERMISSIONS.WARRANTIES_SETTINGS_MANAGE,
+    ],
+  },
+  {
     key: 'plataforma',
     name: 'Modulos e auditoria',
     description: 'Configuracao de funcionalidades e trilha de auditoria.',
@@ -857,6 +961,20 @@ export const ADMINISTRATIVE_PERMISSIONS: readonly PermissionKey[] = [
   PERMISSIONS.ROLES_MANAGE_PERMISSIONS,
 ];
 
+/**
+ * NOTA — por que `warranties.*` nao esta em HIGH_RISK_PERMISSIONS.
+ *
+ * `warranties.reclassify` e `warranties.revoke` tem impacto comercial real:
+ * uma tira o conserto gratuito do cliente, a outra encerra uma cobertura
+ * vigente. Ainda assim o estrago delas e RASTREAVEL — as duas exigem motivo
+ * escrito, ficam na linha do tempo da garantia, na auditoria e no outbox, e
+ * aparecem na ficha para qualquer pessoa que abra.
+ *
+ * A lista de alto risco guarda outra coisa: permissoes cujo estrago e
+ * IRREVERSIVEL E SILENCIOSO, como conceder acesso administrativo. Uma
+ * reclassificacao indevida se descobre lendo a OS; um perfil concedido por
+ * engano, nao.
+ */
 export function isHighRisk(permission: string): boolean {
   return (HIGH_RISK_PERMISSIONS as readonly string[]).includes(permission);
 }

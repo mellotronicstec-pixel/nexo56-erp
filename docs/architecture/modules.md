@@ -29,6 +29,7 @@ testes próprios — nunca como placeholder (Prompt 01, itens 8 e 82).
 | `inventory`      | 10     | catálogo de peças, localizações, saldos, ledger, reservas e transferências         | `parts`, `stock_locations`, `stock_balances`, `stock_movements`, `stock_reservations`, `stock_transfers`                                                                                                            |
 | `purchasing`     | 11     | fornecedores, necessidades, pedidos, recebimento parcial e histórico de custo      | `suppliers`, `supplier_contacts`, `supplier_parts`, `purchase_price_history`, `purchase_needs`, `purchase_orders`, `purchase_order_items`, `purchase_receipts`, `purchase_receipt_items`, `purchase_order_timeline` |
 | `finance`        | 12     | contas a receber e a pagar, parcelas, liquidação, estorno, razão e caixa           | `financial_accounts`, `payment_methods`, `financial_categories`, `financial_titles`, `financial_installments`, `financial_settlements`, `cash_sessions`, `financial_movements`, `financial_title_timeline`          |
+| `warranties`     | 13     | políticas, garantias, cobertura, certificado, retorno, custo e histórico           | `warranty_policies`, `warranties`, `warranty_coverage_items`, `warranty_certificates`, `warranty_returns`, `warranty_costs`, `warranty_timeline`                                                                    |
 
 O `equipment` usa também a abstração de armazenamento de arquivos
 (`core/storage`), introduzida no Prompt 06: os bytes das fotos ficam fora do
@@ -55,6 +56,7 @@ quotes         ──→ service-orders (workflow + leitura), tenancy (sequencia
 inventory      ──→ service-orders (leitura + linha do tempo), tenancy (sequencias), money, quantity, access-control, features, audit, events
 purchasing     ──→ inventory (primitiva de entrada), service-orders (leitura), tenancy (sequencias), money, quantity, access-control, features, audit, events
 finance        ──→ service-orders, quotes, purchasing, customers (LEITURA apenas), tenancy (sequencias), money, access-control, features, audit, events
+warranties     ──→ service-orders (primitiva de criacao + workflow), equipment, customers, inventory (LEITURA opcional), purchasing (LEITURA opcional), tenancy (sequencias), money, access-control, features, audit, events
 ```
 
 `finance` lê os módulos operacionais e **nunca escreve neles**. Nenhum deles
@@ -64,6 +66,21 @@ cruzam módulos. O teste de boundary falha se `service-orders`, `quotes`,
 `inventory` ou `purchasing` importarem de `finance`, e também se `core`
 importar — com a única exceção de `core/db/schema.ts`, o barril do Drizzle, que
 por construção reexporta o schema de todos os módulos e nunca um serviço.
+
+`warranties` chama **duas primitivas** de `service-orders` —
+`planServiceOrderCreation`/`applyServiceOrderCreation` e
+`planTransition`/`applyTransition` — e nunca escreve em `service_orders.status`
+por conta própria. `service-orders` **não importa** `warranties`: as seções de
+garantia na ficha da OS e do equipamento vivem na camada de páginas, como as
+demais seções que cruzam módulos.
+
+`warranties` **não escreve** em `inventory` nem em `finance`. As leituras de
+peça e fornecedor são opcionais — a garantia de peça funciona com
+`part_description` e `part_code` quando o Estoque está desligado. Custo de
+garantia é registro interno e **não cria** título nem movimento no razão
+(ADR-071). O teste de boundary falha se `warranties` importar
+`finance/application` ou escrever em `stock_balances`, `stock_movements`,
+`stock_reservations` ou `financial_movements`.
 
 `inventory` **nunca** importa `quotes`, e `quotes/application` **nunca** importa
 `inventory`: a única ponte é a FK `quote_items.part_id → parts`, declarada no

@@ -11,7 +11,8 @@ Prompt 04 (Design System e interface); 026–028 do Prompt 05 (Clientes);
 033–036 do Prompt 07 (Ordem de Serviço: ownership, numeração, cardinalidade e
 fronteira com o workflow); 037–039 do Prompt 08 (workflow centralizado,
 concorrência otimista e follow-up); 040–042 do Prompt 09 (Orçamentos); 043–047
-do Prompt 10 (Estoque e Peças).
+do Prompt 10 (Estoque e Peças); 048–052 do Prompt 11 (Fornecedores e Compras);
+053–061 do Prompt 12 (Financeiro); 062–071 do Prompt 13 (Garantias).
 
 Um ADR não é reescrito quando a decisão muda: cria-se um novo ADR que o
 substitui, e o antigo passa a `Substituído por ADR-XXX`.
@@ -79,3 +80,13 @@ substitui, e o antigo passa a `Substituído por ADR-XXX`.
 | [059](ADR-059-conta-financeira-e-forma-de-pagamento.md)                    | Conta, forma de pagamento e categoria                 | Aceito |
 | [060](ADR-060-caixa-operacional.md)                                        | Caixa: um aberto por conta, contagem às cegas         | Aceito |
 | [061](ADR-061-liquidacao-idempotente-e-sem-over-settlement.md)             | Liquidação idempotente, sem over-settlement           | Aceito |
+| [062](ADR-062-politica-e-padrao-garantia-e-snapshot.md)                    | Política é padrão; a garantia é snapshot              | Aceito |
+| [063](ADR-063-garantia-interna-comeca-na-entrega.md)                       | A garantia interna começa na entrega                  | Aceito |
+| [064](ADR-064-vigencia-derivada-nao-persistida.md)                         | Vigência é derivada; "expirada" não é coluna          | Aceito |
+| [065](ADR-065-retorno-cria-os-nova.md)                                     | Retorno cria OS nova; a original nunca reabre         | Aceito |
+| [066](ADR-066-excecao-de-estado-inicial-pela-primitiva.md)                 | A exceção de estado inicial mora na primitiva         | Aceito |
+| [067](ADR-067-classificacao-nao-e-status.md)                               | Classificação não é status                            | Aceito |
+| [068](ADR-068-reclassificacao-passa-pela-maquina-de-estados.md)            | Reclassificar passa pela máquina de estados           | Aceito |
+| [069](ADR-069-garantia-de-peca-nao-e-garantia-de-servico.md)               | Garantia de peça ≠ garantia de serviço                | Aceito |
+| [070](ADR-070-certificado-e-snapshot-com-token-opaco.md)                   | Certificado é snapshot com token opaco (sem PDF)      | Aceito |
+| [071](ADR-071-custo-de-garantia-nao-toca-o-financeiro.md)                  | Custo de garantia mede gasto; não gera lançamento     | Aceito |

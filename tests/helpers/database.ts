@@ -24,6 +24,15 @@ const TABLES_IN_DELETE_ORDER = [
   // obrigatoria, mas manter a lista coerente evita que um esquecimento aqui
   // vire dado vazando de um teste para outro — foi o que aconteceu com
   // `service_order_tasks`, ausente desde o Prompt 08.
+  // Garantias antes do Financeiro e das OS: custos e retornos apontam para as
+  // duas pontas, e a linha do tempo pende da garantia.
+  'warranty_timeline',
+  'warranty_costs',
+  'warranty_returns',
+  'warranty_certificates',
+  'warranty_coverage_items',
+  'warranties',
+  'warranty_policies',
   'financial_movements',
   'financial_settlements',
   'financial_title_timeline',

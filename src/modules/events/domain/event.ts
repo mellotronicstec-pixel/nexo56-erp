@@ -137,10 +137,42 @@ export const EVENT_TYPES = {
    * nunca a cada recebimento parcial. E o gancho do Prompt 13 (Garantias),
    * para o dia em que o pagamento final disparar a documentacao de garantia.
    *
-   * HOJE NAO HA CONSUMIDOR: nenhuma garantia e criada, nenhum certificado e
-   * emitido, e a situacao da Ordem de Servico NAO muda por causa dele.
+   * O PROMPT 13 CHEGOU E DELIBERADAMENTE NAO O CONSOME (ADR-063).
+   *
+   * Pagamento integral nao e prova de entrega fisica: o cliente paga por PIX
+   * na terca e busca o aparelho na sexta. Emitir garantia aqui dataria a
+   * cobertura tres dias antes de o aparelho sair da loja. Quem habilita a
+   * emissao e a FINALIZACAO da OS — o ato em que o cliente retira. Este evento
+   * segue publicado, e util para quem quiser lembrar o balcao de emitir; nao
+   * ha handler, e a situacao da Ordem de Servico NAO muda por causa dele.
    */
   SERVICE_ORDER_FINANCIAL_SETTLED: 'SERVICE_ORDER_FINANCIAL_SETTLED',
+
+  // --- Garantias (Prompt 13, item 67) ---------------------------------------
+  /** Garantia criada, ainda em rascunho: nao vale contra a loja. */
+  WARRANTY_CREATED: 'WARRANTY_CREATED',
+  /** Garantia EMITIDA: a partir daqui ela vale, com os termos congelados. */
+  WARRANTY_ACTIVATED: 'WARRANTY_ACTIVATED',
+  /** Certificado gerado para uma garantia ja emitida. */
+  WARRANTY_CERTIFICATE_ISSUED: 'WARRANTY_CERTIFICATE_ISSUED',
+  /** O aparelho voltou. Registrar o retorno nao decide cobertura. */
+  WARRANTY_RETURN_REGISTERED: 'WARRANTY_RETURN_REGISTERED',
+  /** O retorno coberto gerou uma NOVA Ordem de Servico, vinculada a original. */
+  WARRANTY_RETURN_SERVICE_ORDER_CREATED: 'WARRANTY_RETURN_SERVICE_ORDER_CREATED',
+  /**
+   * O tecnico concluiu que o defeito NAO estava coberto.
+   *
+   * ESTE EVENTO E O FATO DE COMUNICACAO PENDENTE (item 30). O cliente esperava
+   * conserto gratuito e vai receber orcamento — alguem precisa dizer isso a
+   * ele. O Prompt 16 ainda nao existe, entao nada e enviado: o evento fica no
+   * outbox com o minimo necessario, SEM o texto da justificativa, para que o
+   * canal futuro saiba a quem falar sem que o payload carregue dado sensivel.
+   */
+  WARRANTY_RETURN_RECLASSIFIED_TO_QUOTE: 'WARRANTY_RETURN_RECLASSIFIED_TO_QUOTE',
+  /** Garantia cancelada: emitida por engano, antes de produzir efeito. */
+  WARRANTY_CANCELLED: 'WARRANTY_CANCELLED',
+  /** Garantia revogada: a cobertura existia e deixou de valer. */
+  WARRANTY_REVOKED: 'WARRANTY_REVOKED',
 } as const;
 
 export type EventType = (typeof EVENT_TYPES)[keyof typeof EVENT_TYPES];

@@ -38,7 +38,8 @@ export type NavIconKey =
   | 'supplier'
   | 'purchase'
   | 'finance'
-  | 'cash-register';
+  | 'cash-register'
+  | 'warranty';
 
 export interface NavItem {
   href: string;
@@ -118,6 +119,24 @@ export const NAV_SECTIONS: readonly NavSection[] = [
         featureKey: FEATURES.OPERATIONS_PURCHASING,
         permission: PERMISSIONS.PURCHASES_VIEW,
         icon: 'purchase',
+      },
+      {
+        /**
+         * Garantias e OPCIONAL e depende de Ordens de Servico (Prompt 13,
+         * itens 78 e 84). Quando o modulo esta desligado, o item some e a OS
+         * continua funcionando exatamente como antes — nenhuma tela de OS
+         * depende de garantia existir.
+         *
+         * Fica em Operacao, e nao em secao propria: garantia e assunto de
+         * bancada e de balcao, no mesmo bloco de quem abre e fecha OS. O
+         * Financeiro ganhou secao propria porque quem mexe em dinheiro
+         * raramente e quem mexe em aparelho; aqui e a mesma gente.
+         */
+        href: '/garantias',
+        label: 'Garantias',
+        featureKey: FEATURES.OPERATIONS_WARRANTIES,
+        permission: PERMISSIONS.WARRANTIES_VIEW,
+        icon: 'warranty',
       },
     ],
   },
@@ -226,6 +245,13 @@ export const BREADCRUMB_LABELS: Readonly<Record<string, string>> = {
   fornecedores: 'Fornecedores',
   'novo-fornecedor': 'Novo fornecedor',
   compras: 'Compras',
+  garantias: 'Garantias',
+  lista: 'Lista',
+  retornos: 'Retornos',
+  politicas: 'Politicas de garantia',
+  'nova-politica': 'Nova politica',
+  'novo-retorno': 'Registrar retorno',
+  certificado: 'Certificado',
   necessidades: 'Necessidades de compra',
   'novo-pedido': 'Novo pedido',
   administracao: 'Administracao',

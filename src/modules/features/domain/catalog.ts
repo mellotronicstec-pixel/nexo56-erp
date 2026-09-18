@@ -47,6 +47,7 @@ export const FEATURES = {
    * Orcamento, Estoque e Compras inteiros.
    */
   FINANCE_CORE: 'finance.core',
+  OPERATIONS_WARRANTIES: 'operations.warranties',
   PLATFORM_MULTI_UNIT: 'platform.multi_unit',
   PLATFORM_LABEL_RECOGNITION: 'platform.label_recognition',
 } as const;
@@ -234,6 +235,27 @@ export const FEATURE_CATALOG: readonly FeatureDefinition[] = [
      */
     type: 'OPTIONAL',
     dependsOn: [FEATURES.CORE_CUSTOMERS],
+  },
+  {
+    key: FEATURES.OPERATIONS_WARRANTIES,
+    name: 'Garantias',
+    description:
+      'Politicas, garantias interna/fabrica/peca/estendida, certificados, retornos em garantia e custos.',
+    /**
+     * OPTIONAL, e a consequencia e deliberada (Prompt 13, itens 71 e 73):
+     * desligar Garantias NAO impede uma Ordem de Servico de ser aberta,
+     * consertada e finalizada. Uma assistencia que nao concede garantia
+     * formal — ou que ainda a controla num caderno — continua usando o Nexo56
+     * inteiro.
+     *
+     * Depende de ORDENS DE SERVICO porque a Garantia Interna cobre um reparo,
+     * e o reparo mora na OS. NAO depende de Estoque, Compras nem Financeiro:
+     * uma garantia de mao de obra existe sem peca, sem compra e sem cobranca —
+     * e exigir o Financeiro faria a loja que nao cobrou perder o direito de
+     * garantir o proprio servico (item 72).
+     */
+    type: 'OPTIONAL',
+    dependsOn: [FEATURES.CORE_SERVICE_ORDERS],
   },
   {
     key: FEATURES.PLATFORM_MULTI_UNIT,

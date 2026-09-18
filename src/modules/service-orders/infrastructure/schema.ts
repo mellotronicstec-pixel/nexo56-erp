@@ -167,6 +167,43 @@ export const serviceOrders = mysqlTable(
      */
     idempotencyKey: varchar('idempotency_key', { length: 80 }),
 
+    /**
+     * A NATUREZA da ordem (Prompt 13, itens 27 e 28).
+     *
+     * `standard` | `warranty_internal`.
+     *
+     * CLASSIFICACAO NAO E ESTADO, e as duas colunas existem lado a lado
+     * justamente para que ninguem confunda: `status` diz ONDE a ordem esta
+     * (Aguardando Conserto, Finalizada); `classification` diz POR QUE ela
+     * existe. Uma OS de garantia percorre os mesmos estados de qualquer outra
+     * e continua sendo de garantia o tempo inteiro — usar `status` para
+     * classificar destruiria as duas informacoes de uma vez.
+     *
+     * `varchar` com default: toda OS ja existente vira `standard` sem
+     * `UPDATE`, e a migration continua puramente aditiva.
+     */
+    classification: varchar('classification', { length: 30 }).notNull().default('standard'),
+
+    /**
+     * A garantia que originou esta ordem (Prompt 13, item 25).
+     *
+     * NAO e FK declarada aqui: `warranties` nasce na migration 0011, DEPOIS
+     * desta tabela, e uma FK nesta direcao inverteria a ordem de criacao. O
+     * vinculo estrutural forte mora em `warranty_returns`, que aponta para as
+     * DUAS ordens com FK composta e tenant-safe. Esta coluna e o atalho de
+     * leitura que a ficha da OS usa para dizer "Garantia da OS #...".
+     */
+    warrantyId: idRef('warranty_id'),
+
+    /**
+     * A ordem ORIGINAL, quando esta nasceu de um retorno em garantia.
+     *
+     * A original permanece historica e intocada (item 24): nao se reabre, nao
+     * se troca o status, nao se reaproveita o numero. Este vinculo e o que
+     * permite as duas fichas se enxergarem.
+     */
+    originalServiceOrderId: idRef('original_service_order_id'),
+
     ...actorColumns(),
     ...timestamps(),
   },

@@ -1,5 +1,5 @@
 import { Money, sumMoney } from '@/core/money/money';
-import { isOverdue } from '@/core/time/civil-date';
+import { addMonths, isOverdue } from '@/core/time/civil-date';
 import { PERMISSIONS, type PermissionKey } from '@/modules/access-control/domain/permissions';
 
 /**
@@ -279,21 +279,19 @@ export function installmentsSumExactly(parts: readonly Money[], total: Money): b
  * seguintes, que e o erro classico de somar 30 dias.
  */
 export function monthlyDueDates(firstDueDate: string, count: number): string[] {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(firstDueDate);
-  if (!match) throw new RangeError('Data de vencimento invalida.');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(firstDueDate)) {
+    throw new RangeError('Data de vencimento invalida.');
+  }
 
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  const day = Number(match[3]);
-
-  return Array.from({ length: count }, (_, index) => {
-    const total = month - 1 + index;
-    const targetYear = year + Math.floor(total / 12);
-    const targetMonth = (total % 12) + 1;
-    const lastDay = new Date(Date.UTC(targetYear, targetMonth, 0)).getUTCDate();
-    const targetDay = Math.min(day, lastDay);
-    return `${targetYear}-${String(targetMonth).padStart(2, '0')}-${String(targetDay).padStart(2, '0')}`;
-  });
+  /**
+   * A aritmetica mora em `core/time/civil-date`, e nao aqui.
+   *
+   * A mesma regra — dia como referencia, ultimo dia do mes quando nao existe —
+   * passou a ser exigida tambem pelas Garantias (Prompt 13, item 9). Duas
+   * copias da mesma conta de calendario e o arranjo que garante que um dia
+   * elas divirjam num 29 de fevereiro, e ninguem descubra pelo lado errado.
+   */
+  return Array.from({ length: count }, (_, index) => addMonths(firstDueDate, index));
 }
 
 /** Plano completo: valores exatos e vencimentos, prontos para gravar. */

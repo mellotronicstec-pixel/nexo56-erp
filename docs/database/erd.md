@@ -738,6 +738,126 @@ erDiagram
     FINANCIAL_ACCOUNTS ||--o{ CASH_SESSIONS : "uma aberta por vez"
     CASH_SESSIONS ||--o{ FINANCIAL_MOVEMENTS : "o que passou pelo turno"
     FINANCIAL_TITLES ||--o{ FINANCIAL_TITLE_TIMELINE : "historia"
+
+    WARRANTY_POLICIES {
+        char36 id PK
+        char36 tenant_id FK
+        varchar name
+        varchar type "internal factory part extended"
+        int duration_amount "CHECK maior que zero"
+        varchar duration_unit "days months"
+        text coverage_summary "COPIADO na emissao - nunca lido depois"
+        text exclusions
+        text terms
+        varchar status "active inactive - desativar NAO apaga"
+        int version "CAS"
+    }
+
+    WARRANTIES {
+        char36 id PK
+        char36 tenant_id FK
+        char36 unit_id FK "quem garantiu foi a loja que consertou"
+        int number "GAR 000042 - de tenant_sequences"
+        varchar type "internal factory part extended"
+        char36 policy_id FK "PROCEDENCIA - nunca fonte de leitura"
+        char36 customer_id FK
+        char36 equipment_id FK
+        char36 service_order_id FK "nulo nas registradas sobre o aparelho"
+        int duration_amount
+        varchar duration_unit
+        text coverage_summary "SNAPSHOT dos termos da emissao"
+        text exclusions
+        text terms
+        tinyint covers_whole_service "0 = parcial - a lista vira a verdade"
+        varchar starts_on "data civil - fuso da empresa"
+        varchar ends_on "data civil - fim INCLUSIVO"
+        varchar status "draft active cancelled revoked - NAO existe expired"
+        varchar manufacturer
+        varchar external_reference
+        char36 part_id FK "garantia de peca - opcional"
+        varchar part_description "sustenta o caso SEM o modulo de Estoque"
+        varchar part_code
+        varchar installed_on
+        char36 stock_movement_id FK
+        char36 supplier_id FK "a quem recorrer"
+        varchar idempotency_key "UNIQUE - duplo clique reencontra"
+        int version "CAS"
+    }
+
+    WARRANTY_COVERAGE_ITEMS {
+        char36 id PK
+        char36 tenant_id FK
+        char36 warranty_id FK
+        varchar kind "labor service part component other"
+        varchar description "o QUE esta coberto - nunca um booleano"
+        char36 part_id FK
+        int position
+    }
+
+    WARRANTY_CERTIFICATES {
+        char36 id PK
+        char36 tenant_id FK
+        char36 warranty_id FK "UNIQUE - um certificado por garantia"
+        text snapshot "JSON completo - montado da GARANTIA nao da politica"
+        varchar checksum "SHA-256 do conteudo"
+        varchar token "UNIQUE - 24 bytes opacos - identifica NAO autoriza"
+        varchar format "html - coluna preparada para pdf que NAO existe"
+        datetime issued_at
+    }
+
+    WARRANTY_RETURNS {
+        char36 id PK
+        char36 tenant_id FK
+        char36 unit_id FK "onde o aparelho voltou"
+        char36 warranty_id FK
+        char36 customer_id FK
+        char36 original_service_order_id FK "NUNCA reaberta"
+        char36 return_service_order_id FK "UNIQUE - a OS NOVA"
+        varchar reference_date "data civil CONGELADA"
+        tinyint was_enforceable "valia NAQUELE dia - nao recalcula"
+        varchar coverage_assessment "covered not_covered undetermined"
+        text customer_report
+        varchar idempotency_key "UNIQUE - dois atendentes juntos criam UMA OS"
+        datetime registered_at
+    }
+
+    WARRANTY_COSTS {
+        char36 id PK
+        char36 tenant_id FK
+        char36 warranty_id FK
+        char36 warranty_return_id FK
+        char36 service_order_id FK
+        varchar kind "labor part outsourced freight other"
+        varchar description
+        decimal amount "CHECK maior ou igual a zero - NAO gera lancamento"
+        datetime created_at
+    }
+
+    WARRANTY_TIMELINE {
+        char36 id PK
+        char36 tenant_id FK
+        char36 warranty_id FK
+        varchar kind
+        varchar summary "em portugues, para quem abrir daqui a seis meses"
+        varchar reason
+        char36 actor_id FK
+        datetime occurred_at
+    }
+
+    UNITS ||--o{ WARRANTIES : "a loja que garantiu"
+    CUSTOMERS ||--o{ WARRANTIES : titular
+    EQUIPMENT ||--o{ WARRANTIES : cobre
+    SERVICE_ORDERS ||--o{ WARRANTIES : "origina - ATO HUMANO na OS concluida"
+    WARRANTY_POLICIES ||--o{ WARRANTIES : "sugere - NAO define"
+    PARTS ||--o{ WARRANTIES : "garantia de peca - OPCIONAL"
+    SUPPLIERS ||--o{ WARRANTIES : responde_por
+    WARRANTIES ||--o{ WARRANTY_COVERAGE_ITEMS : "o QUE cobre"
+    WARRANTIES ||--o| WARRANTY_CERTIFICATES : "snapshot + checksum"
+    WARRANTIES ||--o{ WARRANTY_RETURNS : acionada_por
+    SERVICE_ORDERS ||--o{ WARRANTY_RETURNS : "original - nunca reabre"
+    SERVICE_ORDERS ||--o| WARRANTY_RETURNS : "OS NOVA em awaiting_repair"
+    WARRANTIES ||--o{ WARRANTY_COSTS : "custa a loja - sem tocar o Financeiro"
+    WARRANTIES ||--o{ WARRANTY_TIMELINE : "historia"
 ```
 
 ### Destaques do diagrama
@@ -798,7 +918,14 @@ erDiagram
 > tabelas. `PURCHASE_REQUEST` virou `purchase_needs`, e a relação com o pedido
 > é **N para N pelo item**, não "origina" — ver
 > [ADR-048](../adr/ADR-048-necessidade-e-pedido-sao-coisas-diferentes.md).
-> Aqui eles aparecem apenas como ponto de ligação para Garantia e Financeiro.
+> `WARRANTY` **saiu deste diagrama conceitual**: foi implementado no Prompt 13 e
+> está na seção 1, com sete tabelas reais. O que era uma entidade virou um
+> domínio: política, garantia, cobertura, certificado, retorno, custo e
+> histórico. A relação `SERVICE_ORDER ||--o| SERVICE_ORDER` ("retorno em
+> garantia") também saiu: o vínculo existe, mas passa por `warranty_returns`,
+> que guarda a data de referência, se a garantia valia no dia e a avaliação de
+> cobertura — informação que uma FK direta entre ordens não carregaria
+> ([ADR-065](../adr/ADR-065-retorno-cria-os-nova.md)).
 
 ```mermaid
 erDiagram
@@ -808,11 +935,9 @@ erDiagram
     SERVICE_ORDER ||--o{ QUOTE : possui
     QUOTE ||--o{ QUOTE_ITEM : contem
     SERVICE_ORDER ||--o{ PAYMENT : gera
-    SERVICE_ORDER ||--o{ WARRANTY : "origina (entidade propria)"
     SERVICE_ORDER ||--o{ TASK : demanda
     SERVICE_ORDER ||--o{ COMMUNICATION : registra
     SERVICE_ORDER ||--o{ ATTACHMENT : anexa
-    SERVICE_ORDER ||--o| SERVICE_ORDER : "retorno em garantia"
 
     PART ||--o{ QUOTE_ITEM : "vinculo OPCIONAL (Prompt 10)"
     PART ||--o{ STOCK_BALANCE : "estocada (por unidade)"
@@ -827,9 +952,6 @@ erDiagram
     STOCK_TRANSFER ||--o{ STOCK_MOVEMENT : "duas pontas, mesmo transfer_id"
     UNIT_C ||--o{ STOCK_TRANSFER : "origem / destino"
 
-    PART ||--o{ WARRANTY : "garantia de peca"
-    SUPPLIER ||--o{ WARRANTY : responde_por
-
     UNIT_C ||--o{ APPOINTMENT : agenda
 ```
 
@@ -842,7 +964,13 @@ erDiagram
 | `clients.unit_id` **não define ownership**              | O mesmo cliente é atendido em qualquer filial                                                              |
 | `equipments` pertence a tenant + cliente                | Não se duplica por passar em outra unidade                                                                 |
 | Número da OS **único por tenant**                       | Sem ambiguidade em QR, portal, suporte e garantia                                                          |
-| `warranties` é **entidade própria**                     | Nunca um booleano dentro da OS (item 63)                                                                   |
+| `warranties` é **entidade própria**                     | **Implementado no Prompt 13**: nunca um booleano dentro da OS (item 63)                                    |
+| **não existe `status = 'expired'`**                     | **Prompt 13**: vigência é derivada, no fuso da empresa (ADR-064)                                           |
+| retorno cria **OS nova**                                | **Prompt 13**: a original nunca reabre e o número nunca é reaproveitado (ADR-065)                          |
+| `service_orders.classification` **não é status**        | **Prompt 13**: é o que a ordem é, não onde ela está (ADR-067)                                              |
+| a garantia guarda **snapshot** dos termos               | **Prompt 13**: mudar a política não reescreve o que já foi prometido (ADR-062)                             |
+| `warranty_costs` **não gera lançamento financeiro**     | **Prompt 13**: conserto em garantia válida é gratuito por definição (ADR-071)                              |
+| o token do certificado é **opaco**                      | **Prompt 13**: identifica, não autoriza; nunca carrega dado pessoal (ADR-070)                              |
 | `stock_balances` é **por unidade**                      | **Implementado no Prompt 10**: estoque é físico (item 64)                                                  |
 | `suppliers` **não tem `unit_id`**                       | **Prompt 11**: a empresa negocia com o distribuidor, não a loja (ADR-052)                                  |
 | `purchase_orders.unit_id` **obrigatório**               | **Prompt 11**: a mercadoria chega em um endereço; pedido sem destino não existe                            |

@@ -74,7 +74,15 @@ import { formatTitleNumber } from '@/modules/finance/domain/finance';
 import { Money } from '@/core/money/money';
 import { todayIn } from '@/core/time/civil-date';
 import { createServiceOrderChargeAction } from '../../financeiro/actions';
+import { listWarrantyPolicies } from '@/modules/warranties/application/warranty-policy-service';
+import {
+  findReturnByServiceOrder,
+  listReturnsFromOriginalServiceOrder,
+  listWarrantiesForServiceOrder,
+} from '@/modules/warranties/application/warranty-queries';
+import { issueWarrantyAction, reclassifyAction } from '../../garantias/actions';
 import { FinanceSection } from './finance-section';
+import { WarrantySection } from './warranty-section';
 import { PartsSection } from './parts-section';
 import { QuoteSection } from './orcamentos/quote-section';
 
@@ -273,6 +281,64 @@ export default async function ServiceOrderDetailPage({
         : Promise.resolve([]),
       canReserveDecision.allowed ? searchPartsForPicker(context, '', 50) : Promise.resolve([]),
     ]);
+
+  /**
+   * GARANTIAS (Prompt 13, itens 74, 78 e 89).
+   *
+   * O MODULO E OPCIONAL, e a secao inteira depende disso. Com Garantias
+   * desligado, nenhuma consulta e feita, nenhum bloco aparece e a ficha da OS
+   * fica exatamente como era antes do Prompt 13 — que e o que "modular" tem de
+   * significar para valer alguma coisa.
+   *
+   * Tres permissoes distintas porque sao tres atos distintos: ver, emitir e
+   * reclassificar. Quem atende no balcao ve; quem emite assume um compromisso
+   * da loja; quem reclassifica desfaz uma decisao tecnica.
+   */
+  const canViewWarrantiesDecision = await can(context, {
+    permission: PERMISSIONS.WARRANTIES_VIEW,
+    featureKey: FEATURES.OPERATIONS_WARRANTIES,
+    unitId: order.unitId,
+  });
+
+  const [canIssueWarrantyDecision, canReclassifyDecision] = canViewWarrantiesDecision.allowed
+    ? await Promise.all([
+        can(context, {
+          permission: PERMISSIONS.WARRANTIES_ISSUE,
+          featureKey: FEATURES.OPERATIONS_WARRANTIES,
+          unitId: order.unitId,
+        }),
+        can(context, {
+          permission: PERMISSIONS.WARRANTIES_RECLASSIFY,
+          featureKey: FEATURES.OPERATIONS_WARRANTIES,
+          unitId: order.unitId,
+        }),
+      ])
+    : [{ allowed: false }, { allowed: false }];
+
+  const [warrantiesOnOrder, warrantyOrigin, returnsFromOrder, warrantyPolicies] =
+    canViewWarrantiesDecision.allowed
+      ? await Promise.all([
+          listWarrantiesForServiceOrder(context, order.id),
+          findReturnByServiceOrder(context, order.id),
+          listReturnsFromOriginalServiceOrder(context, order.id),
+          canIssueWarrantyDecision.allowed
+            ? listWarrantyPolicies(context, true)
+            : Promise.resolve([]),
+        ])
+      : [[], null, [], []];
+
+  /**
+   * A GARANTIA INTERNA SO NASCE DE OS CONCLUIDA (item 10; ADR-063).
+   *
+   * "Concluida" e o estado em que o fluxo registra que o cliente retirou o
+   * aparelho — e a garantia comeca quando ele o leva embora, nao quando o
+   * pagamento cai. Cliente que paga por PIX na terca e retira na sexta nao
+   * pode perder tres dias de cobertura.
+   *
+   * A tela ESCONDE o formulario, e o caso de uso RECUSA de qualquer jeito: o
+   * que a interface omite, o backend nega.
+   */
+  const warrantyIssuableHere = order.status === 'completed';
 
   /** A cobranca ja existente, quando ha: e ela que a secao mostra. */
   const charge = canViewFinanceDecision.allowed
@@ -593,6 +659,56 @@ export default async function ServiceOrderDetailPage({
             today={todayIn(context.tenantTimezone)}
             canCreate={canChargeDecision.allowed}
             action={createServiceOrderChargeAction}
+          />
+        </Section>
+      ) : null}
+
+      {/*
+        GARANTIAS (Prompt 13, itens 74 e 89).
+
+        A secao fica DEPOIS do Financeiro porque e essa a ordem do atendimento:
+        cobra e entrega, e a garantia comeca quando o aparelho sai. Ela NUNCA
+        escreve em `service_orders`: emitir garantia nao mexe na situacao da OS,
+        e reclassificar passa pela maquina de estados como qualquer transicao.
+      */}
+      {canViewWarrantiesDecision.allowed ? (
+        <Section
+          id="garantias"
+          title="Garantias"
+          description="O que a loja garantiu neste atendimento, e o que voltou sob garantia."
+        >
+          <WarrantySection
+            serviceOrderId={order.id}
+            equipmentId={equipmentItem.id}
+            version={order.version}
+            classification={order.classification}
+            origin={warrantyOrigin}
+            warranties={warrantiesOnOrder}
+            returnsFromThisOrder={returnsFromOrder.flatMap((retorno) =>
+              retorno.returnServiceOrderId
+                ? [
+                    {
+                      id: retorno.id,
+                      warrantyId: retorno.warrantyId,
+                      warrantyNumber: retorno.warrantyNumber,
+                      returnServiceOrderId: retorno.returnServiceOrderId,
+                      returnNumber: retorno.returnNumber,
+                      coverageAssessment: retorno.coverageAssessment,
+                    },
+                  ]
+                : [],
+            )}
+            policies={warrantyPolicies}
+            canIssue={canIssueWarrantyDecision.allowed}
+            canReclassify={canReclassifyDecision.allowed}
+            canIssueHere={warrantyIssuableHere}
+            issueBlockedReason={
+              warrantyIssuableHere
+                ? null
+                : 'A garantia interna comeca quando o cliente leva o aparelho. Conclua a Ordem de Servico primeiro — e o proprio fluxo que registra a retirada.'
+            }
+            issueAction={issueWarrantyAction}
+            reclassifyAction={reclassifyAction}
           />
         </Section>
       ) : null}

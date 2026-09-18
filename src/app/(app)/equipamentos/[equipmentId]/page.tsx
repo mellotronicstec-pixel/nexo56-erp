@@ -12,7 +12,7 @@ import {
   PageHeader,
   Section,
 } from '@/design-system/components';
-import { IconCamera, IconIntake } from '@/design-system/icons';
+import { IconCamera, IconIntake, IconWarranty } from '@/design-system/icons';
 import { requireAccessForPage } from '@/modules/access-control/application/guard';
 import { PERMISSIONS } from '@/modules/access-control/domain/permissions';
 import { findEquipmentDetail } from '@/modules/equipment/application/equipment-queries';
@@ -28,18 +28,37 @@ import { checkAccess } from '@/modules/features/application/effective-access';
 import { mapServiceOrdersByIntake } from '@/modules/service-orders/application/service-order-queries';
 import { formatServiceOrderNumber } from '@/modules/service-orders/domain/service-order';
 import { hasPermission } from '@/modules/tenancy/domain/tenant-context';
+import { listWarrantiesForEquipment } from '@/modules/warranties/application/warranty-queries';
+import {
+  formatWarrantyNumber,
+  TEMPORAL_CLASS_LABEL,
+  warrantyTypeLabel,
+  WARRANTY_STATUS_LABEL,
+  WARRANTY_STATUS_TONE,
+  type WarrantyStatus,
+} from '@/modules/warranties/domain/warranty';
 import { MediaManager } from './media-manager';
 import { removeMediaAction, uploadMediaAction } from '../actions';
 
 export const metadata: Metadata = { title: 'Equipamento' };
 
 /**
+ * Data civil nao e instante (ADR-017): `AAAA-MM-DD` passado por `new Date()`
+ * viraria meia-noite UTC e, em Sao Paulo, mostraria o dia anterior.
+ */
+function civilDate(value: string): string {
+  const [ano, mes, dia] = value.split('-');
+  return ano && mes && dia ? `${dia}/${mes}/${ano}` : value;
+}
+
+/**
  * Ficha do equipamento (Prompt 06, itens 52 e 80).
  *
  * Mostra o que EXISTE: identificacao, dono, fotos e o historico real de
- * recebimentos. Nao ha aba de Ordens de Servico, garantias ou pecas — esses
- * modulos ainda nao existem, e aba que nao leva a lugar nenhum e pior do que
- * a ausencia dela (item 52).
+ * recebimentos, e — quando o modulo de Garantias esta disponivel — a cobertura
+ * viva do aparelho (Prompt 13, item 75). Nao ha aba de Ordens de Servico nem
+ * de pecas: aba que nao leva a lugar nenhum e pior do que a ausencia dela
+ * (item 52).
  */
 export default async function EquipmentDetailPage({
   params,
@@ -84,6 +103,35 @@ export default async function EquipmentDetailPage({
     context,
     intakes.map(({ intake }) => intake.id),
   );
+
+  /**
+   * GARANTIAS DO APARELHO (Prompt 13, itens 22 e 75).
+   *
+   * A pergunta do balcao e "este aparelho tem cobertura?", e ela e feita sobre
+   * o APARELHO — nao sobre o cliente e nao sobre uma OS especifica. O mesmo
+   * aparelho pode carregar tres garantias ao mesmo tempo: a interna do reparo,
+   * a da peca trocada e a de fabrica, cada uma cobrindo coisa diferente.
+   *
+   * AS VENCIDAS APARECEM, MARCADAS COMO TAL. Esconde-las deixaria a ficha
+   * limpa e o atendente sem resposta: "existiu uma garantia e ela terminou
+   * semana passada" e informacao util; "nao encontrei nada" nao e.
+   *
+   * O MODULO E OPCIONAL: com Garantias desligado, nenhuma consulta acontece e
+   * a ficha fica exatamente como era antes do Prompt 13.
+   */
+  const warrantyAccess = await checkAccess(context, {
+    featureKey: FEATURES.OPERATIONS_WARRANTIES,
+    permission: PERMISSIONS.WARRANTIES_VIEW,
+  });
+
+  const equipmentWarranties = warrantyAccess.allowed
+    ? await listWarrantiesForEquipment(context, item.id)
+    : [];
+
+  const canRegisterReturn = await checkAccess(context, {
+    featureKey: FEATURES.OPERATIONS_WARRANTIES,
+    permission: PERMISSIONS.WARRANTIES_RETURN_CREATE,
+  });
 
   const formatter = new Intl.DateTimeFormat('pt-BR', {
     dateStyle: 'short',
@@ -222,6 +270,79 @@ export default async function EquipmentDetailPage({
           </CardBody>
         </Card>
       </Section>
+
+      {warrantyAccess.allowed ? (
+        <Section
+          id="garantias"
+          title="Garantias"
+          description="O que ainda esta coberto neste aparelho — e o que ja terminou."
+        >
+          <Card>
+            {equipmentWarranties.length === 0 ? (
+              <EmptyState
+                icon={<IconWarranty />}
+                title="Nenhuma garantia"
+                description="Este aparelho nao tem garantia registrada nas suas unidades."
+              />
+            ) : (
+              <CardBody className="p-0">
+                <ul className="divide-y divide-ink-100">
+                  {equipmentWarranties.map((garantia) => (
+                    <li
+                      key={garantia.id}
+                      className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
+                    >
+                      <div className="min-w-0">
+                        <Link
+                          href={`/garantias/${garantia.id}`}
+                          className="touch-target inline-flex items-center font-medium text-brand-600"
+                        >
+                          {formatWarrantyNumber(garantia.number)}
+                        </Link>
+                        <p className="text-small text-ink-500">
+                          {warrantyTypeLabel(garantia.type)} · {civilDate(garantia.startsOn)} a{' '}
+                          {civilDate(garantia.endsOn)}
+                          {garantia.serviceOrderNumber !== null
+                            ? ` · OS ${garantia.serviceOrderNumber}`
+                            : ''}
+                        </p>
+                      </div>
+
+                      <div className="flex shrink-0 flex-wrap items-center gap-2">
+                        <Badge
+                          tone={
+                            WARRANTY_STATUS_TONE[garantia.status as WarrantyStatus] ?? 'neutral'
+                          }
+                        >
+                          {WARRANTY_STATUS_LABEL[garantia.status as WarrantyStatus] ??
+                            garantia.status}
+                        </Badge>
+                        <Badge tone={garantia.enforceable ? 'success' : 'neutral'}>
+                          {TEMPORAL_CLASS_LABEL[garantia.temporal]}
+                        </Badge>
+                        {garantia.coversWholeService === 0 ? (
+                          <Badge tone="warning">Cobertura parcial</Badge>
+                        ) : null}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+
+                {canRegisterReturn.allowed ? (
+                  <div className="border-t border-ink-100 px-4 py-3">
+                    <Link
+                      href={`/garantias/novo-retorno?aparelho=${item.id}`}
+                      className={linkButtonClass('secondary', 'sm')}
+                    >
+                      Registrar retorno em garantia
+                    </Link>
+                  </div>
+                ) : null}
+              </CardBody>
+            )}
+          </Card>
+        </Section>
+      ) : null}
 
       <Section
         id="recebimentos"
