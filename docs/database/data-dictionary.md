@@ -799,12 +799,32 @@ Snapshot do documento, com soma de verificação
 | `snapshot` | JSON completo. Montado a partir da **garantia**, nunca da política  |
 | `checksum` | SHA-256 do conteúdo                                                 |
 | `token`    | 24 bytes aleatórios em base64url. Opaco, não enumerável, **UNIQUE** |
-| `format`   | `html`. Coluna preparada para `pdf`, que **não existe** hoje        |
+| `format`   | formato da representação registrada na emissão                      |
 
 `UNIQUE (tenant_id, warranty_id)` — um certificado por garantia. Gerar de novo
 devolve o mesmo documento e o mesmo token.
 
 **O token identifica; ele não autoriza.** Nunca carrega dado pessoal.
+
+### Colunas do arquivo PDF (Prompt 13.1)
+
+Todas anuláveis: o certificado existe sem PDF desde o Prompt 13, e os históricos
+continuam válidos sem reemissão.
+
+| Coluna                  | Observação                                                                   |
+| ----------------------- | ---------------------------------------------------------------------------- |
+| `pdf_storage_key`       | chave opaca no storage, **sem PII no caminho**                               |
+| `pdf_mime_type`         | `application/pdf`                                                            |
+| `pdf_byte_size`         | tamanho do arquivo                                                           |
+| `pdf_checksum`          | SHA-256 dos **bytes**. Não se confunde com `checksum`, que é do **snapshot** |
+| `pdf_snapshot_checksum` | de qual versão de snapshot este arquivo saiu — revela arquivo envelhecido    |
+| `pdf_page_count`        | páginas do documento                                                         |
+| `pdf_generated_at`      | quando o arquivo foi produzido                                               |
+| `pdf_renderer`          | renderizador e versão, para diagnóstico                                      |
+
+A gravação usa compare-and-swap sobre `pdf_storage_key`: gerações simultâneas
+produzem um artefato só
+([ADR-072](../adr/ADR-072-pdf-do-certificado-e-programatico.md)).
 
 ---
 

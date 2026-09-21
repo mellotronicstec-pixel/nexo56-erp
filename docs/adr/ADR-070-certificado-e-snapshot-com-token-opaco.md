@@ -1,8 +1,17 @@
-# ADR-070 — Certificado é snapshot com token opaco (e não é PDF)
+# ADR-070 — Certificado é snapshot com token opaco
 
-**Status:** Aceito
+**Status:** Aceito — a seção "PDF" foi superada pelo
+[ADR-072](ADR-072-pdf-do-certificado-e-programatico.md)
 **Data:** Prompt 13 — Garantias
 **Itens atendidos:** 18, 19, 20, 21, 61
+
+> **Evolução (Prompt 13.1).** Quando este ADR foi escrito, não havia geração de
+> PDF, e ele registrou essa ausência em vez de disfarçá-la. O Prompt 13.1
+> implementou a geração real, exatamente pelo caminho que a seção "O que NÃO foi
+> feito" previa: um renderizador que lê **o mesmo snapshot** e grava
+> `format`, sem tocar em nada já emitido. Tudo o mais neste documento —
+> snapshot como autoridade, token opaco, "o token identifica, não autoriza" —
+> continua valendo e agora vale também para o arquivo.
 
 ## Contexto
 
@@ -48,7 +57,10 @@ válida.
 
 Token de outra empresa e token inexistente terminam no mesmo lugar: `notFound`.
 
-## O que NÃO foi feito: PDF
+## O que não havia quando este ADR foi escrito: PDF
+
+> Superado pelo [ADR-072](ADR-072-pdf-do-certificado-e-programatico.md). O
+> texto abaixo é preservado como registro da decisão original.
 
 **Não há geração de PDF.** O certificado existe como HTML com snapshot e
 checksum; o navegador imprime. `format` é coluna (`CERTIFICATE_FORMATS =

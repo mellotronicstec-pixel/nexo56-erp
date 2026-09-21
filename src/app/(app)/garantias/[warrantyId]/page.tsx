@@ -380,8 +380,8 @@ export default async function WarrantyDetailPage({ params }: PageProps) {
                   <dd className="font-medium text-ink-900">{instante(certificado.issuedAt)}</dd>
                 </div>
                 <div className="min-w-0">
-                  <dt className="text-small text-ink-500">Formato</dt>
-                  <dd className="font-medium text-ink-900">HTML</dd>
+                  <dt className="text-small text-ink-500">Formatos</dt>
+                  <dd className="font-medium text-ink-900">PDF e visualizacao em tela</dd>
                 </div>
                 <div className="min-w-0">
                   <dt className="text-small text-ink-500">Soma de verificacao</dt>
@@ -391,12 +391,30 @@ export default async function WarrantyDetailPage({ params }: PageProps) {
                 </div>
               </dl>
 
-              <Link
-                href={certificatePathFor(certificado.token)}
-                className={linkButtonClass('secondary', 'sm', 'touch-target')}
-              >
-                Ver certificado
-              </Link>
+              {/*
+                DUAS ACOES, DUAS COISAS DIFERENTES (item 43).
+
+                "Ver" abre a tela do certificado, que continua util para
+                conferir na hora e imprimir pelo navegador. "Baixar PDF"
+                entrega um arquivo `application/pdf` de verdade, gerado no
+                servidor a partir do mesmo snapshot. A tela nunca chama um de
+                outro.
+              */}
+              <div className="flex flex-wrap gap-2">
+                <Link
+                  href={certificatePathFor(certificado.token)}
+                  className={linkButtonClass('secondary', 'sm', 'touch-target')}
+                >
+                  Ver certificado
+                </Link>
+                <a
+                  href={`/api/garantias/${warrantyId}/certificado/pdf`}
+                  className={linkButtonClass('primary', 'sm', 'touch-target')}
+                >
+                  Baixar PDF
+                  <span className="sr-only"> do certificado {numero}</span>
+                </a>
+              </div>
 
               <p className="text-small text-ink-500">
                 O link e o QR carregam apenas uma referencia opaca — nunca CPF, telefone, endereco
@@ -406,8 +424,9 @@ export default async function WarrantyDetailPage({ params }: PageProps) {
               </p>
 
               <p className="text-small text-ink-500">
-                Nao ha PDF neste momento: o certificado existe como HTML com snapshot e soma de
-                verificacao. Imprimir pelo navegador funciona; gerar arquivo PDF ainda nao.
+                O PDF e gerado no servidor a partir do snapshot desta emissao, em A4, e guardado uma
+                vez: baixar de novo entrega o mesmo arquivo. Se a politica da empresa mudar amanha,
+                este documento continua dizendo o que foi prometido hoje.
               </p>
             </>
           ) : (

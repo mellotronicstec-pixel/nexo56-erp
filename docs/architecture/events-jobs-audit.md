@@ -23,7 +23,13 @@ Ações de Garantias (Prompt 13), todas registradas **dentro da transação** qu
 as causou: `warranty_policy.changed` · `warranty.created` ·
 `warranty.activated` · `warranty.cancelled` · `warranty.revoked` ·
 `warranty_certificate.issued` · `warranty_return.registered` ·
-`warranty_return.reclassified` · `warranty_cost.recorded`
+`warranty_return.reclassified` · `warranty_cost.recorded` ·
+`warranty_certificate.pdf_generated`
+
+O **download** do PDF não é auditado, pelo mesmo critério já aplicado à mídia de
+equipamento: um registro por clique inundaria a auditoria sem responder pergunta
+nenhuma. A **geração** do arquivo é rastreável, e acontece uma vez por versão de
+snapshot.
 
 Reservadas para a Central de Módulos completa: `module.enabled`,
 `module.disabled`, `plan.entitlement_changed`.
@@ -73,6 +79,13 @@ depois achando que é esquecimento.
 
 E `WARRANTY_RETURN_REGISTERED` **não envia** WhatsApp, e-mail nem SMS: avisar o
 cliente continua sendo ato humano.
+
+**Nenhum evento novo foi criado para o PDF** (Prompt 13.1). A avaliação foi
+explícita: não há consumidor, e o gancho que o Prompt 16 precisará —
+`certificateId` — já viaja em `WARRANTY_CERTIFICATE_ISSUED`. Criar
+`WARRANTY_CERTIFICATE_PDF_GENERATED` só porque existe uma função nova
+contradiria a regra que o próprio projeto aplica ao resto do outbox. O arquivo é
+uma representação do certificado, não um fato de negócio novo.
 
 ## Jobs
 

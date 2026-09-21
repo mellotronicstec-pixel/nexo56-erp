@@ -538,6 +538,8 @@ export const WARRANTY_TIMELINE_KINDS = {
   CREATED: 'created',
   ACTIVATED: 'activated',
   CERTIFICATE_ISSUED: 'certificate_issued',
+  /** Prompt 13.1: a PRIMEIRA geracao do arquivo. Retry nao repete o fato. */
+  CERTIFICATE_PDF_GENERATED: 'certificate_pdf_generated',
   RETURN_REGISTERED: 'return_registered',
   RETURN_ORDER_CREATED: 'return_order_created',
   RECLASSIFIED: 'reclassified',
@@ -553,6 +555,7 @@ export const WARRANTY_TIMELINE_LABEL: Readonly<Record<string, string>> = {
   created: 'Garantia criada',
   activated: 'Garantia emitida',
   certificate_issued: 'Certificado gerado',
+  certificate_pdf_generated: 'Certificado em PDF gerado',
   return_registered: 'Retorno registrado',
   return_order_created: 'Ordem de Servico de garantia criada',
   reclassified: 'Reclassificada para orcamento',

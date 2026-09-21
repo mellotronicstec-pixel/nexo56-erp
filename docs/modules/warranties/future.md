@@ -7,14 +7,19 @@ revogação, certificado com snapshot e token opaco, retorno com OS nova na mesm
 transação, reclassificação pela máquina de estados, custos, timeline, eventos,
 auditoria, interface completa.
 
+**Certificado em PDF real** (Prompt 13.1): `application/pdf` gerado no servidor
+a partir do snapshot, em A4, multipágina, com QR vetorial, guardado uma vez e
+baixado por rota autorizada. Ver
+[certificates.md](certificates.md) e
+[ADR-072](../../adr/ADR-072-pdf-do-certificado-e-programatico.md).
+
 ## Preparado, não implementado
 
-| O quê                  | O que existe hoje                                                                                                                                              |
-| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **PDF do certificado** | `format` é coluna; o snapshot é completo e determinístico. Um provider futuro lê o mesmo snapshot e grava `format = 'pdf'`. Hoje é HTML — o navegador imprime. |
-| **Custo por período**  | `sumWarrantyCosts` soma no banco. Nenhuma tela o consome ainda.                                                                                                |
-| **Garantia estendida** | o tipo `extended` existe e funciona como registro. Não há contrato, cobrança nem renovação.                                                                    |
-| **Acionar fabricante** | `manufacturer`, `external_reference` e `supplier_id` guardam a quem recorrer. O encaminhamento é humano.                                                       |
+| O quê                  | O que existe hoje                                                                                        |
+| ---------------------- | -------------------------------------------------------------------------------------------------------- |
+| **Custo por período**  | `sumWarrantyCosts` soma no banco. Nenhuma tela o consome ainda.                                          |
+| **Garantia estendida** | o tipo `extended` existe e funciona como registro. Não há contrato, cobrança nem renovação.              |
+| **Acionar fabricante** | `manufacturer`, `external_reference` e `supplier_id` guardam a quem recorrer. O encaminhamento é humano. |
 
 ## Deliberadamente não feito
 
@@ -32,8 +37,13 @@ auditoria, interface completa.
 
 ## O que mudaria se um desses entrasse
 
-**PDF:** um provider novo, lendo o snapshot existente, gravando `format` e um
-arquivo. Nada do que já foi emitido muda.
+**Fontes da marca no PDF:** hoje o documento usa as fontes padrão do PDF,
+porque Sora e Inter chegam pelo `next/font/google` e não existem como arquivo no
+repositório. Com licença e arquivo em mãos, embuti-las é mudança local ao
+renderizador — nada do que já foi emitido muda.
+
+**Logotipo no PDF:** entra quando os ativos oficiais forem entregues. A marca
+não é reconstruída com fonte.
 
 **Custo por período na tela:** consumir `sumWarrantyCosts` numa visão nova, com
 a definição escrita antes do número.

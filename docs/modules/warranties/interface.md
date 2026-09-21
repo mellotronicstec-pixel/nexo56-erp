@@ -72,6 +72,16 @@ Tabela em `md:` para cima, `CardList` abaixo. Verificado de 360px a 1920px.
 só de cor. Tabelas têm `caption`. Cada seção tem `aria-labelledby`. Nenhum
 controle depende de hover.
 
+## Ver, imprimir e baixar são três coisas
+
+A ficha da garantia e a página do certificado oferecem **Ver certificado**
+(a tela, que o navegador imprime) e **Baixar PDF** (um `application/pdf` real,
+gerado do mesmo snapshot). A interface não chama um de outro, e o texto ao lado
+explica que o arquivo é gerado uma vez e reaproveitado.
+
+O botão é um `<a>` com nome acessível — inclui, em `sr-only`, de qual
+certificado se trata — e alvo de toque de 44px, verificado em 360px.
+
 ## O que a interface nunca promete
 
 Nenhuma tela menciona WhatsApp, SMS, e-mail, PDF, nota fiscal ou compra

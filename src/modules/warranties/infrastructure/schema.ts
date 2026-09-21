@@ -397,6 +397,33 @@ export const warrantyCertificates = mysqlTable(
     issuedAt: instant('issued_at').notNull(),
     issuedBy: idRef('issued_by'),
 
+    /**
+     * O ARQUIVO PDF (Prompt 13.1, itens 22, 25, 26 e 39).
+     *
+     * Tudo anulavel: o certificado existe sem PDF desde o Prompt 13, e os
+     * historicos continuam validos sem reemissao (item 41). O PDF e artefato
+     * DERIVADO do snapshot — pode ser gerado sob demanda e regerado se sumir.
+     */
+    pdfStorageKey: varchar('pdf_storage_key', { length: 255 }),
+    pdfMimeType: varchar('pdf_mime_type', { length: 100 }),
+    pdfByteSize: int('pdf_byte_size', { unsigned: true }),
+    /**
+     * SHA-256 dos BYTES do arquivo. Nao se confunde com `checksum`, que e o do
+     * snapshot: um prova que o documento nao mudou, o outro prova que o
+     * arquivo nao foi trocado (item 22).
+     */
+    pdfChecksum: varchar('pdf_checksum', { length: 64 }),
+    /**
+     * De QUAL snapshot este PDF saiu. E o que permite saber que o arquivo
+     * guardado envelheceu quando o certificado e regerado (item 25) — sem
+     * isso, o download entregaria os termos antigos em silencio.
+     */
+    pdfSnapshotChecksum: varchar('pdf_snapshot_checksum', { length: 64 }),
+    pdfPageCount: int('pdf_page_count', { unsigned: true }),
+    pdfGeneratedAt: instant('pdf_generated_at'),
+    /** Renderizador e versao, para diagnosticar diferenca entre documentos. */
+    pdfRenderer: varchar('pdf_renderer', { length: 60 }),
+
     ...timestamps(),
   },
   (table) => [

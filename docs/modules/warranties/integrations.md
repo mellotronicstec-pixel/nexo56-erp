@@ -50,6 +50,24 @@ fornecedor e não cria conta a pagar.
 `SERVICE_ORDER_FINANCIAL_SETTLED` existe e **não é consumido**: pagar não é
 retirar o aparelho (ADR-063).
 
+## Comunicação (Prompt 16) — preparado, não implementado
+
+O PDF do certificado existe como artefato referenciável: `certificate_id` mais
+`pdf_storage_key`, `pdf_mime_type` e `pdf_checksum`. Quando a Comunicação
+chegar, anexar o documento será ler esse registro — nenhuma renderização nova,
+nenhuma regra duplicada.
+
+**Nada é enviado agora.** Não há WhatsApp, e-mail nem SMS, e nenhum evento de
+garantia tem consumidor. Entregar o certificado ao cliente continua sendo ato
+humano.
+
+## Portal (Prompt 17) — não antecipado
+
+Não existe endpoint público para o PDF. A rota de download exige sessão,
+feature, permissão e unidade autorizada, como qualquer outra. Quando o Portal
+existir, ele terá o próprio modelo de acesso — e não herdará uma porta aberta
+deixada aqui.
+
 ## Eventos publicados
 
 Todos pelo outbox, dentro da transação:

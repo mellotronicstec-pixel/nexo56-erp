@@ -149,6 +149,12 @@ export const AUDIT_ACTIONS = {
   WARRANTY_CANCELLED: 'warranty.cancelled',
   WARRANTY_REVOKED: 'warranty.revoked',
   WARRANTY_CERTIFICATE_ISSUED: 'warranty_certificate.issued',
+  /**
+   * Prompt 13.1: a geracao do arquivo PDF e rastreavel; o DOWNLOAD nao e
+   * auditado, pelo mesmo criterio ja aplicado a midia de equipamento — um
+   * registro por clique inundaria a auditoria sem responder pergunta nenhuma.
+   */
+  WARRANTY_CERTIFICATE_PDF_GENERATED: 'warranty_certificate.pdf_generated',
   WARRANTY_RETURN_REGISTERED: 'warranty_return.registered',
   WARRANTY_RETURN_RECLASSIFIED: 'warranty_return.reclassified',
   WARRANTY_COST_RECORDED: 'warranty_cost.recorded',

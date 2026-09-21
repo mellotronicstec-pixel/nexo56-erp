@@ -1,7 +1,15 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { Alert, Badge, Card, CardBody, CardHeader, PageHeader } from '@/design-system/components';
+import {
+  Alert,
+  Badge,
+  Card,
+  CardBody,
+  CardHeader,
+  linkButtonClass,
+  PageHeader,
+} from '@/design-system/components';
 import { isAppError } from '@/core/errors';
 import { requireAccessForPage } from '@/modules/access-control/application/guard';
 import { PERMISSIONS } from '@/modules/access-control/domain/permissions';
@@ -70,6 +78,21 @@ export default async function WarrantyCertificatePage({ params }: PageProps) {
         </Link>
         .
       </Alert>
+
+      {/*
+        O PDF sai do MESMO snapshot que esta tela mostra (item 43). A tela
+        serve para conferir e imprimir pelo navegador; o arquivo serve para
+        guardar, anexar e entregar.
+      */}
+      <div className="flex flex-wrap gap-2">
+        <a
+          href={`/api/garantias/${certificado.warrantyId}/certificado/pdf`}
+          className={linkButtonClass('primary', 'md', 'touch-target')}
+        >
+          Baixar PDF
+          <span className="sr-only"> do certificado {snapshot.garantia.numero}</span>
+        </a>
+      </div>
 
       <Card className="min-w-0">
         <CardHeader

@@ -74,6 +74,13 @@ por conta própria. `service-orders` **não importa** `warranties`: as seções 
 garantia na ficha da OS e do equipamento vivem na camada de páginas, como as
 demais seções que cruzam módulos.
 
+O PDF do certificado é a única parte do módulo com dependência externa de
+runtime: `@cantoo/pdf-lib` e `qrcode-generator`, ambas confinadas a
+`warranties/infrastructure/pdf/`. O domínio declara a interface
+`WarrantyCertificatePdfRenderer` e não conhece nenhuma das duas — teste de
+fronteira falha o build se isso mudar
+([ADR-072](../adr/ADR-072-pdf-do-certificado-e-programatico.md)).
+
 `warranties` **não escreve** em `inventory` nem em `finance`. As leituras de
 peça e fornecedor são opcionais — a garantia de peça funciona com
 `part_description` e `part_code` quando o Estoque está desligado. Custo de

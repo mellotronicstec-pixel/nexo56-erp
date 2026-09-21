@@ -2040,6 +2040,111 @@ describe('upgrade incremental entre prompts', () => {
     }
   });
 
+  it('leva um banco do Prompt 13, com certificado HTML, ate o Prompt 13.1 sem perda', async () => {
+    const stepDb = 'nexo56_migration_step131_test';
+    await adminConnection.query(`DROP DATABASE IF EXISTS \`${stepDb}\``);
+    await adminConnection.query(
+      `CREATE DATABASE \`${stepDb}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`,
+    );
+
+    const folder = buildFolderUpTo('0011');
+    const connection = await mysql.createConnection({
+      uri: urlForDatabase(stepDb),
+      timezone: 'Z',
+      multipleStatements: true,
+    });
+
+    try {
+      // --- banco no estado do Prompt 13 --------------------------------------
+      await migrate(drizzle(connection), { migrationsFolder: folder });
+      await seedUpToPrompt12(connection);
+
+      /** O certificado do Prompt 13 ainda NAO tem colunas de PDF. */
+      const [antesCols] = await connection.query<mysql.RowDataPacket[]>(
+        `SHOW COLUMNS FROM warranty_certificates LIKE 'pdf_%'`,
+      );
+      expect(antesCols).toHaveLength(0);
+
+      // --- uma garantia com certificado HTML ja emitido ----------------------
+      await connection.query(`
+        INSERT INTO warranties
+          (id, tenant_id, unit_id, number, type, customer_id, equipment_id, service_order_id,
+           duration_amount, duration_unit, coverage_summary, exclusions, terms,
+           covers_whole_service, starts_on, ends_on, status, created_by, created_at, updated_at)
+        VALUES ('gar-131', 'tenant-p12', 'unit-p12', 77, 'internal', 'cli-p12', 'eq-p12', NULL,
+                90, 'days', 'Mao de obra', 'Mau uso', 'Termos da epoca',
+                1, '2026-09-01', '2026-11-30', 'active', 'user-p12', NOW(3), NOW(3))
+      `);
+
+      await connection.query(`
+        INSERT INTO warranty_certificates
+          (id, tenant_id, warranty_id, token, format, snapshot, checksum,
+           issued_at, issued_by, created_at, updated_at)
+        VALUES ('cert-131', 'tenant-p12', 'gar-131', 'token-opaco-historico', 'html',
+                '{"garantia":{"numero":"GAR 000077"},"termos":"Termos da epoca"}',
+                'checksum-do-snapshot-historico', NOW(3), 'user-p12', NOW(3), NOW(3))
+      `);
+
+      // --- upgrade para o Prompt 13.1 ----------------------------------------
+      await migrate(drizzle(connection), { migrationsFolder: './drizzle' });
+
+      /** As colunas de PDF nascem, todas anulaveis e todas vazias. */
+      const [depoisCols] = await connection.query<mysql.RowDataPacket[]>(
+        `SHOW COLUMNS FROM warranty_certificates LIKE 'pdf_%'`,
+      );
+      const nomes = depoisCols.map((row) => row.Field as string);
+      for (const coluna of [
+        'pdf_storage_key',
+        'pdf_mime_type',
+        'pdf_byte_size',
+        'pdf_checksum',
+        'pdf_snapshot_checksum',
+        'pdf_page_count',
+        'pdf_generated_at',
+        'pdf_renderer',
+      ]) {
+        expect(nomes).toContain(coluna);
+      }
+      for (const row of depoisCols) expect(row.Null).toBe('YES');
+
+      /**
+       * O CERTIFICADO HISTORICO SOBREVIVE INTEIRO (item 41).
+       *
+       * Mesmo id, mesmo token, mesmo snapshot, mesmo checksum: a migration
+       * nao reemite nada, nao renderiza nada (item 42) e nao toca no que ja
+       * foi prometido.
+       */
+      const [certificados] = await connection.query<mysql.RowDataPacket[]>(
+        `SELECT * FROM warranty_certificates WHERE id = 'cert-131'`,
+      );
+      expect(certificados).toHaveLength(1);
+      const certificado = certificados[0]!;
+      expect(certificado.token).toBe('token-opaco-historico');
+      expect(certificado.checksum).toBe('checksum-do-snapshot-historico');
+      expect(certificado.snapshot).toContain('Termos da epoca');
+      expect(certificado.pdf_storage_key).toBeNull();
+      expect(certificado.pdf_checksum).toBeNull();
+
+      /** A garantia continua lá, com a vigencia da epoca. */
+      const [garantias] = await connection.query<mysql.RowDataPacket[]>(
+        `SELECT * FROM warranties WHERE id = 'gar-131'`,
+      );
+      expect(garantias).toHaveLength(1);
+      expect(garantias[0]!.ends_on).toBe('2026-11-30');
+      expect(garantias[0]!.number).toBe(77);
+
+      /** A migration nao criou tabela nenhuma: e so ADD COLUMN (item 39). */
+      const [tabelas] = await connection.query<mysql.RowDataPacket[]>('SHOW TABLES');
+      const nomesTabelas = tabelas.map((row) => Object.values(row)[0] as string);
+      expect(nomesTabelas).not.toContain('warranty_certificate_files');
+      expect(nomesTabelas).not.toContain('warranty_certificate_pdfs');
+    } finally {
+      await connection.end();
+      rmSync(folder, { recursive: true, force: true });
+      await adminConnection.query(`DROP DATABASE IF EXISTS \`${stepDb}\``);
+    }
+  });
+
   it('cria um banco vazio do zero com todas as migrations', async () => {
     const freshDb = 'nexo56_migration_fresh_test';
     await adminConnection.query(`DROP DATABASE IF EXISTS \`${freshDb}\``);

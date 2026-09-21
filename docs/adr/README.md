@@ -12,7 +12,8 @@ Prompt 04 (Design System e interface); 026–028 do Prompt 05 (Clientes);
 fronteira com o workflow); 037–039 do Prompt 08 (workflow centralizado,
 concorrência otimista e follow-up); 040–042 do Prompt 09 (Orçamentos); 043–047
 do Prompt 10 (Estoque e Peças); 048–052 do Prompt 11 (Fornecedores e Compras);
-053–061 do Prompt 12 (Financeiro); 062–071 do Prompt 13 (Garantias).
+053–061 do Prompt 12 (Financeiro); 062–071 do Prompt 13 (Garantias); 072 do
+Prompt 13.1 (certificado em PDF).
 
 Um ADR não é reescrito quando a decisão muda: cria-se um novo ADR que o
 substitui, e o antigo passa a `Substituído por ADR-XXX`.
@@ -88,5 +89,6 @@ substitui, e o antigo passa a `Substituído por ADR-XXX`.
 | [067](ADR-067-classificacao-nao-e-status.md)                               | Classificação não é status                            | Aceito |
 | [068](ADR-068-reclassificacao-passa-pela-maquina-de-estados.md)            | Reclassificar passa pela máquina de estados           | Aceito |
 | [069](ADR-069-garantia-de-peca-nao-e-garantia-de-servico.md)               | Garantia de peça ≠ garantia de serviço                | Aceito |
-| [070](ADR-070-certificado-e-snapshot-com-token-opaco.md)                   | Certificado é snapshot com token opaco (sem PDF)      | Aceito |
+| [070](ADR-070-certificado-e-snapshot-com-token-opaco.md)                   | Certificado é snapshot com token opaco                | Aceito |
 | [071](ADR-071-custo-de-garantia-nao-toca-o-financeiro.md)                  | Custo de garantia mede gasto; não gera lançamento     | Aceito |
+| [072](ADR-072-pdf-do-certificado-e-programatico.md)                        | PDF do certificado é programático, não navegador      | Aceito |

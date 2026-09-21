@@ -281,3 +281,72 @@ describe('o payload do evento nao carrega texto sensivel (itens 30 e 120)', () =
     expect(payload).not.toMatch(/\breason\b/);
   });
 });
+
+describe('o PDF fica na infraestrutura (Prompt 13.1, itens 6 e 7)', () => {
+  const DOMINIO = WARRANTY_FILES.filter(({ path }) => path.includes(join('warranties', 'domain')));
+  const INFRA_PDF = WARRANTY_FILES.filter(({ path }) =>
+    path.includes(join('infrastructure', 'pdf')),
+  );
+
+  it('ha dominio e ha renderizador para inspecionar', () => {
+    expect(DOMINIO.length).toBeGreaterThan(0);
+    expect(INFRA_PDF.length).toBeGreaterThan(0);
+  });
+
+  it('NENHUM arquivo do dominio importa a biblioteca de PDF', () => {
+    /**
+     * O dominio declara a interface `WarrantyCertificatePdfRenderer` e o
+     * modelo documental; quem produz bytes e a infraestrutura. Trocar de
+     * biblioteca amanha nao pode exigir tocar em regra de negocio.
+     */
+    const infratores = DOMINIO.filter(({ code }) =>
+      /pdf-lib|qrcode-generator|pdfkit|puppeteer|playwright/.test(code),
+    ).map(({ path }) => path);
+
+    expect(infratores).toEqual([]);
+  });
+
+  it('a biblioteca de PDF so aparece dentro de infrastructure/pdf', () => {
+    const forasteiros = WARRANTY_FILES.filter(
+      ({ path, code }) =>
+        !path.includes(join('infrastructure', 'pdf')) &&
+        /@cantoo\/pdf-lib|qrcode-generator/.test(code),
+    ).map(({ path }) => path);
+
+    expect(forasteiros).toEqual([]);
+  });
+
+  it('NAO ha navegador headless no caminho de producao (itens 4 e 6)', () => {
+    /**
+     * Puppeteer e Playwright existem no projeto apenas como ferramenta de
+     * verificacao no navegador. Se um deles aparecer em `src/`, a geracao de
+     * PDF passou a exigir Chromium — e com ele a migracao para VPS que o
+     * item 4 proibe.
+     */
+    const infratores = FILES.filter(({ code }) =>
+      /from\s+['"](puppeteer|playwright|playwright-core)['"]/.test(code),
+    ).map(({ path }) => path);
+
+    expect(infratores).toEqual([]);
+  });
+
+  it('o servico de PDF nao consulta a politica de garantia (item 9)', () => {
+    /**
+     * A mesma trava do certificado HTML, agora para o arquivo: o PDF sai do
+     * snapshot. Se `warrantyPolicies` aparecer aqui, a alteracao de politica
+     * passaria a reescrever documento historico.
+     */
+    const servico = WARRANTY_FILES.find(({ path }) =>
+      path.endsWith('warranty-certificate-pdf-service.ts'),
+    );
+
+    expect(servico).toBeDefined();
+    expect(servico!.code).not.toMatch(/warrantyPolicies|warranty_policies/);
+  });
+
+  it('o modelo documental tambem nao conhece a politica', () => {
+    const modelo = DOMINIO.find(({ path }) => path.endsWith('certificate-document.ts'));
+    expect(modelo).toBeDefined();
+    expect(modelo!.code).not.toMatch(/warrantyPolicies|warranty_policies|getDb/);
+  });
+});

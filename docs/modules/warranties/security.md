@@ -68,3 +68,30 @@ não aconteceu.
 
 Termos, exclusões e relato do cliente não entram em log estruturado. O log
 registra ids, operação e módulo.
+
+## O arquivo PDF (Prompt 13.1)
+
+**A chave de armazenamento é opaca e não tem PII.**
+`warranty-certificates/<32 hex>.pdf`, gerada pelo servidor, fora de `public/`.
+Nunca CPF, telefone, nome, número de garantia nem id de tenant no caminho.
+
+**O nome do download vem do número da garantia**, não do cliente:
+`certificado-garantia-gar-000123.pdf`. O domínio o monta a partir de uma faixa
+restrita de caracteres (`[a-z0-9-]`), então não há como injetar cabeçalho pelo
+`Content-Disposition`.
+
+**Possuir a URL não autoriza.** A rota exige sessão, feature, permissão
+`warranties.view` e unidade autorizada — tudo verificado no backend, não na
+tela. Garantia de outra empresa responde 404.
+
+**Texto do cliente é texto, nunca comando.** `toPdfSafeText` normaliza e
+substitui o que as fontes padrão não codificam; um emoji no nome do aparelho não
+derruba a geração do certificado inteiro.
+
+**O arquivo é verificado antes de ser entregue.** Bytes menores que o mínimo,
+checksum divergente ou conteúdo que não começa com `%PDF-` nunca são servidos
+como PDF: o documento é regerado do snapshot, e se ainda assim falhar a resposta
+é erro — nunca um HTML com MIME de PDF.
+
+**Cache privado.** `Cache-Control: private, no-store`: é o documento de um
+cliente, não pode ficar em proxy compartilhado.

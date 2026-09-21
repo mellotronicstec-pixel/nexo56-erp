@@ -62,8 +62,11 @@ defeito não era coberto
 
 Não envia WhatsApp, e-mail ou SMS. Não cria título financeiro nem cobrança. Não
 compra peça. Não escreve em `service_orders.status`, `stock_balances`,
-`stock_movements`, `stock_reservations` nem `financial_movements`. Não gera PDF.
-Não implementa Rule Engine nem IA.
+`stock_movements`, `stock_reservations` nem `financial_movements`. Não
+implementa Rule Engine nem IA.
+
+O certificado **tem PDF real** desde o Prompt 13.1 — gerado no servidor a partir
+do snapshot, sem navegador headless.
 
 Cada uma dessas ausências é deliberada e tem ADR ou seção própria nesta pasta.
 

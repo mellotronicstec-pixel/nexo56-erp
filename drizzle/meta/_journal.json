@@ -85,6 +85,13 @@
       "when": 1789673879470,
       "tag": "0011_warranties",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "5",
+      "when": 1790024558701,
+      "tag": "0012_warranty_certificate_pdf",
+      "breakpoints": true
     }
   ]
 }
