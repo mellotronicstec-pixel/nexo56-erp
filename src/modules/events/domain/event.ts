@@ -173,6 +173,29 @@ export const EVENT_TYPES = {
   WARRANTY_CANCELLED: 'WARRANTY_CANCELLED',
   /** Garantia revogada: a cobertura existia e deixou de valer. */
   WARRANTY_REVOKED: 'WARRANTY_REVOKED',
+
+  // --- Prompt 14: agenda e tarefas -----------------------------------------
+  /**
+   * SEIS EVENTOS, e nenhum para "editei a prioridade" (item 87).
+   *
+   * O criterio e o mesmo do resto do outbox: publica-se o que outro modulo
+   * poderia querer saber, nao cada alteracao de campo. Trocar o prazo de uma
+   * tarefa nao muda nada para ninguem de fora; atribui-la a alguem, sim.
+   *
+   * O PAYLOAD LEVA IDENTIFICADORES (item 88). Nunca o titulo, as notas, o
+   * nome do cliente ou o contexto tecnico: nota de tarefa e texto livre de
+   * quem opera, e o outbox nao e lugar para isso.
+   *
+   * NENHUM DELES ENVIA NADA (item 11). Tarefa "ligar para o cliente" criada
+   * nao significa cliente avisado — a Comunicacao e o Prompt 16.
+   */
+  TASK_CREATED: 'TASK_CREATED',
+  TASK_ASSIGNED: 'TASK_ASSIGNED',
+  TASK_COMPLETED: 'TASK_COMPLETED',
+  TASK_CANCELLED: 'TASK_CANCELLED',
+  APPOINTMENT_CREATED: 'APPOINTMENT_CREATED',
+  APPOINTMENT_RESCHEDULED: 'APPOINTMENT_RESCHEDULED',
+  APPOINTMENT_CANCELLED: 'APPOINTMENT_CANCELLED',
 } as const;
 
 export type EventType = (typeof EVENT_TYPES)[keyof typeof EVENT_TYPES];

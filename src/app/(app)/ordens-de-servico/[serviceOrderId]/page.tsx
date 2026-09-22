@@ -12,6 +12,10 @@ import {
 } from '@/design-system/components';
 import { IconCamera, IconHistory } from '@/design-system/icons';
 import { can } from '@/modules/access-control/application/authorization-service';
+import { listTasks } from '@/modules/agenda/application/agenda-queries';
+import { listUnitMembers } from '@/modules/users/application/user-queries';
+import { TASK_PRIORITY_LABEL, type TaskPriority } from '@/modules/agenda/domain/agenda';
+import { NewTaskForm, TaskActions } from '../../agenda/agenda-forms';
 import { requireAccessForPage } from '@/modules/access-control/application/guard';
 import { PERMISSIONS } from '@/modules/access-control/domain/permissions';
 import { formatCivilDateBR, isOverdue, isDueOrOverdue } from '@/core/time/civil-date';
@@ -25,7 +29,6 @@ import { FEATURES } from '@/modules/features/domain/catalog';
 import {
   findServiceOrderDetail,
   getServiceOrderNumberFormat,
-  listUnitMembers,
 } from '@/modules/service-orders/application/service-order-queries';
 import {
   getQuoteNumberFormat,
@@ -148,6 +151,7 @@ export default async function ServiceOrderDetailPage({
     canTasksDecision,
     canViewQuotesDecision,
     canCreateQuoteDecision,
+    canAgendaTasksDecision,
   ] = await Promise.all([
     can(context, { ...unitScope, permission: PERMISSIONS.SERVICE_ORDERS_UPDATE }),
     can(context, { ...unitScope, permission: CANCEL_RULE.permission }),
@@ -164,7 +168,31 @@ export default async function ServiceOrderDetailPage({
       featureKey: FEATURES.CORE_QUOTES,
       unitId: order.unitId,
     }),
+    /**
+     * A Agenda e OPCIONAL: se a empresa nao a tem, esta ficha nao muda em
+     * nada. Nenhuma secao aparece e nenhuma consulta e feita (ADR-073).
+     */
+    can(context, {
+      permission: PERMISSIONS.AGENDA_TASKS_CREATE,
+      featureKey: FEATURES.OPERATIONS_AGENDA,
+      unitId: order.unitId,
+    }),
   ]);
+
+  /**
+   * Tarefas operacionais vinculadas a esta ordem (Prompt 14).
+   *
+   * Sao OUTRA COISA das tarefas de fluxo acima: aquelas o workflow cria e
+   * governa; estas uma pessoa escreveu. Ficam em secao propria justamente para
+   * a diferenca continuar visivel — juntar as duas numa lista so faria alguem
+   * esperar que concluir "ligar para o cliente" movesse a ordem.
+   */
+  const agendaTasks = canAgendaTasksDecision.allowed
+    ? await listTasks(context, { serviceOrderId: order.id, unitId: order.unitId })
+    : null;
+  const agendaMembers = canAgendaTasksDecision.allowed
+    ? await listUnitMembers(context, order.unitId)
+    : [];
 
   /**
    * As transicoes vem da maquina de estados, nao de um `if` nesta pagina. O
@@ -568,6 +596,73 @@ export default async function ServiceOrderDetailPage({
           </CardBody>
         </Card>
       </Section>
+
+      {/*
+        AGENDA DESTA ORDEM (Prompt 14).
+
+        A secao so existe se a empresa tiver a Agenda ligada E a pessoa puder
+        criar tarefa. Quando o modulo esta desligado, esta ficha volta a ser
+        exatamente o que era no Prompt 08 — e o acompanhamento continua
+        funcionando, porque `follow_up_at` nunca dependeu daqui.
+
+        NENHUMA TAREFA DAQUI MOVE A ORDEM. Concluir "ligar para o cliente" nao
+        muda situacao nenhuma; quem move a OS e a transicao oficial.
+      */}
+      {agendaTasks ? (
+        <Section
+          id="agenda"
+          title="Tarefas da Agenda"
+          description="Trabalho que alguem anotou sobre esta ordem. Nao muda a situacao da OS."
+        >
+          <Card>
+            <CardBody className="space-y-4">
+              {agendaTasks.rows.length === 0 ? (
+                <p className="text-ui text-ink-600">
+                  Nenhuma tarefa da Agenda vinculada a esta ordem.
+                </p>
+              ) : (
+                <ul className="divide-y divide-ink-200">
+                  {agendaTasks.rows.map((task) => (
+                    <li key={task.id} className="space-y-2 py-3 first:pt-0 last:pb-0">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <p className="min-w-0 font-medium text-ink-900">{task.title}</p>
+                        <span className="flex shrink-0 flex-wrap items-center gap-2">
+                          {task.priority !== 'normal' ? (
+                            <Badge tone={task.priority === 'urgent' ? 'danger' : 'warning'}>
+                              {TASK_PRIORITY_LABEL[task.priority as TaskPriority]}
+                            </Badge>
+                          ) : null}
+                          {task.overdue ? <Badge tone="danger">Atrasada</Badge> : null}
+                        </span>
+                      </div>
+                      <p className="text-small text-ink-500">
+                        {task.dueDate ? `Prazo ${formatCivilDateBR(task.dueDate)}` : 'Sem prazo'}
+                        {task.assigneeName ? ` · ${task.assigneeName}` : ''}
+                      </p>
+                      <TaskActions
+                        taskId={task.id}
+                        version={task.version}
+                        status={task.status}
+                        assigneeId={task.assigneeId}
+                        members={agendaMembers}
+                        canManage={false}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              <NewTaskForm
+                unitId={order.unitId}
+                members={agendaMembers}
+                currentUserId={context.userId}
+                serviceOrderId={order.id}
+                today={agendaTasks.today}
+              />
+            </CardBody>
+          </Card>
+        </Section>
+      ) : null}
 
       {/*
         ORCAMENTOS (Prompt 09, itens 80 e 81).

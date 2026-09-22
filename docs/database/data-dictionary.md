@@ -908,3 +908,47 @@ exato em TypeScript é a classe `Quantity` (`src/core/quantity/quantity.ts`), qu
 guarda décimos de milésimo em `bigint` — quantidade **não é dinheiro**, e um
 saldo que erra na quarta casa recusa reserva legítima sem ninguém entender por
 quê.
+
+---
+
+## Agenda e Tarefas (Prompt 14, migration 0013)
+
+Duas tabelas novas. Nenhuma tabela existente ganhou coluna.
+
+### `agenda_tasks`
+
+Trabalho que **uma pessoa** anotou. Distinta de `service_order_tasks`, que é
+consequência de uma transição da OS — a comparação formal está na
+[ADR-073](../adr/ADR-073-uma-arquitetura-de-tarefas-com-dois-papeis.md).
+
+| Coluna                                                           | Tipo                   | Nota                                                        |
+| ---------------------------------------------------------------- | ---------------------- | ----------------------------------------------------------- |
+| `unit_id`                                                        | `varchar(36)` NOT NULL | tarefa acontece em algum lugar                              |
+| `status`                                                         | `varchar(20)`          | `open` \| `done` \| `cancelled`, o vocabulário do Prompt 08 |
+| `priority`                                                       | `varchar(10)`          | `low` \| `normal` \| `high` \| `urgent`                     |
+| `due_date`                                                       | `civilDate()`          | prazo é **dia**, não instante                               |
+| `idempotency_key`                                                | `varchar(120)`         | `UNIQUE (tenant_id, idempotency_key)`                       |
+| `service_order_id`, `customer_id`, `equipment_id`, `warranty_id` | `varchar(36)`          | vínculos **opcionais**                                      |
+| `version`                                                        | `int unsigned`         | CAS otimista                                                |
+
+### `agenda_appointments`
+
+Hora reservada. As quatro colunas temporais existem para que **instante e dia
+civil nunca se misturem**: com horário valem `start_at`/`end_at`; dia inteiro
+vale `start_date`/`end_date`, e o par não usado vai a `NULL`.
+
+| Coluna                    | Tipo          | Nota                                        |
+| ------------------------- | ------------- | ------------------------------------------- |
+| `status`                  | `varchar(20)` | `scheduled` \| `cancelled` — **sem `done`** |
+| `all_day`                 | `tinyint`     |                                             |
+| `start_at` / `end_at`     | `instant()`   | `CHECK (end_at > start_at)`                 |
+| `start_date` / `end_date` | `civilDate()` | `CHECK (end_date >= start_date)`            |
+
+### Correção de redação na 0013
+
+A migration também corrige a descrição da tarefa sistêmica de preparação, de
+`conferencia estetica` para `conferência estética`, recortando por
+`kind = 'delivery_preparation'`. A identidade da tarefa é
+`(service_order_id, kind, open_marker)` — texto não identifica nada, então a
+correção não duplica, não reabre e não toca em estado
+([ADR-075](../adr/ADR-075-compatibilidade-com-o-follow-up-historico.md)).

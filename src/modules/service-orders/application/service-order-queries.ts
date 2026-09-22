@@ -15,7 +15,6 @@ import {
   or,
   type SQL,
 } from 'drizzle-orm';
-import { sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/mysql-core';
 import { getDb } from '@/core/db/client';
 import { buildOffsetPage, resolveOffset, type OffsetPage } from '@/core/db/pagination';
@@ -656,35 +655,4 @@ export async function findServiceOrderByNumber(
     .limit(1);
 
   return row ?? null;
-}
-
-/**
- * Pessoas que podem ser responsaveis por uma ordem desta unidade.
- *
- * O criterio e ACESSO REAL, nao o nome do papel (item 28): "Tecnico" e um
- * rotulo que cada empresa escreve como quiser, e filtrar por ele deixaria de
- * fora o eletronico que a loja chama de "bancada". Quem aparece aqui e quem
- * esta ativo e tem vinculo com a unidade; a escolha de quem e capaz e de quem
- * atribui.
- */
-export async function listUnitMembers(
-  context: TenantContext,
-  unitId: string,
-): Promise<{ id: string; name: string }[]> {
-  if (!context.authorizedUnitIds.includes(unitId)) return [];
-
-  const rows = await getDb().execute(sql`
-    SELECT u.id, u.name
-      FROM users u
-      JOIN user_units uu ON uu.user_id = u.id AND uu.unit_id = ${unitId}
-     WHERE u.tenant_id = ${context.tenantId}
-       AND u.status = 'active'
-     ORDER BY u.name ASC
-     LIMIT 100
-  `);
-
-  return ((rows as unknown as Array<{ id: string; name: string }>[])[0] ?? []) as Array<{
-    id: string;
-    name: string;
-  }>;
 }

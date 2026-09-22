@@ -34,6 +34,14 @@ export function Breadcrumb({ items, className }: { items: readonly Crumb[]; clas
                   href={item.href}
                   className={cn(
                     'inline-flex items-center rounded-xs py-1 hover:text-ink-800 hover:underline',
+                    /*
+                      O ALVO DE TOQUE VALE PARA A TRILHA TAMBEM. O texto e
+                      pequeno de proposito — trilha nao compete com o titulo —
+                      mas o dedo nao sabe disso. `min-h` sem `min-w` porque
+                      44px de largura num "Agenda" curto deixaria a trilha com
+                      buracos entre os itens.
+                    */
+                    'min-h-[44px] sm:min-h-0',
                   )}
                 >
                   {item.label}

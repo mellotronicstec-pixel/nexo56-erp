@@ -28,11 +28,11 @@ import { requireAccessForPage } from '@/modules/access-control/application/guard
 import { PERMISSIONS } from '@/modules/access-control/domain/permissions';
 import { equipmentTitle } from '@/modules/equipment/domain/equipment';
 import { FEATURES } from '@/modules/features/domain/catalog';
+import { listUnitMembers } from '@/modules/users/application/user-queries';
 import { loadPendingWork } from '@/modules/service-orders/application/service-order-actions';
 import {
   getServiceOrderNumberFormat,
   listServiceOrders,
-  listUnitMembers,
 } from '@/modules/service-orders/application/service-order-queries';
 import { formatServiceOrderNumber } from '@/modules/service-orders/domain/service-order';
 import {

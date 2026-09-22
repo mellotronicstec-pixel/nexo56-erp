@@ -1,5 +1,5 @@
 import 'server-only';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { getDb } from '@/core/db/client';
 import { scopedWhere } from '@/core/db/tenant-scoped';
 import { roles, userRoles } from '@/modules/access-control/infrastructure/schema';
@@ -78,4 +78,44 @@ export async function listUserRoleKeys(context: TenantContext, userId: string): 
     .where(scopedWhere(context, userRoles.tenantId, eq(userRoles.userId, userId)));
 
   return rows.map((row) => row.key);
+}
+
+export interface UnitMember {
+  id: string;
+  name: string;
+}
+
+/**
+ * Quem opera numa unidade: ativo, da empresa, com vinculo naquela unidade.
+ *
+ * MORA EM `users` DE PROPOSITO. A pergunta "quem trabalha aqui" nao pertence a
+ * Ordens de Servico nem a Agenda — os dois so a fazem. Deixa-la em um dos dois
+ * obrigaria o outro a depender de um modulo com o qual ele nao tem relacao: a
+ * Agenda e OPCIONAL e nao depende de OS (ADR-073), e uma tarefa
+ * administrativa precisa de responsavel do mesmo jeito.
+ *
+ * E a MESMA regra que `assertAssignee` aplica ao gravar. Se a lista da tela
+ * fosse mais larga que a regra do servidor, o formulario ofereceria nomes que
+ * a gravacao recusa.
+ */
+export async function listUnitMembers(
+  context: TenantContext,
+  unitId: string,
+): Promise<UnitMember[]> {
+  if (!context.authorizedUnitIds.includes(unitId)) return [];
+
+  const rows = await getDb().execute(sql`
+    SELECT u.id, u.name
+      FROM users u
+      JOIN user_units uu ON uu.user_id = u.id AND uu.unit_id = ${unitId}
+     WHERE u.tenant_id = ${context.tenantId}
+       AND u.status = 'active'
+     ORDER BY u.name ASC
+     LIMIT 100
+  `);
+
+  return ((rows as unknown as Array<UnitMember[]>)[0] ?? []).map((row) => ({
+    id: row.id,
+    name: row.name,
+  }));
 }

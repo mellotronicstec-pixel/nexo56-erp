@@ -413,7 +413,32 @@ export const TASK_STATUS_LABEL: Record<TaskStatus, string> = {
  * bancada, e "conferencia estetica" nao e a mesma coisa que "conferir".
  */
 export const DELIVERY_PREPARATION_TASK_TITLE = 'Preparar equipamento para entrega';
+
+/**
+ * TEXTO OFICIAL DA TAREFA DE PREPARACAO — COM ACENTOS, DE PROPOSITO.
+ *
+ * O restante do codigo escreve portugues sem acentos; esta constante e a
+ * excecao deliberada porque ela NAO e comentario nem rotulo de tela montado
+ * aqui: e o texto normativo definido pela Constituicao do Nexo56, e o lugar
+ * onde ele aparece e a bancada do tecnico. "conferencia estetica" foi um
+ * empobrecimento acidental da especificacao, nao uma decisao.
+ *
+ * A IDENTIDADE DA TAREFA NAO DEPENDE DESTE TEXTO. Quem diz que duas tarefas
+ * sao a mesma e `(service_order_id, kind, open_marker)` — ver `createWorkflowTask`
+ * e a UNIQUE `uq_so_task_open`. Por isso corrigir a redacao nao cria segunda
+ * tarefa, nao reabre tarefa concluida e nao altera estado de OS nenhuma
+ * (ADR-075).
+ */
 export const DELIVERY_PREPARATION_TASK_DESCRIPTION =
+  'Realizar limpeza final, conferência estética e preparação do equipamento para entrega ao cliente.';
+
+/**
+ * A REDACAO ANTIGA, preservada para a migration 0013 reconhecer exatamente as
+ * linhas que ela mesma gravou — e apenas essas. Nada no fluxo escreve este
+ * valor; ele existe para o backfill e para o teste que prova que o backfill
+ * acertou o alvo.
+ */
+export const DELIVERY_PREPARATION_TASK_DESCRIPTION_LEGACY =
   'Realizar limpeza final, conferencia estetica e preparacao do equipamento para entrega ao cliente.';
 
 export const PART_PICKUP_TASK_TITLE = 'Buscar peca';

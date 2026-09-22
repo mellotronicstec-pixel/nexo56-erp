@@ -5,6 +5,10 @@ import { join } from 'node:path';
 import { drizzle } from 'drizzle-orm/mysql2';
 import { migrate } from 'drizzle-orm/mysql2/migrator';
 import mysql from 'mysql2/promise';
+import {
+  DELIVERY_PREPARATION_TASK_DESCRIPTION as TEXTO_OFICIAL_PREPARACAO,
+  DELIVERY_PREPARATION_TASK_DESCRIPTION_LEGACY as TEXTO_LEGADO_PREPARACAO,
+} from '@/modules/service-orders/domain/workflow';
 
 /**
  * TESTE DE UPGRADE (Prompt 02, itens 70 e 75).
@@ -2138,6 +2142,188 @@ describe('upgrade incremental entre prompts', () => {
       const nomesTabelas = tabelas.map((row) => Object.values(row)[0] as string);
       expect(nomesTabelas).not.toContain('warranty_certificate_files');
       expect(nomesTabelas).not.toContain('warranty_certificate_pdfs');
+    } finally {
+      await connection.end();
+      rmSync(folder, { recursive: true, force: true });
+      await adminConnection.query(`DROP DATABASE IF EXISTS \`${stepDb}\``);
+    }
+  });
+
+  it('leva um banco do Prompt 13.1, com follow-ups e tarefas do Prompt 08, ate o Prompt 14 sem perda', async () => {
+    const stepDb = 'nexo56_migration_step14_test';
+    await adminConnection.query(`DROP DATABASE IF EXISTS \`${stepDb}\``);
+    await adminConnection.query(
+      `CREATE DATABASE \`${stepDb}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`,
+    );
+
+    const folder = buildFolderUpTo('0012');
+    const connection = await mysql.createConnection({
+      uri: urlForDatabase(stepDb),
+      timezone: 'Z',
+      multipleStatements: true,
+      charset: 'utf8mb4',
+    });
+
+    try {
+      // --- banco no estado do Prompt 13.1 ------------------------------------
+      await migrate(drizzle(connection), { migrationsFolder: folder });
+      await seedUpToPrompt12(connection);
+
+      /** A Agenda ainda nao existe neste banco. */
+      const [tabelasAntes] = await connection.query<mysql.RowDataPacket[]>('SHOW TABLES');
+      const nomesAntes = tabelasAntes.map((row) => Object.values(row)[0] as string);
+      expect(nomesAntes).not.toContain('agenda_tasks');
+      expect(nomesAntes).not.toContain('agenda_appointments');
+      /** Mas o mecanismo real de follow-up do Prompt 08, sim. */
+      expect(nomesAntes).toContain('service_order_tasks');
+
+      // --- dados representativos do Prompt 08 --------------------------------
+      /**
+       * Uma OS ABERTA com o proximo ponto de atencao marcado e ja alertado.
+       * E exatamente a forma historica: `follow_up_at` + `follow_up_alerted_for`
+       * em colunas da propria ordem — nunca uma tabela `service_order_follow_ups`,
+       * que nunca existiu.
+       */
+      await connection.query(`
+        INSERT INTO service_orders
+          (id, tenant_id, unit_id, number, customer_id, equipment_id, status, customer_report,
+           opened_at, follow_up_at, follow_up_alerted_for, version, created_by, created_at, updated_at)
+        VALUES ('so-p14', 'tenant-p12', 'unit-p12', 2, 'cli-p12', 'eq-p12',
+                'awaiting_delivery_preparation', 'Nao liga.',
+                NOW(3), '2026-09-10', '2026-09-10', 3, 'user-p12', NOW(3), NOW(3))
+      `);
+
+      /** Tarefa de preparacao ABERTA, com a redacao antiga sem acentos. */
+      await connection.query(
+        `INSERT INTO service_order_tasks
+           (id, tenant_id, unit_id, service_order_id, kind, title, description,
+            due_date, status, open_marker, created_by, created_at, updated_at)
+         VALUES ('sot-legado-aberta', 'tenant-p12', 'unit-p12', 'so-p14',
+                 'delivery_preparation', 'Preparar equipamento para entrega', ?,
+                 '2026-09-12', 'open', 1, 'user-p12', NOW(3), NOW(3))`,
+        [TEXTO_LEGADO_PREPARACAO],
+      );
+
+      /** Tarefa de preparacao ja CONCLUIDA, tambem com a redacao antiga. */
+      await connection.query(
+        `INSERT INTO service_order_tasks
+           (id, tenant_id, unit_id, service_order_id, kind, title, description,
+            due_date, status, open_marker, created_by, completed_at, completed_by,
+            created_at, updated_at)
+         VALUES ('sot-legado-concluida', 'tenant-p12', 'unit-p12', 'so-p12',
+                 'delivery_preparation', 'Preparar equipamento para entrega', ?,
+                 '2026-08-20', 'done', NULL, 'user-p12', NOW(3), 'user-p12',
+                 NOW(3), NOW(3))`,
+        [TEXTO_LEGADO_PREPARACAO],
+      );
+
+      /** Uma tarefa de OUTRO tipo, cuja descricao NAO pode ser tocada. */
+      await connection.query(`
+        INSERT INTO service_order_tasks
+          (id, tenant_id, unit_id, service_order_id, kind, title, description,
+           due_date, status, open_marker, created_by, created_at, updated_at)
+        VALUES ('sot-peca', 'tenant-p12', 'unit-p12', 'so-p14',
+                'part_pickup', 'Buscar peca', 'Texto escrito por uma pessoa, nao mexa.',
+                '2026-09-11', 'open', 1, 'user-p12', NOW(3), NOW(3))
+      `);
+
+      /**
+       * E uma tarefa de preparacao cuja descricao alguem EDITOU. A trava
+       * textual do backfill existe para ela: o texto de uma pessoa fica.
+       */
+      await connection.query(`
+        INSERT INTO service_order_tasks
+          (id, tenant_id, unit_id, service_order_id, kind, title, description,
+           due_date, status, open_marker, created_by, created_at, updated_at)
+        VALUES ('sot-editada', 'tenant-p12', 'unit-p12', 'so-p12',
+                'delivery_preparation', 'Preparar equipamento para entrega',
+                'Conferir tambem o carregador que o cliente trouxe.',
+                '2026-08-25', 'done', NULL, 'user-p12', NOW(3), NOW(3))
+      `);
+
+      // --- upgrade para o Prompt 14 ------------------------------------------
+      await migrate(drizzle(connection), { migrationsFolder: './drizzle' });
+
+      /** As duas tabelas da Agenda nascem; nenhuma outra some. */
+      const [tabelasDepois] = await connection.query<mysql.RowDataPacket[]>('SHOW TABLES');
+      const nomesDepois = tabelasDepois.map((row) => Object.values(row)[0] as string);
+      expect(nomesDepois).toContain('agenda_tasks');
+      expect(nomesDepois).toContain('agenda_appointments');
+      for (const tabela of nomesAntes) expect(nomesDepois).toContain(tabela);
+      /** A tabela que o Prompt 14 assumia que existisse continua nao existindo. */
+      expect(nomesDepois).not.toContain('service_order_follow_ups');
+
+      /**
+       * O FOLLOW-UP HISTORICO NAO FOI MIGRADO NEM DUPLICADO (itens 17 e 68).
+       *
+       * As colunas do Prompt 08 continuam com os mesmos valores, e nenhuma
+       * tarefa espelho foi criada para faze-lo aparecer na agenda: a agenda o
+       * projeta lendo daqui (ADR-073).
+       */
+      const [ordens] = await connection.query<mysql.RowDataPacket[]>(
+        `SELECT * FROM service_orders WHERE id = 'so-p14'`,
+      );
+      expect(ordens).toHaveLength(1);
+      expect(ordens[0]!.follow_up_at).toBe('2026-09-10');
+      expect(ordens[0]!.follow_up_alerted_for).toBe('2026-09-10');
+      expect(ordens[0]!.status).toBe('awaiting_delivery_preparation');
+      expect(ordens[0]!.version).toBe(3);
+
+      const [agendaVazia] = await connection.query<mysql.RowDataPacket[]>(
+        'SELECT COUNT(*) AS total FROM agenda_tasks',
+      );
+      expect(Number(agendaVazia[0]!.total)).toBe(0);
+
+      /**
+       * A REDACAO FOI CORRIGIDA, A TAREFA CONTINUA SENDO A MESMA.
+       *
+       * Mesmo id, mesmo `kind`, mesmo `open_marker`, mesmo status: o backfill
+       * troca texto, nao identidade. Nao ha segunda tarefa com acentos.
+       */
+      const [preparacoes] = await connection.query<mysql.RowDataPacket[]>(
+        `SELECT * FROM service_order_tasks WHERE kind = 'delivery_preparation' ORDER BY id`,
+      );
+      expect(preparacoes).toHaveLength(3);
+
+      const aberta = preparacoes.find((row) => row.id === 'sot-legado-aberta')!;
+      expect(aberta.description).toBe(TEXTO_OFICIAL_PREPARACAO);
+      expect(aberta.status).toBe('open');
+      expect(aberta.open_marker).toBe(1);
+      expect(aberta.service_order_id).toBe('so-p14');
+
+      const concluida = preparacoes.find((row) => row.id === 'sot-legado-concluida')!;
+      expect(concluida.description).toBe(TEXTO_OFICIAL_PREPARACAO);
+      expect(concluida.status).toBe('done');
+      expect(concluida.open_marker).toBeNull();
+      expect(concluida.completed_by).toBe('user-p12');
+
+      /** O texto que uma pessoa escreveu ficou como ela deixou. */
+      const editada = preparacoes.find((row) => row.id === 'sot-editada')!;
+      expect(editada.description).toBe('Conferir tambem o carregador que o cliente trouxe.');
+
+      /** Buscar Peca e outro tipo e nao foi tocada (item 6 da correcao). */
+      const [pecas] = await connection.query<mysql.RowDataPacket[]>(
+        `SELECT * FROM service_order_tasks WHERE kind = 'part_pickup'`,
+      );
+      expect(pecas).toHaveLength(1);
+      expect(pecas[0]!.description).toBe('Texto escrito por uma pessoa, nao mexa.');
+      expect(pecas[0]!.title).toBe('Buscar peca');
+
+      /** Uma unica tarefa ABERTA de preparacao por ordem, como sempre foi. */
+      const [abertasPorOrdem] = await connection.query<mysql.RowDataPacket[]>(
+        `SELECT service_order_id, COUNT(*) AS total
+           FROM service_order_tasks
+          WHERE kind = 'delivery_preparation' AND status = 'open'
+          GROUP BY service_order_id`,
+      );
+      for (const linha of abertasPorOrdem) expect(Number(linha.total)).toBe(1);
+
+      /** A OS ja encerrada nao mudou de estado por causa da correcao textual. */
+      const [antiga] = await connection.query<mysql.RowDataPacket[]>(
+        `SELECT status, version FROM service_orders WHERE id = 'so-p12'`,
+      );
+      expect(antiga[0]!.status).toBe('completed');
+      expect(antiga[0]!.version).toBe(5);
     } finally {
       await connection.end();
       rmSync(folder, { recursive: true, force: true });

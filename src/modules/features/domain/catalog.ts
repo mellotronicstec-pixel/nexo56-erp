@@ -48,6 +48,7 @@ export const FEATURES = {
    */
   FINANCE_CORE: 'finance.core',
   OPERATIONS_WARRANTIES: 'operations.warranties',
+  OPERATIONS_AGENDA: 'operations.agenda',
   PLATFORM_MULTI_UNIT: 'platform.multi_unit',
   PLATFORM_LABEL_RECOGNITION: 'platform.label_recognition',
 } as const;
@@ -235,6 +236,38 @@ export const FEATURE_CATALOG: readonly FeatureDefinition[] = [
      */
     type: 'OPTIONAL',
     dependsOn: [FEATURES.CORE_CUSTOMERS],
+  },
+  {
+    key: FEATURES.OPERATIONS_AGENDA,
+    name: 'Agenda e Tarefas',
+    description:
+      'Tarefas operacionais, compromissos, minhas tarefas e a visao de agenda que reune o trabalho da unidade.',
+    /**
+     * OPTIONAL — e SEM DEPENDENCIA de Ordens de Servico (Prompt 14, item 71).
+     *
+     * A pergunta arquitetural foi feita e respondida com o caso real: uma
+     * tarefa administrativa — "conferir a documentacao do fornecedor",
+     * "organizar a prateleira" — nao tem Ordem de Servico nenhuma, e exigir
+     * o modulo de OS para criar essa tarefa seria inventar um acoplamento que
+     * a operacao nao tem.
+     *
+     * A integracao com a OS e CAPACIDADE OPORTUNISTA, nao dependencia: quando
+     * a ordem existe, a tarefa pode apontar para ela e a agenda mostra as
+     * tarefas de fluxo e os acompanhamentos junto das suas. Quando nao existe,
+     * a Agenda continua inteira.
+     *
+     * NAO depende de Garantias, Estoque, Compras nem Financeiro (itens 72 a
+     * 75): os vinculos para esses contextos sao campos opcionais, e desligar
+     * qualquer um deles nao tira a Agenda do ar.
+     *
+     * O CAMINHO INVERSO TAMBEM VALE, e e o mais importante (item 77): desligar
+     * a Agenda NAO desliga o acompanhamento da Ordem de Servico. O follow-up
+     * de +2 e +3 dias e as tarefas de fluxo vivem no modulo de OS, que e CORE,
+     * e continuam funcionando sozinhos — "nenhuma Ordem de Servico importante
+     * deve ser esquecida" nao e uma promessa opcional (ADR-075).
+     */
+    type: 'OPTIONAL',
+    dependsOn: [],
   },
   {
     key: FEATURES.OPERATIONS_WARRANTIES,

@@ -3,8 +3,8 @@
 Plataforma ERP/SaaS multiempresa para gestão de assistência técnica e reparo.
 
 **Estado atual: fundação completa + módulos de negócio Clientes, Equipamentos,
-Ordens de Serviço com workflow, Orçamentos, Estoque, Compras, Financeiro e
-Garantias, com certificado em PDF real (Prompts 01 a 13.1).** Autenticação, sessões,
+Ordens de Serviço com workflow, Orçamentos, Estoque, Compras, Financeiro,
+Garantias com certificado em PDF real, e Agenda e Tarefas (Prompts 01 a 14).** Autenticação, sessões,
 usuários, perfis, permissões com **escopo por unidade**, multi-tenancy,
 modularidade, auditoria, eventos, jobs, Design System, interface responsiva,
 **Clientes**, **Equipamentos e Recebimento** (com fotos em storage privado), a
@@ -20,12 +20,14 @@ pagamentos parciais, estorno controlado, razão append-only e caixa operacional)
 estão implementados e testados. As **Garantias** (políticas, garantia interna,
 de fábrica, de peça e estendida, cobertura total e parcial, vigência,
 certificado com soma de verificação, retorno em garantia com Ordem de Serviço
-nova, reclassificação controlada e custos) também. Os demais módulos serão
-construídos nos prompts seguintes.
+nova, reclassificação controlada e custos) também. A **Agenda e Tarefas**
+(tarefas operacionais com ou sem OS, compromissos, "Minhas tarefas" e a agenda
+que reúne quatro origens sem copiar nenhuma) fecha o Prompt 14. Os demais
+módulos serão construídos nos prompts seguintes.
 
-**Estoque, Compras, Financeiro e Garantias são módulos OPCIONAIS**
+**Estoque, Compras, Financeiro, Garantias e Agenda são módulos OPCIONAIS**
 (`operations.inventory`, `operations.purchasing`, `finance.core`,
-`operations.warranties`): a empresa
+`operations.warranties`, `operations.agenda`): a empresa
 pode desligá-los. Sem Estoque, o Orçamento continua inteiro com linha de peça
 escrita à mão ([modularidade do Estoque](docs/modules/inventory/modularity.md));
 sem Compras, o Estoque não percebe diferença nenhuma e a origem
@@ -36,7 +38,23 @@ inteiros — receber mercadoria nunca dependeu de haver financeiro
 ([modularidade do Financeiro](docs/modules/finance/modularity.md)); sem
 Garantias, a ficha da Ordem de Serviço e a do equipamento ficam exatamente como
 eram antes do Prompt 13, e **nenhuma consulta é feita**
-([modularidade de Garantias](docs/modules/warranties/modularity.md)).
+([modularidade de Garantias](docs/modules/warranties/modularity.md)); sem
+Agenda, as três telas somem do menu e a ficha da OS volta a ser exatamente o
+que era — mas **o `follow_up_at` continua sendo marcado e a varredura continua
+rodando**, porque a rede de segurança que impede a OS parada de sumir é do
+núcleo e nunca dependeu do módulo opcional
+([visão geral da Agenda](docs/modules/agenda/overview.md)).
+
+**A Agenda lê quatro origens e não copia nenhuma.** Tarefa da Agenda,
+compromisso, tarefa de fluxo da OS e o próximo ponto de atenção da OS chegam à
+mesma lista com a procedência visível. Concluir a tarefa de fluxo pela Agenda
+**delega** ao serviço do Prompt 08 — copiá-la para uma segunda tabela criaria
+duas verdades sobre o mesmo trabalho, e a OS ficaria esperando para sempre uma
+preparação que alguém já fez
+([ADR-073](docs/adr/ADR-073-uma-arquitetura-de-tarefas-com-dois-papeis.md)).
+Também **não existe tabela `service_order_follow_ups`**: o mecanismo histórico
+sempre foi `service_orders.follow_up_at` + `follow_up_alerted_for`
+([ADR-075](docs/adr/ADR-075-compatibilidade-com-o-follow-up-historico.md)).
 
 **O Financeiro não fala com banco nenhum.** Não há conciliação bancária, não há
 PIX automático, não há integração com adquirente e não há emissão fiscal.
@@ -374,6 +392,25 @@ produção não depende de Docker.
 | Autorização      | tenant errado, feature desligada e falta de permissão recusam no backend; certificado histórico gera PDF sem reemitir a garantia             |
 | Fronteira        | o domínio não importa a biblioteca de PDF; Chromium/Puppeteer não existem em `src/`; o serviço não consulta `warranty_policies`              |
 
+### Cobertura da Agenda e Tarefas (Prompt 14)
+
+| Área                 | O que é testado                                                                                                                                                                                    |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Conceitos separados  | tarefa, compromisso, tarefa de fluxo e follow-up são coisas distintas; compromisso **não tem** `done`; follow-up **não se conclui**                                                                |
+| Atraso derivado      | aberta + prazo vencido na data civil **da empresa**; encerrada nunca atrasa; sem prazo nunca atrasa; dias de atraso atravessam mês e ano                                                           |
+| Ordenação            | dia manda, hora desempata, prioridade desempata o empate, item sem dia vai para o fim — e o `RANK` é posição, não peso                                                                             |
+| Read model           | as quatro origens aparecem, cada uma identificável; **deduplicação por construção**; nada é copiado para `agenda_tasks`                                                                            |
+| Vínculos             | OS de outra empresa e de outra unidade respondem "não encontrado"; cliente que não é o da OS é recusado; a OS dita cliente e aparelho                                                              |
+| **Idempotência**     | mesma chave reencontra a tarefa; **5 criações simultâneas → 1 tarefa**; a mesma chave em outra empresa cria outra (a chave é por tenant)                                                           |
+| **Concorrência**     | **concluir × cancelar em paralelo no MariaDB real → um vencedor, o outro recusado**; versão antiga é recusada                                                                                      |
+| Delegação            | concluir tarefa de fluxo pela Agenda chama o serviço do Prompt 08; **o estado e a versão da OS não mudam**                                                                                         |
+| Modularidade         | feature desligada: as telas recusam e a agenda fica vazia — mas o `follow_up_at` continua marcado no núcleo                                                                                        |
+| Isolamento           | tarefa de outra empresa e de unidade sem acesso respondem "não encontrado"; a agenda de uma empresa não enxerga a outra                                                                            |
+| Boundary             | varredura de `src/`: a Agenda não escreve `service_orders`, `service_order_tasks`, estoque, financeiro, compras nem garantia; sem provedor de mensagem, sem IA, sem job novo, sem coluna `overdue` |
+| Texto da preparação  | literal exato com acentos; retry, concorrência e título diferente **não** duplicam; registro legado não vira duas tarefas; Buscar Peça intocada                                                    |
+| Migration            | upgrade real do Prompt 13.1 para o 14 com OS aberta, `follow_up_at`, `follow_up_alerted_for`, tarefa legada aberta, concluída e editada à mão                                                      |
+| Limpeza entre testes | teste que falha se **qualquer** tabela do schema ficar fora da lista de `truncateAll` — o defeito já aconteceu duas vezes                                                                          |
+
 ---
 
 ## 9. Build e produção
@@ -439,6 +476,7 @@ docs/             arquitetura, ADRs, Hostinger
 - **Fornecedores e Compras:** [docs/modules/purchasing/overview.md](docs/modules/purchasing/overview.md)
 - **Financeiro:** [docs/modules/finance/overview.md](docs/modules/finance/overview.md)
 - **Garantias:** [docs/modules/warranties/overview.md](docs/modules/warranties/overview.md)
+- **Agenda e Tarefas:** [docs/modules/agenda/overview.md](docs/modules/agenda/overview.md)
 
 ---
 

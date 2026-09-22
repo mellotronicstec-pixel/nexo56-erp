@@ -208,6 +208,24 @@ export const PERMISSIONS = {
   WARRANTIES_COSTS_VIEW: 'warranties.costs.view',
   WARRANTIES_COSTS_MANAGE: 'warranties.costs.manage',
   WARRANTIES_SETTINGS_MANAGE: 'warranties.settings.manage',
+
+  // --- Prompt 14: agenda e tarefas -----------------------------------------
+  /**
+   * CINCO CHAVES, e nao uma por botao (item 79).
+   *
+   * O corte segue o que muda de MAO na operacao: consultar a agenda, criar
+   * trabalho, passar trabalho para outra pessoa, encerrar trabalho alheio e
+   * marcar compromisso. Concluir a PROPRIA tarefa nao esta nesta lista de
+   * proposito — exigir permissao administrativa para o tecnico dar baixa no
+   * que ele mesmo fez transformaria a ferramenta em obstaculo.
+   */
+  AGENDA_VIEW: 'agenda.view',
+  AGENDA_TASKS_CREATE: 'agenda.tasks.create',
+  /** Editar, concluir e cancelar tarefa de OUTRA pessoa. */
+  AGENDA_TASKS_MANAGE: 'agenda.tasks.manage',
+  /** Atribuir a terceiro: mexe na fila de trabalho de outra pessoa (item 82). */
+  AGENDA_TASKS_ASSIGN: 'agenda.tasks.assign',
+  AGENDA_APPOINTMENTS_MANAGE: 'agenda.appointments.manage',
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -674,6 +692,36 @@ export const PERMISSION_CATALOG: readonly PermissionDefinition[] = [
     description: 'Administra as politicas de garantia da empresa.',
     featureKey: 'operations.warranties',
   },
+  {
+    key: PERMISSIONS.AGENDA_VIEW,
+    name: 'Ver agenda e tarefas',
+    description: 'Consulta a agenda da unidade, as tarefas e os compromissos.',
+    featureKey: 'operations.agenda',
+  },
+  {
+    key: PERMISSIONS.AGENDA_TASKS_CREATE,
+    name: 'Criar tarefas',
+    description: 'Cria tarefas operacionais, com ou sem vinculo a uma Ordem de Servico.',
+    featureKey: 'operations.agenda',
+  },
+  {
+    key: PERMISSIONS.AGENDA_TASKS_MANAGE,
+    name: 'Gerenciar tarefas de terceiros',
+    description: 'Edita, conclui e cancela tarefas que pertencem a outra pessoa.',
+    featureKey: 'operations.agenda',
+  },
+  {
+    key: PERMISSIONS.AGENDA_TASKS_ASSIGN,
+    name: 'Atribuir tarefas',
+    description: 'Define o responsavel por uma tarefa, colocando trabalho na fila de alguem.',
+    featureKey: 'operations.agenda',
+  },
+  {
+    key: PERMISSIONS.AGENDA_APPOINTMENTS_MANAGE,
+    name: 'Gerenciar compromissos',
+    description: 'Cria, reagenda e cancela compromissos na agenda da unidade.',
+    featureKey: 'operations.agenda',
+  },
 ];
 
 /** Papeis estruturais criados no bootstrap de cada tenant. */
@@ -905,6 +953,18 @@ export const PERMISSION_GROUPS = [
       PERMISSIONS.WARRANTIES_COSTS_VIEW,
       PERMISSIONS.WARRANTIES_COSTS_MANAGE,
       PERMISSIONS.WARRANTIES_SETTINGS_MANAGE,
+    ],
+  },
+  {
+    key: 'agenda',
+    name: 'Agenda e Tarefas',
+    description: 'Tarefas operacionais, atribuicao, compromissos e a visao de agenda da unidade.',
+    permissions: [
+      PERMISSIONS.AGENDA_VIEW,
+      PERMISSIONS.AGENDA_TASKS_CREATE,
+      PERMISSIONS.AGENDA_TASKS_MANAGE,
+      PERMISSIONS.AGENDA_TASKS_ASSIGN,
+      PERMISSIONS.AGENDA_APPOINTMENTS_MANAGE,
     ],
   },
   {

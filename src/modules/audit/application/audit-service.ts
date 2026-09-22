@@ -155,6 +155,16 @@ export const AUDIT_ACTIONS = {
    * registro por clique inundaria a auditoria sem responder pergunta nenhuma.
    */
   WARRANTY_CERTIFICATE_PDF_GENERATED: 'warranty_certificate.pdf_generated',
+  // --- Prompt 14: agenda e tarefas -----------------------------------------
+  TASK_CREATED: 'task.created',
+  TASK_UPDATED: 'task.updated',
+  TASK_ASSIGNED: 'task.assigned',
+  TASK_COMPLETED: 'task.completed',
+  TASK_CANCELLED: 'task.cancelled',
+  APPOINTMENT_CREATED: 'appointment.created',
+  APPOINTMENT_UPDATED: 'appointment.updated',
+  APPOINTMENT_CANCELLED: 'appointment.cancelled',
+
   WARRANTY_RETURN_REGISTERED: 'warranty_return.registered',
   WARRANTY_RETURN_RECLASSIFIED: 'warranty_return.reclassified',
   WARRANTY_COST_RECORDED: 'warranty_cost.recorded',

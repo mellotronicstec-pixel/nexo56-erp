@@ -39,7 +39,9 @@ export type NavIconKey =
   | 'purchase'
   | 'finance'
   | 'cash-register'
-  | 'warranty';
+  | 'warranty'
+  | 'agenda'
+  | 'task';
 
 export interface NavItem {
   href: string;
@@ -137,6 +139,43 @@ export const NAV_SECTIONS: readonly NavSection[] = [
         featureKey: FEATURES.OPERATIONS_WARRANTIES,
         permission: PERMISSIONS.WARRANTIES_VIEW,
         icon: 'warranty',
+      },
+      {
+        /**
+         * Agenda e Tarefas e OPCIONAL e NAO depende de Ordens de Servico
+         * (Prompt 14, item 71): "conferir a documentacao do fornecedor" e
+         * trabalho real sem OS nenhuma.
+         *
+         * Quando o modulo esta desligado, os tres itens somem — e o
+         * acompanhamento da OS continua funcionando exatamente como antes,
+         * porque `follow_up_at` e a varredura sao do nucleo e nunca
+         * dependeram daqui (ADR-073).
+         *
+         * SAO TRES ITENS, nao um com abas, porque sao tres perguntas
+         * diferentes: "o que tem para esta semana?" (Agenda), "o que eu devo?"
+         * (Minhas tarefas) e "o que a unidade tem em aberto?" (Tarefas). A do
+         * meio e a que o tecnico abre todo dia, entao ela nao pode estar
+         * escondida atras de duas.
+         */
+        href: '/agenda',
+        label: 'Agenda',
+        featureKey: FEATURES.OPERATIONS_AGENDA,
+        permission: PERMISSIONS.AGENDA_VIEW,
+        icon: 'agenda',
+      },
+      {
+        href: '/minhas-tarefas',
+        label: 'Minhas tarefas',
+        featureKey: FEATURES.OPERATIONS_AGENDA,
+        permission: PERMISSIONS.AGENDA_VIEW,
+        icon: 'task',
+      },
+      {
+        href: '/tarefas',
+        label: 'Tarefas da unidade',
+        featureKey: FEATURES.OPERATIONS_AGENDA,
+        permission: PERMISSIONS.AGENDA_VIEW,
+        icon: 'task',
       },
     ],
   },

@@ -92,3 +92,6 @@ substitui, e o antigo passa a `Substituído por ADR-XXX`.
 | [070](ADR-070-certificado-e-snapshot-com-token-opaco.md)                   | Certificado é snapshot com token opaco                | Aceito |
 | [071](ADR-071-custo-de-garantia-nao-toca-o-financeiro.md)                  | Custo de garantia mede gasto; não gera lançamento     | Aceito |
 | [072](ADR-072-pdf-do-certificado-e-programatico.md)                        | PDF do certificado é programático, não navegador      | Aceito |
+| [073](ADR-073-uma-arquitetura-de-tarefas-com-dois-papeis.md)               | Uma arquitetura de tarefas com dois papéis            | Aceito |
+| [074](ADR-074-atraso-e-derivado-e-prazo-e-dia.md)                          | "Atrasada" é derivado; prazo é dia                    | Aceito |
+| [075](ADR-075-compatibilidade-com-o-follow-up-historico.md)                | O follow-up histórico fica onde está                  | Aceito |

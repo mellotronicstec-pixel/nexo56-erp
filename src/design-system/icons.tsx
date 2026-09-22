@@ -341,3 +341,19 @@ export const IconWarranty = (props: IconProps) => (
     <path d="M9.5 13.8L8 21l4-2.2L16 21l-1.5-7.2" />
   </Icon>
 );
+
+/** Agenda: a folha do calendario com os furos da espiral. */
+export const IconAgenda = (props: IconProps) => (
+  <Icon {...props}>
+    <rect x="3" y="5" width="18" height="16" rx="2" />
+    <path d="M3 10h18M8 3v4M16 3v4" />
+  </Icon>
+);
+
+/** Tarefas: a lista com o que ja foi feito marcado. */
+export const IconTask = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="M4 7l2 2 3-3M4 16l2 2 3-3" />
+    <path d="M13 8h7M13 17h7" />
+  </Icon>
+);

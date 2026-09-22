@@ -20,6 +20,10 @@ export async function migrateTestDatabase(): Promise<void> {
  */
 const TABLES_IN_DELETE_ORDER = [
   'audit_logs',
+  // Agenda primeiro: suas tarefas e compromissos apontam para OS, garantia,
+  // aparelho e cliente, entao elas sao as folhas mais externas da arvore.
+  'agenda_appointments',
+  'agenda_tasks',
   // Filhas antes das maes: com FOREIGN_KEY_CHECKS desligado a ordem nao e
   // obrigatoria, mas manter a lista coerente evita que um esquecimento aqui
   // vire dado vazando de um teste para outro — foi o que aconteceu com
