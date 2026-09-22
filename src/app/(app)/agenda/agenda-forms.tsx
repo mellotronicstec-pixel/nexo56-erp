@@ -82,19 +82,6 @@ function useCommandKey(): string {
   return key;
 }
 
-/**
- * Hora local do navegador -> instante ISO com deslocamento.
- *
- * Vazio devolve vazio: o campo obrigatorio ja e barrado pelo proprio
- * formulario, e mandar "Invalid Date" trocaria uma mensagem clara por uma
- * confusa.
- */
-function paraInstante(local: string): string {
-  if (!local) return '';
-  const data = new Date(local);
-  return Number.isNaN(data.getTime()) ? '' : data.toISOString();
-}
-
 function Feedback({ state }: { state: AgendaActionState }) {
   return (
     <div aria-live="polite">
@@ -297,20 +284,19 @@ export function NewAppointmentForm({ unitId, members, today }: NewAppointmentFor
           ) : (
             <div className="grid gap-4 sm:grid-cols-2">
               {/*
-                O navegador entrega hora LOCAL ("2026-09-22T14:00"); o servidor
-                guarda INSTANTE. A conversao acontece aqui, em campos ocultos,
-                para que o que trafega ja seja absoluto — e nao uma string cujo
-                significado dependa de onde ela foi digitada.
+                O QUE TRAFEGA E HORARIO CIVIL, nao instante. "14h" significa
+                quatorze horas NA LOJA; quem sabe o fuso da unidade e o
+                servidor, e e la que a conversao acontece (ADR-076). Converter
+                aqui faria o navegador de quem digitou virar a autoridade
+                temporal do dominio.
               */}
-              <input type="hidden" name="startAt" value={paraInstante(inicio)} />
-              <input type="hidden" name="endAt" value={paraInstante(fim)} />
-
               <div className="min-w-0">
                 <FormField label="Inicio" required>
                   {(field) => (
                     <Input
                       {...field}
                       type="datetime-local"
+                      name="startAtLocal"
                       value={inicio}
                       onChange={(event) => setInicio(event.target.value)}
                       required
@@ -324,6 +310,7 @@ export function NewAppointmentForm({ unitId, members, today }: NewAppointmentFor
                     <Input
                       {...field}
                       type="datetime-local"
+                      name="endAtLocal"
                       value={fim}
                       onChange={(event) => setFim(event.target.value)}
                       required
@@ -680,8 +667,6 @@ export function AppointmentActions({
           <input type="hidden" name="appointmentId" value={appointmentId} />
           <input type="hidden" name="reschedule" value="true" />
           <input type="hidden" name="allDay" value="false" />
-          <input type="hidden" name="startAt" value={paraInstante(inicio)} />
-          <input type="hidden" name="endAt" value={paraInstante(fim)} />
 
           <div className="grid gap-2 sm:grid-cols-2">
             <div className="min-w-0">
@@ -690,6 +675,7 @@ export function AppointmentActions({
                   <Input
                     {...field}
                     type="datetime-local"
+                    name="startAtLocal"
                     value={inicio}
                     onChange={(event) => setInicio(event.target.value)}
                     required
@@ -703,6 +689,7 @@ export function AppointmentActions({
                   <Input
                     {...field}
                     type="datetime-local"
+                    name="endAtLocal"
                     value={fim}
                     onChange={(event) => setFim(event.target.value)}
                     required

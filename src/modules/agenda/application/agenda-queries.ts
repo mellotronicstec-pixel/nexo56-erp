@@ -27,6 +27,7 @@ import {
   type TaskPriority,
 } from '@/modules/agenda/domain/agenda';
 import { agendaAppointments, agendaTasks } from '@/modules/agenda/infrastructure/schema';
+import { resolveUnitTimeZones } from './agenda-guards';
 
 /**
  * A AGENDA E LEITURA, E SO LEITURA (ADR-073).
@@ -98,6 +99,12 @@ export interface AgendaView {
   overdueCount: number;
   /** Unidades efetivamente consultadas; vazio significa "nada visivel". */
   unitIds: string[];
+  /**
+   * O fuso de cada unidade consultada. A TELA NAO RECALCULA NADA: ela formata
+   * a hora de um compromisso com o fuso que veio daqui, nunca com o do
+   * navegador de quem esta olhando (ADR-076).
+   */
+  timeZones: Record<string, string>;
 }
 
 const CIVIL = /^\d{4}-\d{2}-\d{2}$/;
@@ -138,8 +145,11 @@ export async function loadAgenda(
 
   const unitIds = await visibleUnits(context, input.unitId?.trim() || null);
   if (unitIds.length === 0) {
-    return { from, to, today, days: [], overdueCount: 0, unitIds: [] };
+    return { from, to, today, days: [], overdueCount: 0, unitIds: [], timeZones: {} };
   }
+
+  /** Uma consulta so para todos os fusos; nada de uma por linha. */
+  const timeZones = await resolveUnitTimeZones(context, unitIds);
 
   const assigneeId = input.assigneeId?.trim() || null;
   const tipos = new Set<AgendaItemType>(
@@ -152,7 +162,9 @@ export async function loadAgenda(
 
   const partes = await Promise.all([
     tipos.has('task') ? readTasks(context, unitIds, janela, assigneeId, today) : [],
-    tipos.has('appointment') ? readAppointments(context, unitIds, from, to, assigneeId) : [],
+    tipos.has('appointment')
+      ? readAppointments(context, unitIds, from, to, assigneeId, timeZones)
+      : [],
     tipos.has('service_order_task')
       ? readServiceOrderTasks(context, unitIds, janela, assigneeId, today)
       : [],
@@ -168,6 +180,7 @@ export async function loadAgenda(
     days: groupAgendaByDay(itens),
     overdueCount: countOverdue(itens),
     unitIds,
+    timeZones,
   };
 }
 
@@ -273,6 +286,7 @@ async function readAppointments(
   from: string,
   to: string,
   assigneeId: string | null,
+  timeZones: Record<string, string>,
 ): Promise<AgendaItem[]> {
   const folgaInicio = new Date(`${from}T00:00:00.000Z`);
   folgaInicio.setUTCDate(folgaInicio.getUTCDate() - 1);
@@ -337,10 +351,15 @@ async function readAppointments(
 
   for (const linha of linhas) {
     const diaInteiro = linha.allDay === 1;
+    /**
+     * O dia civil e o DA UNIDADE do compromisso, nao o do tenant e muito menos
+     * o do navegador: uma filial em outro fuso agrupa pelo dia dela.
+     */
+    const fuso = timeZones[linha.unitId] ?? context.tenantTimezone;
     const dia = diaInteiro
       ? linha.startDate
       : linha.startAt
-        ? formatCivilDate(linha.startAt, context.tenantTimezone)
+        ? formatCivilDate(linha.startAt, fuso)
         : null;
 
     /** Fora do periodo depois da conversao para o dia civil: nao entra. */

@@ -95,3 +95,4 @@ substitui, e o antigo passa a `Substituído por ADR-XXX`.
 | [073](ADR-073-uma-arquitetura-de-tarefas-com-dois-papeis.md)               | Uma arquitetura de tarefas com dois papéis            | Aceito |
 | [074](ADR-074-atraso-e-derivado-e-prazo-e-dia.md)                          | "Atrasada" é derivado; prazo é dia                    | Aceito |
 | [075](ADR-075-compatibilidade-com-o-follow-up-historico.md)                | O follow-up histórico fica onde está                  | Aceito |
+| [076](ADR-076-o-navegador-nao-e-autoridade-temporal.md)                    | O navegador não é autoridade temporal do domínio      | Aceito |

@@ -151,7 +151,8 @@ export default async function ServiceOrderDetailPage({
     canTasksDecision,
     canViewQuotesDecision,
     canCreateQuoteDecision,
-    canAgendaTasksDecision,
+    canAgendaViewDecision,
+    canAgendaCreateDecision,
   ] = await Promise.all([
     can(context, { ...unitScope, permission: PERMISSIONS.SERVICE_ORDERS_UPDATE }),
     can(context, { ...unitScope, permission: CANCEL_RULE.permission }),
@@ -169,9 +170,19 @@ export default async function ServiceOrderDetailPage({
       unitId: order.unitId,
     }),
     /**
-     * A Agenda e OPCIONAL: se a empresa nao a tem, esta ficha nao muda em
-     * nada. Nenhuma secao aparece e nenhuma consulta e feita (ADR-073).
+     * VER a agenda desta ordem exige `agenda.view` — LER e criar sao coisas
+     * diferentes, e exigir a permissao de criacao para exibir uma lista
+     * esconderia dados de quem tem todo o direito de ve-los.
+     *
+     * A Agenda e OPCIONAL: sem a feature, esta ficha nao muda em nada, nenhuma
+     * secao aparece e nenhuma consulta e feita (ADR-073).
      */
+    can(context, {
+      permission: PERMISSIONS.AGENDA_VIEW,
+      featureKey: FEATURES.OPERATIONS_AGENDA,
+      unitId: order.unitId,
+    }),
+    /** Criar tarefa e outra chave, e governa apenas o formulario. */
     can(context, {
       permission: PERMISSIONS.AGENDA_TASKS_CREATE,
       featureKey: FEATURES.OPERATIONS_AGENDA,
@@ -187,10 +198,15 @@ export default async function ServiceOrderDetailPage({
    * a diferenca continuar visivel — juntar as duas numa lista so faria alguem
    * esperar que concluir "ligar para o cliente" movesse a ordem.
    */
-  const agendaTasks = canAgendaTasksDecision.allowed
+  const agendaTasks = canAgendaViewDecision.allowed
     ? await listTasks(context, { serviceOrderId: order.id, unitId: order.unitId })
     : null;
-  const agendaMembers = canAgendaTasksDecision.allowed
+  /**
+   * Os nomes da unidade acompanham a LEITURA: quem ve a lista precisa ver de
+   * quem e cada tarefa, e um seletor de responsavel vazio seria pior do que
+   * nenhum.
+   */
+  const agendaMembers = canAgendaViewDecision.allowed
     ? await listUnitMembers(context, order.unitId)
     : [];
 
@@ -652,13 +668,16 @@ export default async function ServiceOrderDetailPage({
                 </ul>
               )}
 
-              <NewTaskForm
-                unitId={order.unitId}
-                members={agendaMembers}
-                currentUserId={context.userId}
-                serviceOrderId={order.id}
-                today={agendaTasks.today}
-              />
+              {/* O formulario e de quem pode CRIAR; a lista acima, de quem pode VER. */}
+              {canAgendaCreateDecision.allowed ? (
+                <NewTaskForm
+                  unitId={order.unitId}
+                  members={agendaMembers}
+                  currentUserId={context.userId}
+                  serviceOrderId={order.id}
+                  today={agendaTasks.today}
+                />
+              ) : null}
             </CardBody>
           </Card>
         </Section>

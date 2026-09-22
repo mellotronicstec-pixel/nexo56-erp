@@ -7,6 +7,7 @@ import { isDuplicateKeyError } from '@/core/db/duplicate-key';
 import { runInTransaction } from '@/core/db/unit-of-work';
 import { BusinessRuleError, ConflictError, NotFoundError, ValidationError } from '@/core/errors';
 import { newId } from '@/core/ids/id';
+import { zonedCivilToInstant } from '@/core/time/zoned-time';
 import { authorize } from '@/modules/access-control/application/authorization-service';
 import { PERMISSIONS } from '@/modules/access-control/domain/permissions';
 import { AUDIT_ACTIONS, recordAudit } from '@/modules/audit/application/audit-service';
@@ -22,7 +23,7 @@ import {
   validateAppointmentWhen,
 } from '@/modules/agenda/domain/agenda';
 import { agendaAppointments } from '@/modules/agenda/infrastructure/schema';
-import { assertAssignee, blank, parse, resolveUnit } from './agenda-guards';
+import { assertAssignee, blank, parse, resolveUnit, resolveUnitTimeZone } from './agenda-guards';
 import { assertContextLinks } from './agenda-links';
 
 /**
@@ -44,10 +45,18 @@ import { assertContextLinks } from './agenda-links';
 
 const linkSchema = z.string().trim().optional().or(z.literal(''));
 
-const instantSchema = z
+/**
+ * O NAVEGADOR MANDA HORARIO CIVIL, NAO INSTANTE (ADR-076).
+ *
+ * `datetime-local` devolve "2026-09-22T14:00" — quatorze horas, sem fuso. Se o
+ * navegador convertesse isso para instante, o resultado dependeria de onde a
+ * pessoa estava: o dono viajando marcaria uma visita "as 14h" e a loja veria
+ * 10h. Aqui a conversao acontece no SERVIDOR, com o fuso DA UNIDADE.
+ */
+const civilDateTimeSchema = z
   .string()
   .trim()
-  .datetime({ offset: true, message: 'Informe um horario valido.' });
+  .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/, 'Informe um horario valido.');
 
 const civilSchema = z
   .string()
@@ -62,8 +71,9 @@ const civilSchema = z
 const whenSchema = z.discriminatedUnion('allDay', [
   z.object({
     allDay: z.literal(false),
-    startAt: instantSchema,
-    endAt: instantSchema,
+    /** Horario civil no fuso da UNIDADE; o servidor converte. */
+    startAtLocal: civilDateTimeSchema,
+    endAtLocal: civilDateTimeSchema,
   }),
   z.object({
     allDay: z.literal(true),
@@ -88,11 +98,25 @@ const createSchema = z
 
 export type CreateAppointmentInput = z.infer<typeof createSchema>;
 
-/** Converte a entrada validada no tipo do dominio, que sabe julgar o periodo. */
-function toWhen(input: z.infer<typeof whenSchema>): AppointmentWhen {
-  return input.allDay
-    ? { allDay: true, startDate: input.startDate, endDate: input.endDate }
-    : { allDay: false, startAt: new Date(input.startAt), endAt: new Date(input.endAt) };
+/**
+ * Converte a entrada validada no tipo do dominio, resolvendo o horario civil
+ * para instante NO FUSO DA UNIDADE.
+ *
+ * Numa borda de horario de verao, `zonedCivilToInstant` diz se a hora nao
+ * existe (`gap`) ou acontece duas vezes (`ambiguous`) e ja devolve a escolha
+ * documentada. O compromisso e gravado assim mesmo: recusar deixaria a pessoa
+ * presa num formulario uma vez por ano, sem entender o motivo.
+ */
+function toWhen(input: z.infer<typeof whenSchema>, timeZone: string): AppointmentWhen {
+  if (input.allDay) {
+    return { allDay: true, startDate: input.startDate, endDate: input.endDate };
+  }
+
+  return {
+    allDay: false,
+    startAt: zonedCivilToInstant(input.startAtLocal, timeZone).instant,
+    endAt: zonedCivilToInstant(input.endAtLocal, timeZone).instant,
+  };
 }
 
 /**
@@ -143,7 +167,9 @@ export async function createAppointment(
     unitId,
   });
 
-  const when = toWhen(input);
+  /** O fuso e da UNIDADE, resolvido no backend — nunca o do navegador. */
+  const timeZone = await resolveUnitTimeZone(context, unitId);
+  const when = toWhen(input, timeZone);
   assertWhen(when);
 
   const assigneeId = blank(input.assigneeId);
@@ -330,7 +356,8 @@ export async function updateAppointment(
 
   let reagendou = false;
   if (input.allDay !== undefined) {
-    const when = toWhen(input);
+    const timeZone = await resolveUnitTimeZone(context, appointment.unitId);
+    const when = toWhen(input, timeZone);
     assertWhen(when);
     Object.assign(mudancas, whenColumns(when));
     reagendou = true;

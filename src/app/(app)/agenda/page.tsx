@@ -58,7 +58,15 @@ function tomDaOrigem(type: AgendaItem['type']): 'brand' | 'neutral' | 'warning' 
   return 'brand';
 }
 
-function LinhaDaAgenda({ item, hoje }: { item: AgendaItem; hoje: string }) {
+function LinhaDaAgenda({
+  item,
+  hoje,
+  timeZone,
+}: {
+  item: AgendaItem;
+  hoje: string;
+  timeZone: string;
+}) {
   const atraso = item.overdue && item.dueDate ? daysLate(item.dueDate, hoje) : 0;
 
   return (
@@ -91,7 +99,7 @@ function LinhaDaAgenda({ item, hoje }: { item: AgendaItem; hoje: string }) {
           {item.allDay
             ? 'Dia inteiro'
             : item.startAt
-              ? `${hora(item.startAt)}${item.endAt ? ` as ${hora(item.endAt)}` : ''}`
+              ? `${hora(item.startAt, timeZone)}${item.endAt ? ` as ${hora(item.endAt, timeZone)}` : ''}`
               : `Prazo: ${dataCivil(item.dueDate)}`}
           {item.customerName ? ` · ${item.customerName}` : ''}
         </p>
@@ -222,6 +230,7 @@ export default async function AgendaPage({
                       key={`${item.type}:${item.id}`}
                       item={item}
                       hoje={agenda.today}
+                      timeZone={agenda.timeZones[item.unitId] ?? context.tenantTimezone}
                     />
                   ))}
                 </ul>

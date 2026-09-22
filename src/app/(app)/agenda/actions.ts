@@ -225,10 +225,15 @@ function whenFrom(formData: FormData) {
     };
   }
 
+  /**
+   * HORARIO CIVIL, cru. A Server Action nao converte para instante: ela nao
+   * sabe o fuso da unidade, e adivinhar aqui repetiria — no servidor — o
+   * mesmo erro de deixar o navegador decidir (ADR-076).
+   */
   return {
     allDay: false as const,
-    startAt: text(formData, 'startAt'),
-    endAt: text(formData, 'endAt'),
+    startAtLocal: text(formData, 'startAtLocal'),
+    endAtLocal: text(formData, 'endAtLocal'),
   };
 }
 

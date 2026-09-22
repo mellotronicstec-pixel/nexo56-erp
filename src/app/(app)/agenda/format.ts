@@ -1,3 +1,5 @@
+import { formatZonedTime } from '@/core/time/zoned-time';
+
 /**
  * Formatacao compartilhada das telas de Agenda e Tarefas.
  *
@@ -16,11 +18,17 @@ export function dataCivil(value: string | null | undefined): string {
   return ano && mes && dia ? `${dia}/${mes}/${ano}` : value;
 }
 
-const horaCurta = new Intl.DateTimeFormat('pt-BR', { timeStyle: 'short' });
 const instanteCurto = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
 
-export function hora(value: Date | null | undefined): string {
-  return value ? horaCurta.format(value) : '';
+/**
+ * A hora de um compromisso, NO FUSO DA UNIDADE.
+ *
+ * O fuso e parametro obrigatorio de proposito: sem ele o `Intl` usaria o do
+ * navegador, e um compromisso marcado para as 14h na loja apareceria as 10h
+ * para quem abrisse a agenda de outro pais (ADR-076).
+ */
+export function hora(value: Date | null | undefined, timeZone: string): string {
+  return value ? formatZonedTime(value, timeZone) : '';
 }
 
 export function instante(value: Date | null | undefined): string {

@@ -62,6 +62,29 @@ const envSchema = z
         message: 'APP_URL deve usar https em producao (cookies Secure dependem disso)',
       });
     }
+
+    /**
+     * A VALVULA SO ABRE PARA A PROPRIA MAQUINA.
+     *
+     * `ALLOW_INSECURE_APP_URL` existe para rodar a verificacao de ponta a ponta
+     * num servidor local em http. O risco obvio e alguem copiar essa variavel
+     * para o ambiente de producao e derrubar, junto, o `Secure` dos cookies de
+     * sessao — sem nenhum aviso, porque o sistema continuaria subindo.
+     *
+     * Entao a valvula so vale quando o endereco e da propria maquina. Com
+     * qualquer host real ela e recusada, e a mensagem diz exatamente isso.
+     */
+    if (value.ALLOW_INSECURE_APP_URL) {
+      const local = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?(\/|$)/;
+      if (!local.test(value.APP_URL)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['ALLOW_INSECURE_APP_URL'],
+          message:
+            'ALLOW_INSECURE_APP_URL so vale com APP_URL em localhost/127.0.0.1 — em qualquer outro endereco use https',
+        });
+      }
+    }
   });
 
 export type Env = z.infer<typeof envSchema>;

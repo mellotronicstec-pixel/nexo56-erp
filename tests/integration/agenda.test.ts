@@ -15,13 +15,20 @@ import { createCustomer } from '@/modules/customers/application/customer-service
 import { createEquipment } from '@/modules/equipment/application/equipment-service';
 import { domainEvents } from '@/modules/events/infrastructure/schema';
 import { setTenantFeature } from '@/modules/features/application/tenant-configuration';
+import { PERMISSIONS } from '@/modules/access-control/domain/permissions';
+import { units } from '@/modules/tenancy/infrastructure/schema';
 import { FEATURES } from '@/modules/features/domain/catalog';
 import { createServiceOrder } from '@/modules/service-orders/application/service-order-service';
 import { transitionServiceOrder } from '@/modules/service-orders/application/workflow-service';
 import { serviceOrderTasks, serviceOrders } from '@/modules/service-orders/infrastructure/schema';
 import { TASK_KINDS } from '@/modules/service-orders/domain/workflow';
 import { completeAgendaItem } from '@/modules/agenda/application/agenda-actions';
-import { loadAgenda, loadMyTasks, listTasks } from '@/modules/agenda/application/agenda-queries';
+import {
+  findTask,
+  listTasks,
+  loadAgenda,
+  loadMyTasks,
+} from '@/modules/agenda/application/agenda-queries';
 import {
   assignTask,
   cancelTask,
@@ -37,8 +44,10 @@ import {
 import { agendaAppointments, agendaTasks } from '@/modules/agenda/infrastructure/schema';
 import { closeTestDatabase, migrateTestDatabase, truncateAll } from '../helpers/database';
 import {
+  assignTenantRole,
   contextFor,
   createPlainUser,
+  createRoleWithPermissions,
   createTenantFixture,
   createUnit,
   grantMembership,
@@ -484,8 +493,8 @@ describe('a agenda reune quatro origens sem copiar nenhuma', () => {
       createAppointment(tenantA.context, {
         title: 'Visita tecnica no cliente',
         allDay: false,
-        startAt: `${hoje()}T17:00:00.000Z`,
-        endAt: `${hoje()}T18:00:00.000Z`,
+        startAtLocal: `${hoje()}T14:00`,
+        endAtLocal: `${hoje()}T15:00`,
       }),
     );
 
@@ -783,8 +792,8 @@ describe('compromissos', () => {
         createAppointment(tenantA.context, {
           title: 'Impossivel',
           allDay: false,
-          startAt: `${hoje()}T18:00:00.000Z`,
-          endAt: `${hoje()}T17:00:00.000Z`,
+          startAtLocal: `${hoje()}T18:00`,
+          endAtLocal: `${hoje()}T17:00`,
         }),
       ),
     ).rejects.toBeInstanceOf(ValidationError);
@@ -803,8 +812,8 @@ describe('compromissos', () => {
     await run(() =>
       updateAppointment(tenantA.context, appointmentId, {
         allDay: false,
-        startAt: `${addDays(hoje(), 1)}T14:00:00.000Z`,
-        endAt: `${addDays(hoje(), 1)}T15:00:00.000Z`,
+        startAtLocal: `${addDays(hoje(), 1)}T14:00`,
+        endAtLocal: `${addDays(hoje(), 1)}T15:00`,
       }),
     );
 
@@ -835,5 +844,173 @@ describe('compromissos', () => {
     expect(segundo.appointmentId).toBe(primeiro.appointmentId);
     expect(segundo.reused).toBe(true);
     expect(await getDb().select().from(agendaAppointments)).toHaveLength(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Leitura nao e criacao
+// ---------------------------------------------------------------------------
+
+describe('agenda.view governa a leitura; agenda.tasks.create, so a criacao', () => {
+  /** Monta uma pessoa com exatamente as permissoes pedidas, e nada mais. */
+  async function pessoaCom(
+    permissoes: readonly (typeof PERMISSIONS)[keyof typeof PERMISSIONS][],
+    email: string,
+  ) {
+    const userId = await createPlainUser(tenantA.tenantId, email);
+    await grantMembership(tenantA.tenantId, userId, tenantA.unitId);
+    const roleId = await createRoleWithPermissions(tenantA.tenantId, `papel-${email}`, permissoes);
+    await assignTenantRole(tenantA.tenantId, userId, roleId);
+    return contextFor(tenantA.tenantId, userId, tenantA.unitId);
+  }
+
+  it('quem tem agenda.view LE a agenda e a lista, mesmo sem poder criar', async () => {
+    await run(() =>
+      createTask(tenantA.context, { title: 'Visivel para quem so le', dueDate: hoje() }),
+    );
+
+    const soLeitura = await pessoaCom([PERMISSIONS.AGENDA_VIEW], 'so-leitura@ag-a.invalid');
+
+    const agenda = await run(() => loadAgenda(soLeitura));
+    const titulos = agenda.days.flatMap((dia) => dia.items.map((item) => item.title));
+    expect(titulos).toContain('Visivel para quem so le');
+
+    const lista = await run(() => listTasks(soLeitura, {}));
+    expect(lista.total).toBeGreaterThan(0);
+  });
+
+  it('quem tem agenda.view NAO cria tarefa', async () => {
+    const soLeitura = await pessoaCom([PERMISSIONS.AGENDA_VIEW], 'so-leitura2@ag-a.invalid');
+
+    await expect(
+      run(() => createTask(soLeitura, { title: 'Nao deveria nascer' })),
+    ).rejects.toBeInstanceOf(AuthorizationError);
+  });
+
+  /**
+   * O CASO QUE MOTIVOU A CORRECAO: ter a chave de CRIAR nao pode, sozinha,
+   * conceder leitura. Se concedesse, bastaria a permissao errada num papel
+   * para expor a fila inteira da unidade.
+   */
+  it('quem tem agenda.tasks.create SEM agenda.view nao le nada', async () => {
+    await run(() => createTask(tenantA.context, { title: 'Nao deve vazar', dueDate: hoje() }));
+
+    const soCriacao = await pessoaCom([PERMISSIONS.AGENDA_TASKS_CREATE], 'so-criacao@ag-a.invalid');
+
+    const agenda = await run(() => loadAgenda(soCriacao));
+    expect(agenda.days).toHaveLength(0);
+    expect(agenda.unitIds).toHaveLength(0);
+
+    const lista = await run(() => listTasks(soCriacao, {}));
+    expect(lista.rows).toHaveLength(0);
+    expect(lista.total).toBe(0);
+
+    const minhas = await run(() => loadMyTasks(soCriacao));
+    expect(minhas.buckets).toHaveLength(0);
+
+    /** Nem a ficha de uma tarefa cujo id ele conheca. */
+    const [qualquer] = await getDb().select({ id: agendaTasks.id }).from(agendaTasks).limit(1);
+    expect(await run(() => findTask(soCriacao, qualquer!.id))).toBeNull();
+  });
+
+  it('mas ele CRIA — a chave de criacao faz exatamente o que promete', async () => {
+    const soCriacao = await pessoaCom(
+      [PERMISSIONS.AGENDA_TASKS_CREATE],
+      'so-criacao2@ag-a.invalid',
+    );
+
+    const { taskId } = await run(() => createTask(soCriacao, { title: 'Criada sem poder ler' }));
+    expect(taskId).toBeTruthy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Semantica temporal do compromisso
+// ---------------------------------------------------------------------------
+
+describe('o horario do compromisso e civil, resolvido no fuso da unidade', () => {
+  it('14h na unidade viram o instante certo, nao o do navegador', async () => {
+    /** A unidade de teste nasce em America/Sao_Paulo: 14h locais = 17h UTC. */
+    const { appointmentId } = await run(() =>
+      createAppointment(tenantA.context, {
+        title: 'Visita as duas da tarde',
+        allDay: false,
+        startAtLocal: '2026-09-22T14:00',
+        endAtLocal: '2026-09-22T15:00',
+      }),
+    );
+
+    const [row] = await getDb()
+      .select()
+      .from(agendaAppointments)
+      .where(eq(agendaAppointments.id, appointmentId));
+
+    expect(row!.startAt?.toISOString()).toBe('2026-09-22T17:00:00.000Z');
+    expect(row!.endAt?.toISOString()).toBe('2026-09-22T18:00:00.000Z');
+  });
+
+  it('o mesmo horario civil em uma unidade de outro fuso produz outro instante', async () => {
+    const filial = await createUnit(tenantA.tenantId, 'Filial em Lisboa');
+    await getDb().update(units).set({ timezone: 'UTC' }).where(eq(units.id, filial));
+    await grantMembership(tenantA.tenantId, tenantA.adminUserId, filial);
+    const contextoFilial = await contextFor(tenantA.tenantId, tenantA.adminUserId, filial);
+
+    const { appointmentId } = await run(() =>
+      createAppointment(contextoFilial, {
+        title: 'Mesma hora, outro fuso',
+        unitId: filial,
+        allDay: false,
+        startAtLocal: '2026-09-22T14:00',
+        endAtLocal: '2026-09-22T15:00',
+      }),
+    );
+
+    const [row] = await getDb()
+      .select()
+      .from(agendaAppointments)
+      .where(eq(agendaAppointments.id, appointmentId));
+
+    /** Na unidade em UTC, 14h civis sao 14h UTC — nao 17h. */
+    expect(row!.startAt?.toISOString()).toBe('2026-09-22T14:00:00.000Z');
+  });
+
+  it('recusa instante ISO: o servico so aceita horario civil', async () => {
+    await expect(
+      run(() =>
+        createAppointment(tenantA.context, {
+          title: 'Instante cru',
+          allDay: false,
+          startAtLocal: '2026-09-22T17:00:00.000Z',
+          endAtLocal: '2026-09-22T18:00:00.000Z',
+        }),
+      ),
+    ).rejects.toBeInstanceOf(ValidationError);
+  });
+
+  it('a agenda devolve o fuso de cada unidade consultada', async () => {
+    const agenda = await run(() => loadAgenda(tenantA.context));
+    expect(agenda.timeZones[tenantA.unitId]).toBe('America/Sao_Paulo');
+  });
+
+  it('um compromisso das 22h continua no MESMO dia civil da unidade', async () => {
+    const dia = addDays(hoje(), 1);
+
+    await run(() =>
+      createAppointment(tenantA.context, {
+        title: 'Plantao da noite',
+        allDay: false,
+        startAtLocal: `${dia}T22:00`,
+        endAtLocal: `${dia}T23:00`,
+      }),
+    );
+
+    const agenda = await run(() => loadAgenda(tenantA.context));
+    const noturno = agenda.days
+      .flatMap((d) => d.items.map((item) => ({ dia: d.date, item })))
+      .find((linha) => linha.item.title === 'Plantao da noite');
+
+    expect(noturno).toBeDefined();
+    /** Em UTC ja e o dia seguinte; na loja, nao. */
+    expect(noturno!.dia).toBe(dia);
   });
 });

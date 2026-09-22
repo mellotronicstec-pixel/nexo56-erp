@@ -1,9 +1,10 @@
 import 'server-only';
-import { sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import type { z } from 'zod';
 import { getDb } from '@/core/db/client';
 import { NotFoundError, ValidationError } from '@/core/errors';
 import type { TenantContext } from '@/modules/tenancy/domain/tenant-context';
+import { units } from '@/modules/tenancy/infrastructure/schema';
 
 /**
  * GUARDAS COMPARTILHADAS DA AGENDA.
@@ -83,4 +84,60 @@ export async function assertAssignee(
       'Esta pessoa nao pode receber o item: ela precisa estar ativa e ter acesso a unidade.',
     );
   }
+}
+
+/**
+ * O FUSO DE UMA UNIDADE — e por que ele nao vem do navegador.
+ *
+ * `units.timezone` ja existe desde a fundacao, anulavel, com o comentario
+ * "Nulo = herda o timezone do tenant". Entao a resposta esta no banco: nao ha
+ * infraestrutura nova aqui, so a leitura de uma coluna que sempre esteve la.
+ *
+ * O `TenantContext` carrega apenas `tenantTimezone`; ampliar o contexto para
+ * carregar o fuso de cada unidade seria mudanca de fundacao, fora do escopo
+ * deste prompt. Entao a consulta e pontual, feita onde a unidade ja e
+ * conhecida, e o fallback e explicito.
+ */
+export async function resolveUnitTimeZone(context: TenantContext, unitId: string): Promise<string> {
+  const linhas = await getDb().execute(sql`
+    SELECT u.timezone
+      FROM units u
+     WHERE u.id = ${unitId}
+       AND u.tenant_id = ${context.tenantId}
+     LIMIT 1
+  `);
+
+  const daUnidade = (rows: unknown): string | null => {
+    const primeira = (rows as Array<Array<{ timezone: string | null }>>)[0]?.[0];
+    return primeira?.timezone?.trim() || null;
+  };
+
+  return daUnidade(linhas) ?? context.tenantTimezone;
+}
+
+/**
+ * O fuso de varias unidades de uma vez, para a agenda nao fazer uma consulta
+ * por linha. Unidade sem fuso proprio herda o do tenant, como o schema diz.
+ */
+export async function resolveUnitTimeZones(
+  context: TenantContext,
+  unitIds: readonly string[],
+): Promise<Record<string, string>> {
+  const mapa: Record<string, string> = {};
+  if (unitIds.length === 0) return mapa;
+
+  const linhas = await getDb()
+    .select({ id: units.id, timezone: units.timezone })
+    .from(units)
+    .where(and(eq(units.tenantId, context.tenantId), inArray(units.id, [...unitIds])));
+
+  for (const linha of linhas) {
+    mapa[linha.id] = linha.timezone?.trim() || context.tenantTimezone;
+  }
+
+  for (const unitId of unitIds) {
+    mapa[unitId] ??= context.tenantTimezone;
+  }
+
+  return mapa;
 }

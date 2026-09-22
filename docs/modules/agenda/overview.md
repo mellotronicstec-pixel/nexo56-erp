@@ -42,6 +42,12 @@ que fazer.
 que não tem prazo aparecem, porque são exatamente os que ninguém lembra
 sozinho.
 
+**Janela padrão e teto são _defaults_, não regra de negócio.**
+`DEFAULT_AGENDA_RANGE_DAYS = 7` e `MAX_AGENDA_RANGE_DAYS = 92` existem para a
+agenda não virar varredura de histórico. São números de produto, passíveis de
+virar configuração por empresa quando a operação pedir — nada no domínio
+depende deles serem esses.
+
 ## Nada é copiado
 
 A Agenda **lê** quatro origens e **escreve** em duas:

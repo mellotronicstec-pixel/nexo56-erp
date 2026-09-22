@@ -36,6 +36,22 @@ A tela oferece criar, reagendar (pelo serviço) e cancelar. Uma ficha de
 compromisso com edição completa não foi construída porque a operação ainda não
 pediu — e uma tela a mais é uma tela a mais para manter.
 
+## Fuso da unidade dentro do `TenantContext`
+
+O horário de um compromisso é convertido no **servidor**, com o fuso da
+unidade ([ADR-076](../../adr/ADR-076-o-navegador-nao-e-autoridade-temporal.md)).
+`units.timezone` já existia; o que **não** existe é esse fuso dentro do
+`TenantContext`, que carrega apenas `tenantTimezone`.
+
+Por isso a resolução é feita por consulta pontual — `resolveUnitTimeZone` e
+`resolveUnitTimeZones` — onde a unidade já é conhecida. Funciona e é correto,
+mas custa uma consulta por operação de compromisso e uma por carga de agenda.
+
+Levar o fuso da unidade para dentro do contexto é mudança de **fundação**, não
+de módulo, e ficou deliberadamente fora do Prompt 14 para não ampliar o escopo
+com infraestrutura global improvisada. Quando for feita, `resolveUnitTimeZone`
+passa a ler do contexto e o resto do módulo não muda.
+
 ## Não antecipado, por instrução explícita
 
 Central de Trabalho (15), Comunicação (16), Portal do cliente (17), BI (18),

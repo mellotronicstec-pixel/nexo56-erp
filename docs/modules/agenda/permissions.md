@@ -22,6 +22,22 @@ pessoa precisa de `agenda.tasks.manage`. A regra mora em um lugar só
 (`assertCanOperate`) — espalhá-la por caso de uso garantiria que um deles
 esquecesse.
 
+**Ler não é criar.** `agenda.view` governa **toda** a leitura: as três telas, o
+read model e a seção "Tarefas da Agenda" na ficha da OS. `agenda.tasks.create`
+governa **apenas** a criação.
+
+Isso vale nos dois sentidos, e os dois são testados:
+
+- quem tem `agenda.view` **lê** a agenda e a lista da unidade, mesmo sem poder
+  criar nada;
+- quem tem `agenda.tasks.create` **sem** `agenda.view` não lê **nada** — nem a
+  agenda, nem a lista, nem "Minhas tarefas", nem a ficha de uma tarefa cujo id
+  ele conheça — e ainda assim cria, porque a chave faz o que promete.
+
+Backend e interface seguem a mesma política: o `can()` da ficha da OS pergunta
+por `agenda.view` para exibir a lista e por `agenda.tasks.create` para exibir o
+formulário. Sem a permissão de leitura, **nenhuma consulta é feita**.
+
 ## Unidade
 
 A unidade **vem do backend**. A unidade ativa do navegador é conveniência de
