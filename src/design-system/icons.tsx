@@ -357,3 +357,12 @@ export const IconTask = (props: IconProps) => (
     <path d="M13 8h7M13 17h7" />
   </Icon>
 );
+
+/** Central de Trabalho: as filas lado a lado, com o que exige atencao no topo. */
+export const IconWorkCenter = (props: IconProps) => (
+  <Icon {...props}>
+    <rect x="3" y="4" width="7" height="16" rx="1.5" />
+    <rect x="14" y="4" width="7" height="9" rx="1.5" />
+    <path d="M14 17h7" />
+  </Icon>
+);

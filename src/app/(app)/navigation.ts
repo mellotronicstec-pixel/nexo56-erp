@@ -41,7 +41,8 @@ export type NavIconKey =
   | 'cash-register'
   | 'warranty'
   | 'agenda'
-  | 'task';
+  | 'task'
+  | 'work-center';
 
 export interface NavItem {
   href: string;
@@ -61,6 +62,22 @@ export const NAV_SECTIONS: readonly NavSection[] = [
   {
     title: 'Operacao',
     items: [
+      {
+        /**
+         * A CENTRAL VEM PRIMEIRO, e e o unico item do menu que nao abre um
+         * modulo: ela abre a PERGUNTA "o que precisa da minha atencao agora?".
+         * Quem chega de manha comeca por ela e so entra em Clientes, OS ou
+         * Estoque depois de saber para onde ir.
+         *
+         * OPCIONAL e dependente de Ordens de Servico: quando a feature esta
+         * desligada o item some e o menu se fecha sozinho, sem buraco.
+         */
+        href: '/central-de-trabalho',
+        label: 'Central de Trabalho',
+        featureKey: FEATURES.OPERATIONS_WORK_CENTER,
+        permission: PERMISSIONS.WORK_CENTER_VIEW,
+        icon: 'work-center',
+      },
       {
         href: '/clientes',
         label: 'Clientes',

@@ -96,3 +96,4 @@ substitui, e o antigo passa a `Substituído por ADR-XXX`.
 | [074](ADR-074-atraso-e-derivado-e-prazo-e-dia.md)                          | "Atrasada" é derivado; prazo é dia                    | Aceito |
 | [075](ADR-075-compatibilidade-com-o-follow-up-historico.md)                | O follow-up histórico fica onde está                  | Aceito |
 | [076](ADR-076-o-navegador-nao-e-autoridade-temporal.md)                    | O navegador não é autoridade temporal do domínio      | Aceito |
+| [077](ADR-077-central-de-trabalho-e-leitura-sem-autoridade.md)             | A Central é leitura; a autoridade fica no domínio     | Aceito |

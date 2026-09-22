@@ -49,6 +49,7 @@ export const FEATURES = {
   FINANCE_CORE: 'finance.core',
   OPERATIONS_WARRANTIES: 'operations.warranties',
   OPERATIONS_AGENDA: 'operations.agenda',
+  OPERATIONS_WORK_CENTER: 'operations.work_center',
   PLATFORM_MULTI_UNIT: 'platform.multi_unit',
   PLATFORM_LABEL_RECOGNITION: 'platform.label_recognition',
 } as const;
@@ -268,6 +269,33 @@ export const FEATURE_CATALOG: readonly FeatureDefinition[] = [
      */
     type: 'OPTIONAL',
     dependsOn: [],
+  },
+  {
+    key: FEATURES.OPERATIONS_WORK_CENTER,
+    name: 'Central de Trabalho',
+    description:
+      'Visao operacional unica: filas de Ordens de Servico por estado, sinais de atencao e o caminho direto para o contexto certo.',
+    /**
+     * OPTIONAL, e dependente APENAS de Ordens de Servico.
+     *
+     * A dependencia de OS e real, nao burocratica: o conteudo da Central sao
+     * as filas de OS. Sem o modulo de Ordens de Servico nao ha o que enfileirar,
+     * e a tela existiria vazia para sempre.
+     *
+     * NAO depende da Agenda (item 20), e esta e a decisao que mais importa
+     * aqui. A Central mostra follow-up e tarefa de fluxo lendo o NUCLEO — as
+     * colunas da propria OS e `service_order_tasks`, ambos CORE do Prompt 08.
+     * O que vem da Agenda (tarefas gerais, compromissos) e camada
+     * OPORTUNISTA: some quando `operations.agenda` esta desligada, e o resto
+     * da Central continua inteiro. Fazer o contrario transformaria um modulo
+     * opcional em pre-requisito da pergunta "o que preciso fazer hoje?".
+     *
+     * NAO depende de Estoque, Compras, Financeiro nem Garantias: quando
+     * disponiveis, a Central pode mostrar sinais desses contextos; quando nao,
+     * ela nao os menciona e nao quebra (ADR-077).
+     */
+    type: 'OPTIONAL',
+    dependsOn: [FEATURES.CORE_SERVICE_ORDERS],
   },
   {
     key: FEATURES.OPERATIONS_WARRANTIES,

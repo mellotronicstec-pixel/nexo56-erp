@@ -98,8 +98,9 @@ async function main(): Promise<void> {
       await enableOptionalFeature(devTenant.id, FEATURES.FINANCE_CORE);
       await enableOptionalFeature(devTenant.id, FEATURES.OPERATIONS_WARRANTIES);
       await enableOptionalFeature(devTenant.id, FEATURES.OPERATIONS_AGENDA);
+      await enableOptionalFeature(devTenant.id, FEATURES.OPERATIONS_WORK_CENTER);
       console.log(
-        '[seed] modulos Estoque, Compras, Financeiro, Garantias e Agenda habilitados no tenant de desenvolvimento.',
+        '[seed] modulos Estoque, Compras, Financeiro, Garantias, Agenda e Central de Trabalho habilitados no tenant de desenvolvimento.',
       );
     }
 

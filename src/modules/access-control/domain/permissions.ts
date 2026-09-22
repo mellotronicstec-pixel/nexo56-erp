@@ -226,6 +226,21 @@ export const PERMISSIONS = {
   /** Atribuir a terceiro: mexe na fila de trabalho de outra pessoa (item 82). */
   AGENDA_TASKS_ASSIGN: 'agenda.tasks.assign',
   AGENDA_APPOINTMENTS_MANAGE: 'agenda.appointments.manage',
+
+  /**
+   * UMA chave so para a Central, de proposito.
+   *
+   * Ela governa o ACESSO A TELA. O que aparece dentro continua governado pelas
+   * permissoes de origem: as filas de OS exigem `service_orders.view`, os itens
+   * da Agenda exigem `agenda.view`, e cada acao rapida exige a permissao da
+   * acao oficial correspondente.
+   *
+   * NAO existe `work_center.team_view`. Quem pode listar as OS da unidade em
+   * `/ordens-de-servico` ja ve exatamente os mesmos registros; uma chave extra
+   * para a Central esconderia na cozinha o que ja esta servido no salao — seria
+   * teatro de seguranca, nao seguranca.
+   */
+  WORK_CENTER_VIEW: 'work_center.view',
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -722,6 +737,13 @@ export const PERMISSION_CATALOG: readonly PermissionDefinition[] = [
     description: 'Cria, reagenda e cancela compromissos na agenda da unidade.',
     featureKey: 'operations.agenda',
   },
+  {
+    key: PERMISSIONS.WORK_CENTER_VIEW,
+    name: 'Ver a Central de Trabalho',
+    description:
+      'Abre a visao operacional com as filas de Ordens de Servico e os sinais de atencao da unidade.',
+    featureKey: 'operations.work_center',
+  },
 ];
 
 /** Papeis estruturais criados no bootstrap de cada tenant. */
@@ -965,6 +987,7 @@ export const PERMISSION_GROUPS = [
       PERMISSIONS.AGENDA_TASKS_MANAGE,
       PERMISSIONS.AGENDA_TASKS_ASSIGN,
       PERMISSIONS.AGENDA_APPOINTMENTS_MANAGE,
+      PERMISSIONS.WORK_CENTER_VIEW,
     ],
   },
   {

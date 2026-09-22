@@ -4,7 +4,8 @@ Plataforma ERP/SaaS multiempresa para gestão de assistência técnica e reparo.
 
 **Estado atual: fundação completa + módulos de negócio Clientes, Equipamentos,
 Ordens de Serviço com workflow, Orçamentos, Estoque, Compras, Financeiro,
-Garantias com certificado em PDF real, e Agenda e Tarefas (Prompts 01 a 14).** Autenticação, sessões,
+Garantias com certificado em PDF real, Agenda e Tarefas, e a Central de
+Trabalho (Prompts 01 a 15).** Autenticação, sessões,
 usuários, perfis, permissões com **escopo por unidade**, multi-tenancy,
 modularidade, auditoria, eventos, jobs, Design System, interface responsiva,
 **Clientes**, **Equipamentos e Recebimento** (com fotos em storage privado), a
@@ -22,12 +23,15 @@ de fábrica, de peça e estendida, cobertura total e parcial, vigência,
 certificado com soma de verificação, retorno em garantia com Ordem de Serviço
 nova, reclassificação controlada e custos) também. A **Agenda e Tarefas**
 (tarefas operacionais com ou sem OS, compromissos, "Minhas tarefas" e a agenda
-que reúne quatro origens sem copiar nenhuma) fecha o Prompt 14. Os demais
-módulos serão construídos nos prompts seguintes.
+que reúne quatro origens sem copiar nenhuma) fecha o Prompt 14. A **Central de
+Trabalho** (filas de OS por estado, sinais de atenção derivados, visão pessoal
+e da unidade) fecha o Prompt 15. Os demais módulos serão construídos nos
+prompts seguintes.
 
-**Estoque, Compras, Financeiro, Garantias e Agenda são módulos OPCIONAIS**
-(`operations.inventory`, `operations.purchasing`, `finance.core`,
-`operations.warranties`, `operations.agenda`): a empresa
+**Estoque, Compras, Financeiro, Garantias, Agenda e Central de Trabalho são
+módulos OPCIONAIS** (`operations.inventory`, `operations.purchasing`,
+`finance.core`, `operations.warranties`, `operations.agenda`,
+`operations.work_center`): a empresa
 pode desligá-los. Sem Estoque, o Orçamento continua inteiro com linha de peça
 escrita à mão ([modularidade do Estoque](docs/modules/inventory/modularity.md));
 sem Compras, o Estoque não percebe diferença nenhuma e a origem
@@ -55,6 +59,16 @@ preparação que alguém já fez
 Também **não existe tabela `service_order_follow_ups`**: o mecanismo histórico
 sempre foi `service_orders.follow_up_at` + `follow_up_alerted_for`
 ([ADR-075](docs/adr/ADR-075-compatibilidade-com-o-follow-up-historico.md)).
+
+**A Central de Trabalho é leitura, e só leitura.** Ela reúne as sete filas de
+Ordens de Serviço, os sinais de atenção derivados e leva ao contexto certo —
+mas não escreve em lugar nenhum: a ação de cada linha é "Abrir OS", e a
+transição continua acontecendo na ficha, pela máquina de estados. Nenhuma
+tabela foi criada e não há migration no Prompt 15: as filas são consultas e
+"atrasada" é derivado. E ela **não depende da Agenda**: com `operations.agenda`
+desligada, filas, acompanhamento e tarefas de fluxo continuam inteiros, porque
+são CORE do Prompt 08
+([ADR-077](docs/adr/ADR-077-central-de-trabalho-e-leitura-sem-autoridade.md)).
 
 **O Financeiro não fala com banco nenhum.** Não há conciliação bancária, não há
 PIX automático, não há integração com adquirente e não há emissão fiscal.
@@ -411,6 +425,22 @@ produção não depende de Docker.
 | Migration            | upgrade real do Prompt 13.1 para o 14 com OS aberta, `follow_up_at`, `follow_up_alerted_for`, tarefa legada aberta, concluída e editada à mão                                                      |
 | Limpeza entre testes | teste que falha se **qualquer** tabela do schema ficar fora da lista de `truncateAll` — o defeito já aconteceu duas vezes                                                                          |
 
+### Cobertura da Central de Trabalho (Prompt 15)
+
+| Área                 | O que é testado                                                                                                                                    |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Filas                | as sete são exatamente os estados não terminais do Prompt 08; finalizada e cancelada somem do trabalho ativo; fila inventada é **recusada**        |
+| **Ordenação**        | precedência provada caso a caso; empate por data e por número; **antissimetria**; 12 embaralhamentos determinísticos produzem sempre a mesma ordem |
+| Flags derivadas      | atrasado e hoje são mutuamente exclusivos; acumulam quando os fatos acumulam; "sem responsável" **não** cria urgência                              |
+| Cartão × lista       | o total de cada cartão é exatamente o que a lista filtrada devolve                                                                                 |
+| **Isolamento**       | outra empresa e outra unidade não aparecem — **nem na lista, nem na contagem, nem pela busca**                                                     |
+| Permissão cruzada    | quem tem `work_center.view` sem `service_orders.view` vê lista vazia e **todas as contagens em zero**                                              |
+| **Agenda desligada** | filas, acompanhamento e tarefas de fluxo continuam inteiros; só o sinal que era da Agenda some                                                     |
+| SQL × domínio        | a ordem que o banco devolve é a mesma que `compareWorkCenterItems` produziria                                                                      |
+| Paginação            | 60 OS em três páginas: nenhum item repetido, nenhum perdido, ordem crescente; página além do fim devolve vazio                                     |
+| **N+1**              | o número de consultas **medido** com 5 e com 45 OS não cresce                                                                                      |
+| Fronteira            | varredura de `src/`: sem escrita, sem transação, sem `mysqlTable`, sem migration `0014`, sem estado inventado                                      |
+
 ---
 
 ## 9. Build e produção
@@ -477,6 +507,7 @@ docs/             arquitetura, ADRs, Hostinger
 - **Financeiro:** [docs/modules/finance/overview.md](docs/modules/finance/overview.md)
 - **Garantias:** [docs/modules/warranties/overview.md](docs/modules/warranties/overview.md)
 - **Agenda e Tarefas:** [docs/modules/agenda/overview.md](docs/modules/agenda/overview.md)
+- **Central de Trabalho:** [docs/modules/work-center/overview.md](docs/modules/work-center/overview.md)
 
 ---
 

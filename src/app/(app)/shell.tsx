@@ -33,6 +33,7 @@ import {
   IconCashRegister,
   IconWarranty,
   IconAgenda,
+  IconWorkCenter,
   IconTask,
   IconFinance,
   IconInventory,
@@ -68,6 +69,7 @@ const NAV_ICONS: Record<NavIconKey, ComponentType<IconProps>> = {
   'cash-register': IconCashRegister,
   warranty: IconWarranty,
   agenda: IconAgenda,
+  'work-center': IconWorkCenter,
   task: IconTask,
 };
 
