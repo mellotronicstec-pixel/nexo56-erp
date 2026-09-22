@@ -241,6 +241,23 @@ export const PERMISSIONS = {
    * teatro de seguranca, nao seguranca.
    */
   WORK_CENTER_VIEW: 'work_center.view',
+
+  /**
+   * TRES PERMISSOES, E NAO SEIS (Prompt 16, itens 79 a 84).
+   *
+   * A tentacao seria separar `send`, `retry` e `cancel`. Mas reenviar e
+   * enviar de novo, e cancelar uma mensagem que ainda nao saiu e desfazer o
+   * proprio envio — as tres sao a mesma autoridade: decidir o que a empresa
+   * fala com o cliente. Separa-las criaria o cargo absurdo de quem pode
+   * mandar e nao pode consertar o que mandou.
+   *
+   * O que E outra autoridade e MEXER NO MODELO: quem edita um template muda o
+   * texto de todas as mensagens futuras de todas as unidades, sem enviar nada.
+   * Isso e configuracao da empresa, e tem chave propria.
+   */
+  COMMUNICATIONS_VIEW: 'communications.view',
+  COMMUNICATIONS_SEND: 'communications.send',
+  COMMUNICATIONS_TEMPLATES_MANAGE: 'communications.templates.manage',
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -744,6 +761,26 @@ export const PERMISSION_CATALOG: readonly PermissionDefinition[] = [
       'Abre a visao operacional com as filas de Ordens de Servico e os sinais de atencao da unidade.',
     featureKey: 'operations.work_center',
   },
+  {
+    key: PERMISSIONS.COMMUNICATIONS_VIEW,
+    name: 'Ver comunicacoes',
+    description:
+      'Consulta o historico de mensagens enviadas ao cliente e o resultado de cada tentativa.',
+    featureKey: 'communications.core',
+  },
+  {
+    key: PERMISSIONS.COMMUNICATIONS_SEND,
+    name: 'Enviar mensagens ao cliente',
+    description: 'Envia, reenvia e cancela mensagens para o cliente pelos canais disponiveis.',
+    featureKey: 'communications.core',
+  },
+  {
+    key: PERMISSIONS.COMMUNICATIONS_TEMPLATES_MANAGE,
+    name: 'Gerenciar modelos de mensagem',
+    description:
+      'Cria, edita e arquiva os modelos de texto que a empresa usa para falar com o cliente.',
+    featureKey: 'communications.core',
+  },
 ];
 
 /** Papeis estruturais criados no bootstrap de cada tenant. */
@@ -988,6 +1025,16 @@ export const PERMISSION_GROUPS = [
       PERMISSIONS.AGENDA_TASKS_ASSIGN,
       PERMISSIONS.AGENDA_APPOINTMENTS_MANAGE,
       PERMISSIONS.WORK_CENTER_VIEW,
+    ],
+  },
+  {
+    key: 'comunicacao',
+    name: 'Comunicacao com o cliente',
+    description: 'Envio de mensagens ao cliente, historico de tentativas e modelos de texto.',
+    permissions: [
+      PERMISSIONS.COMMUNICATIONS_VIEW,
+      PERMISSIONS.COMMUNICATIONS_SEND,
+      PERMISSIONS.COMMUNICATIONS_TEMPLATES_MANAGE,
     ],
   },
   {

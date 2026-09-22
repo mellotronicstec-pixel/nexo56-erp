@@ -196,6 +196,26 @@ export const EVENT_TYPES = {
   APPOINTMENT_CREATED: 'APPOINTMENT_CREATED',
   APPOINTMENT_RESCHEDULED: 'APPOINTMENT_RESCHEDULED',
   APPOINTMENT_CANCELLED: 'APPOINTMENT_CANCELLED',
+
+  /**
+   * Prompt 16: comunicacao.
+   *
+   * MENSAGEM CRIADA NAO E MENSAGEM ENVIADA, e os dois eventos existem
+   * separados justamente por isso. Entre um e outro ha uma tentativa que pode
+   * falhar, e ha um intervalo em que ninguem foi avisado de nada.
+   *
+   * `MESSAGE_SENT` significa ACEITA PELO PROVEDOR. Nao existe
+   * `MESSAGE_DELIVERED` porque nao existe quem confirme a entrega hoje —
+   * inventar o evento agora obrigaria a inventar tambem quem o dispara.
+   *
+   * O PAYLOAD LEVA IDENTIFICADORES E CANAL. Nunca o corpo, nunca o assunto,
+   * nunca o telefone nem o e-mail: o outbox e lido em log e diagnostico, e
+   * destinatario e PII (item 87).
+   */
+  MESSAGE_CREATED: 'MESSAGE_CREATED',
+  MESSAGE_SENT: 'MESSAGE_SENT',
+  MESSAGE_FAILED: 'MESSAGE_FAILED',
+  MESSAGE_CANCELLED: 'MESSAGE_CANCELLED',
 } as const;
 
 export type EventType = (typeof EVENT_TYPES)[keyof typeof EVENT_TYPES];

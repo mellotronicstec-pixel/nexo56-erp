@@ -37,6 +37,7 @@ import {
   IconTask,
   IconFinance,
   IconInventory,
+  IconMessage,
   IconPurchase,
   IconServiceOrder,
   IconSupplier,
@@ -71,6 +72,7 @@ const NAV_ICONS: Record<NavIconKey, ComponentType<IconProps>> = {
   agenda: IconAgenda,
   'work-center': IconWorkCenter,
   task: IconTask,
+  message: IconMessage,
 };
 
 /**

@@ -168,6 +168,28 @@ export const AUDIT_ACTIONS = {
   WARRANTY_RETURN_REGISTERED: 'warranty_return.registered',
   WARRANTY_RETURN_RECLASSIFIED: 'warranty_return.reclassified',
   WARRANTY_COST_RECORDED: 'warranty_cost.recorded',
+
+  // --- Prompt 16: comunicacao ----------------------------------------------
+  /**
+   * A AUDITORIA GUARDA A DECISAO, NAO O TEXTO (item 67 e 88).
+   *
+   * Quem mandou, por qual canal, para qual cliente, a partir de qual OS. O que
+   * foi escrito fica em `communication_messages`, onde a permissao de ver
+   * comunicacao se aplica. Copiar o corpo para a trilha de auditoria colocaria
+   * a mensagem do cliente numa tela com outra regra de acesso — e o numero de
+   * telefone num log que existe para durar.
+   *
+   * NAO existe acao "entregue": nao ha como auditar um fato que nao foi
+   * observado.
+   */
+  MESSAGE_CREATED: 'communication_message.created',
+  MESSAGE_SENT: 'communication_message.sent',
+  MESSAGE_FAILED: 'communication_message.failed',
+  MESSAGE_RETRIED: 'communication_message.retried',
+  MESSAGE_CANCELLED: 'communication_message.cancelled',
+  MESSAGE_TEMPLATE_CREATED: 'communication_template.created',
+  MESSAGE_TEMPLATE_UPDATED: 'communication_template.updated',
+  MESSAGE_TEMPLATE_ARCHIVED: 'communication_template.archived',
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];

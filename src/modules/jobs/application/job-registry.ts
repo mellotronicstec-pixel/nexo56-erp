@@ -1,6 +1,7 @@
 import 'server-only';
 import { pruneExpiredSessions } from '@/modules/auth/application/session-service';
 import { requeueStaleJobs } from '@/modules/jobs/application/job-queue';
+import { sweepStuckMessages } from '@/modules/communications/application/stuck-message-job';
 import { sweepLowStock } from '@/modules/inventory/application/low-stock-job';
 import { expireOverdueQuotes } from '@/modules/quotes/application/quote-expiry-job';
 import { sweepOverdueFollowUps } from '@/modules/service-orders/application/follow-up-job';
@@ -81,12 +82,31 @@ const lowStockSweepJob: JobHandler<Record<string, never>> = {
   },
 };
 
+/**
+ * Desatola mensagens que ficaram paradas por queda de processo (Prompt 16).
+ *
+ * NAO ENVIA MENSAGEM COM ANEXO e NAO reprocessa tentativa interrompida: a
+ * `sending` orfa vira falha explicita, para uma pessoa decidir se reenvia. O
+ * raciocinio inteiro esta em `stuck-message-job.ts`.
+ */
+const stuckMessagesJob: JobHandler<{ olderThanMinutes?: number }> = {
+  name: 'communication.sweep-stuck',
+  async handle(payload) {
+    const result = await sweepStuckMessages(payload?.olderThanMinutes ?? 10);
+    return {
+      summary: 'mensagens paradas tratadas',
+      affected: result.processed + result.abandoned,
+    };
+  },
+};
+
 const HANDLERS: readonly JobHandler<never>[] = [
   pruneSessionsJob as JobHandler<never>,
   requeueStaleJobsJob as JobHandler<never>,
   followUpSweepJob as JobHandler<never>,
   quoteExpiryJob as JobHandler<never>,
   lowStockSweepJob as JobHandler<never>,
+  stuckMessagesJob as JobHandler<never>,
 ];
 
 const BY_NAME = new Map(HANDLERS.map((handler) => [handler.name, handler]));
@@ -123,4 +143,11 @@ export const RECURRING_JOBS = [
    * encontram nada — e, como o alerta e marcado no saldo, nao adiantaria nada.
    */
   { name: 'inventory.low-stock-sweep', everyMinutes: 60 },
+  /**
+   * A cada 15 minutos, e nao de hora em hora: uma mensagem parada e um cliente
+   * esperando um aviso que nao chegou, e a janela util disso e curta. O job so
+   * toca em linhas paradas ha mais de 10 minutos, entao ele nunca atrapalha um
+   * envio em curso.
+   */
+  { name: 'communication.sweep-stuck', everyMinutes: 15 },
 ] as const;

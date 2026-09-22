@@ -4,8 +4,8 @@ Plataforma ERP/SaaS multiempresa para gestão de assistência técnica e reparo.
 
 **Estado atual: fundação completa + módulos de negócio Clientes, Equipamentos,
 Ordens de Serviço com workflow, Orçamentos, Estoque, Compras, Financeiro,
-Garantias com certificado em PDF real, Agenda e Tarefas, e a Central de
-Trabalho (Prompts 01 a 15).** Autenticação, sessões,
+Garantias com certificado em PDF real, Agenda e Tarefas, a Central de
+Trabalho e Comunicação com o cliente (Prompts 01 a 16).** Autenticação, sessões,
 usuários, perfis, permissões com **escopo por unidade**, multi-tenancy,
 modularidade, auditoria, eventos, jobs, Design System, interface responsiva,
 **Clientes**, **Equipamentos e Recebimento** (com fotos em storage privado), a
@@ -25,14 +25,16 @@ nova, reclassificação controlada e custos) também. A **Agenda e Tarefas**
 (tarefas operacionais com ou sem OS, compromissos, "Minhas tarefas" e a agenda
 que reúne quatro origens sem copiar nenhuma) fecha o Prompt 14. A **Central de
 Trabalho** (filas de OS por estado, sinais de atenção derivados, visão pessoal
-e da unidade) fecha o Prompt 15. Os demais módulos serão construídos nos
-prompts seguintes.
+e da unidade) fecha o Prompt 15. A **Comunicação** (mensagens por WhatsApp,
+e-mail e SMS, modelos de texto sem `eval`, histórico de tentativas e um
+provedor de captura enquanto não há fornecedor contratado) fecha o Prompt 16.
+Os demais módulos serão construídos nos prompts seguintes.
 
-**Estoque, Compras, Financeiro, Garantias, Agenda e Central de Trabalho são
-módulos OPCIONAIS** (`operations.inventory`, `operations.purchasing`,
-`finance.core`, `operations.warranties`, `operations.agenda`,
-`operations.work_center`): a empresa
-pode desligá-los. Sem Estoque, o Orçamento continua inteiro com linha de peça
+**Estoque, Compras, Financeiro, Garantias, Agenda, Central de Trabalho e
+Comunicação são módulos OPCIONAIS** (`operations.inventory`,
+`operations.purchasing`, `finance.core`, `operations.warranties`,
+`operations.agenda`, `operations.work_center`, `communications.core`): a
+empresa pode desligá-los. Sem Estoque, o Orçamento continua inteiro com linha de peça
 escrita à mão ([modularidade do Estoque](docs/modules/inventory/modularity.md));
 sem Compras, o Estoque não percebe diferença nenhuma e a origem
 "Compra PC 000037" continua legível no ledger
@@ -69,6 +71,18 @@ tabela foi criada e não há migration no Prompt 15: as filas são consultas e
 desligada, filas, acompanhamento e tarefas de fluxo continuam inteiros, porque
 são CORE do Prompt 08
 ([ADR-077](docs/adr/ADR-077-central-de-trabalho-e-leitura-sem-autoridade.md)).
+
+**A Comunicação informa o fato; ela não é o fato.** Marcar uma OS como
+"cliente avisado" continua movendo a ordem e gravando a linha do tempo
+exatamente como antes do Prompt 16 — o que muda é que agora existe, de
+verdade, uma mensagem para enviar. `communication_messages.status` tem cinco
+estados (`queued`, `sending`, `sent`, `failed`, `cancelled`), e **não existem
+`delivered` nem `read`**: nenhum provedor real está integrado, e `sent`
+significa "aceito pelo provedor", nunca "entregue ao cliente". O template não
+tem `eval` nem expressão nenhuma — só um catálogo fechado de variáveis, e
+lacuna sem valor é recusa, nunca mensagem incompleta
+([ADR-078](docs/adr/ADR-078-comunicacao-nao-e-fonte-de-verdade.md),
+[ADR-079](docs/adr/ADR-079-template-sem-eval.md)).
 
 **O Financeiro não fala com banco nenhum.** Não há conciliação bancária, não há
 PIX automático, não há integração com adquirente e não há emissão fiscal.
@@ -440,6 +454,27 @@ produção não depende de Docker.
 | Paginação            | 60 OS em três páginas: nenhum item repetido, nenhum perdido, ordem crescente; página além do fim devolve vazio                                     |
 | **N+1**              | o número de consultas **medido** com 5 e com 45 OS não cresce                                                                                      |
 | Fronteira            | varredura de `src/`: sem escrita, sem transação, sem `mysqlTable`, sem migration `0014`, sem estado inventado                                      |
+
+### Cobertura da Comunicação (Prompt 16)
+
+| Área                  | O que é testado                                                                                                                                                        |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Vocabulário separado  | canal, template, mensagem, tentativa e status da OS não colidem; **nenhum estado afirma entrega** (`delivered`/`read` não existem)                                     |
+| Template sem `eval`   | só `{{ chave }}`; **lacuna sem valor é recusa**, nunca mensagem incompleta; lacuna fora do catálogo é recusada; sem substituição recursiva                             |
+| Destinatário          | vem **do cadastro do cliente**, nunca de campo livre; WhatsApp exige `is_whatsapp = 1`; contato de outro cliente é recusado; é um retrato, sem ponteiro para o contato |
+| Modelo é cópia        | o texto vai renderizado para a mensagem; editar/arquivar o modelo **não reescreve** mensagem já enviada; modelo de outro canal é recusado                              |
+| Falha nunca move a OS | provedor recusa dez vezes e o `status` da OS **não muda**; verificado contra MariaDB real, não suposto                                                                 |
+| **Idempotência**      | mesma chave reencontra a mensagem; **5 criações simultâneas → 1 mensagem**, provado com `Promise.allSettled` real                                                      |
+| **Concorrência**      | **5 reivindicações simultâneas → no máximo 1 processa**; reenvio concorrente → 1 vencedor; a trava é `UPDATE ... WHERE status = 'queued'`, nunca `SELECT` antes        |
+| Job de recuperação    | `queued` órfã é tentada com segurança; `sending` órfã vira falha explícita e **nunca é reprocessada sozinha**                                                          |
+| PII                   | destino mascarado na lista, inteiro na ficha; `domain_events`, `audit_logs` e logs **nunca** carregam telefone, e-mail, corpo ou assunto                               |
+| Segredos              | detalhe de erro do provedor passa por higienização; token/`api_key`/`Bearer` são redigidos antes de tocar o banco                                                      |
+| Guarda de produção    | o provedor de captura **lança** se acionado com `NODE_ENV=production`; o registro devolve `null` em produção, nunca a captura                                          |
+| Anexo                 | os bytes vêm de `readCertificatePdf` (checa tenant/unidade/permissão); o módulo **não tem** `storage_key`                                                              |
+| Costura com a OS      | `notifyCustomerReady` move a OS e grava a linha do tempo **igual**, com a Comunicação inscrita ou não; nenhuma mensagem sai sozinha ao receber o evento                |
+| Isolamento            | outra empresa não vê a mensagem, nem pela ficha nem pela lista; a lista respeita a unidade ativa                                                                       |
+| Fronteira             | varredura de `src/`: sem escrita em `service_orders`/`service_order_timeline`/`service_order_tasks`; sem nome de fornecedor; sem `fetch`; sem dependência da Agenda    |
+| Migration             | upgrade real do Prompt 15 (migration 0013) para o 16 (migration 0014) e banco 0000→0014 do zero, ambos verificados contra MariaDB                                      |
 
 ---
 

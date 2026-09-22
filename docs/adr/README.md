@@ -97,3 +97,5 @@ substitui, e o antigo passa a `Substituído por ADR-XXX`.
 | [075](ADR-075-compatibilidade-com-o-follow-up-historico.md)                | O follow-up histórico fica onde está                  | Aceito |
 | [076](ADR-076-o-navegador-nao-e-autoridade-temporal.md)                    | O navegador não é autoridade temporal do domínio      | Aceito |
 | [077](ADR-077-central-de-trabalho-e-leitura-sem-autoridade.md)             | A Central é leitura; a autoridade fica no domínio     | Aceito |
+| [078](ADR-078-comunicacao-nao-e-fonte-de-verdade.md)                       | A Comunicação informa o fato; ela não é o fato        | Aceito |
+| [079](ADR-079-template-sem-eval.md)                                        | Template é texto com lacunas, nunca programa          | Aceito |

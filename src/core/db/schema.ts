@@ -23,3 +23,4 @@ export * from '@/modules/purchasing/infrastructure/schema';
 export * from '@/modules/finance/infrastructure/schema';
 export * from '@/modules/warranties/infrastructure/schema';
 export * from '@/modules/agenda/infrastructure/schema';
+export * from '@/modules/communications/infrastructure/schema';

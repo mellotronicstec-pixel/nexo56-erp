@@ -12,6 +12,12 @@ import {
 } from '@/design-system/components';
 import { IconCamera, IconHistory } from '@/design-system/icons';
 import { can } from '@/modules/access-control/application/authorization-service';
+import {
+  CHANNEL_LABEL,
+  MESSAGE_STATUS_LABEL,
+  MESSAGE_STATUS_TONE,
+} from '@/modules/communications/domain/communication';
+import { listMessagesForServiceOrder } from '@/modules/communications/application/message-queries';
 import { listTasks } from '@/modules/agenda/application/agenda-queries';
 import { listUnitMembers } from '@/modules/users/application/user-queries';
 import { TASK_PRIORITY_LABEL, type TaskPriority } from '@/modules/agenda/domain/agenda';
@@ -153,6 +159,8 @@ export default async function ServiceOrderDetailPage({
     canCreateQuoteDecision,
     canAgendaViewDecision,
     canAgendaCreateDecision,
+    canCommunicationsViewDecision,
+    canCommunicationsSendDecision,
   ] = await Promise.all([
     can(context, { ...unitScope, permission: PERMISSIONS.SERVICE_ORDERS_UPDATE }),
     can(context, { ...unitScope, permission: CANCEL_RULE.permission }),
@@ -188,6 +196,28 @@ export default async function ServiceOrderDetailPage({
       featureKey: FEATURES.OPERATIONS_AGENDA,
       unitId: order.unitId,
     }),
+    /**
+     * VER comunicacao e uma chave propria (Prompt 16, item 83).
+     *
+     * Poder abrir esta ordem NAO da o direito de ler o que foi escrito ao
+     * cliente: sao dois assuntos, e o segundo carrega o telefone e o texto que
+     * a pessoa recebeu. Sem a chave, a secao inteira some — e nenhuma consulta
+     * e feita.
+     *
+     * A Comunicacao e OPCIONAL: sem a feature, esta ficha e exatamente a que
+     * era antes do Prompt 16 (ADR-078).
+     */
+    can(context, {
+      permission: PERMISSIONS.COMMUNICATIONS_VIEW,
+      featureKey: FEATURES.COMMUNICATIONS_CORE,
+      unitId: order.unitId,
+    }),
+    /** Enviar e outra chave ainda, e governa apenas o botao. */
+    can(context, {
+      permission: PERMISSIONS.COMMUNICATIONS_SEND,
+      featureKey: FEATURES.COMMUNICATIONS_CORE,
+      unitId: order.unitId,
+    }),
   ]);
 
   /**
@@ -209,6 +239,17 @@ export default async function ServiceOrderDetailPage({
   const agendaMembers = canAgendaViewDecision.allowed
     ? await listUnitMembers(context, order.unitId)
     : [];
+
+  /**
+   * Mensagens desta ordem (Prompt 16).
+   *
+   * LEITURA SEPARADA DA ACAO: a lista aparece para quem pode VER comunicacao;
+   * o botao de escrever, so para quem pode ENVIAR. Sem a feature ou sem a
+   * chave de leitura, nada disto e consultado.
+   */
+  const communicationMessages = canCommunicationsViewDecision.allowed
+    ? await listMessagesForServiceOrder(context, order.id, order.unitId)
+    : null;
 
   /**
    * As transicoes vem da maquina de estados, nao de um `if` nesta pagina. O
@@ -678,6 +719,71 @@ export default async function ServiceOrderDetailPage({
                   today={agendaTasks.today}
                 />
               ) : null}
+            </CardBody>
+          </Card>
+        </Section>
+      ) : null}
+
+      {/*
+        COMUNICACAO (Prompt 16, itens 60 a 63).
+
+        O QUE ESTA SECAO NAO E: ela NAO e a fonte da verdade sobre "o cliente
+        foi avisado". Esse fato e da propria ordem — `notifyCustomerReady` move
+        a OS e escreve na linha do tempo, com ou sem esta secao, com ou sem a
+        feature ligada (ADR-078).
+
+        O QUE ELA MOSTRA: o que a empresa efetivamente tentou enviar, e o que
+        aconteceu. A distancia entre as duas coisas e justamente o que vale
+        olhar: uma ordem marcada como avisada sem mensagem nenhuma aqui
+        significa que alguem avisou por fora do sistema — o que e legitimo, e
+        bom de saber.
+      */}
+      {communicationMessages ? (
+        <Section
+          id="comunicacao"
+          title="Comunicacao com o cliente"
+          description="O que foi enviado sobre esta ordem. Falha de envio nao muda a situacao da OS."
+          actions={
+            canCommunicationsSendDecision.allowed ? (
+              <Link
+                href={`/comunicacao?os=${order.id}&motivo=service_update`}
+                className={linkButtonClass('secondary', 'sm')}
+              >
+                Escrever ao cliente
+              </Link>
+            ) : null
+          }
+        >
+          <Card>
+            <CardBody>
+              {communicationMessages.length === 0 ? (
+                <p className="text-ui text-ink-600">
+                  Nenhuma mensagem enviada por aqui sobre esta ordem.
+                </p>
+              ) : (
+                <ul className="divide-y divide-ink-200">
+                  {communicationMessages.map((mensagem) => (
+                    <li key={mensagem.id} className="space-y-2 py-3 first:pt-0 last:pb-0">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <p className="min-w-0 text-ui text-ink-800">{mensagem.preview}</p>
+                        <Badge tone={MESSAGE_STATUS_TONE[mensagem.status]}>
+                          {MESSAGE_STATUS_LABEL[mensagem.status]}
+                        </Badge>
+                      </div>
+                      <p className="text-small text-ink-500">
+                        {CHANNEL_LABEL[mensagem.channel]} · {mensagem.recipientMasked} ·{' '}
+                        {mensagem.createdAt.toLocaleString('pt-BR')}
+                      </p>
+                      <Link
+                        href={`/comunicacao/${mensagem.id}`}
+                        className={linkButtonClass('ghost', 'sm')}
+                      >
+                        Ver tentativas
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </CardBody>
           </Card>
         </Section>

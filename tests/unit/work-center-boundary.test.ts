@@ -162,12 +162,24 @@ describe('a Central NAO persiste nada', () => {
     expect(infratores.map((f) => f.path)).toEqual([]);
   });
 
-  it('nenhuma migration foi criada para a Central', () => {
-    const migrations = readdirSync(join(process.cwd(), 'drizzle')).filter((f) =>
-      f.endsWith('.sql'),
-    );
-    /** O Prompt 14 terminou na 0013 e o Prompt 15 nao precisou de schema. */
-    expect(migrations.some((f) => f.startsWith('0014'))).toBe(false);
+  it('a Central nao tem infraestrutura de persistencia propria', () => {
+    /**
+     * A invariante real e "a Central nunca teve schema.ts nem migration
+     * dela" — nao "a proxima migration numerada e a 0014". Fixar o numero
+     * quebraria no dia em que outro modulo, legitimamente, chegasse a essa
+     * mesma numeracao (foi exatamente o que aconteceu no Prompt 16, com
+     * `drizzle/0014_communications.sql`). O module nunca teve pasta
+     * `infrastructure/`, e e isso que este teste prova, sem depender de
+     * quantos prompts vieram depois.
+     */
+    let hasInfrastructure: boolean;
+    try {
+      statSync(join(process.cwd(), 'src', 'modules', 'work-center', 'infrastructure'));
+      hasInfrastructure = true;
+    } catch {
+      hasInfrastructure = false;
+    }
+    expect(hasInfrastructure).toBe(false);
   });
 });
 

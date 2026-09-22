@@ -50,6 +50,7 @@ export const FEATURES = {
   OPERATIONS_WARRANTIES: 'operations.warranties',
   OPERATIONS_AGENDA: 'operations.agenda',
   OPERATIONS_WORK_CENTER: 'operations.work_center',
+  COMMUNICATIONS_CORE: 'communications.core',
   PLATFORM_MULTI_UNIT: 'platform.multi_unit',
   PLATFORM_LABEL_RECOGNITION: 'platform.label_recognition',
 } as const;
@@ -317,6 +318,37 @@ export const FEATURE_CATALOG: readonly FeatureDefinition[] = [
      */
     type: 'OPTIONAL',
     dependsOn: [FEATURES.CORE_SERVICE_ORDERS],
+  },
+  {
+    key: FEATURES.COMMUNICATIONS_CORE,
+    name: 'Comunicacao com o cliente',
+    description:
+      'Mensagens para o cliente por WhatsApp, e-mail e SMS, com modelos de texto, historico e registro de cada tentativa de entrega.',
+    /**
+     * OPTIONAL, e a consequencia importa (Prompt 16, itens 68 a 78):
+     * desligar Comunicacao NAO impede abrir, consertar, orcar, faturar nem
+     * entregar uma Ordem de Servico. A oficina que avisa o cliente pelo
+     * telefone pessoal continua usando o Nexo56 inteiro — e esse e o teste de
+     * que a comunicacao nao virou autoridade sobre o fato operacional.
+     *
+     * Depende de CLIENTES porque o destinatario sai do cadastro de contatos.
+     * Sem cliente nao ha para quem mandar, e um modulo de comunicacao que
+     * digita o telefone a mao toda vez seria um caderno com botao de enviar.
+     *
+     * NAO depende de ORDENS DE SERVICO (item 73), e esta e a decisao central.
+     * A OS e CONTEXTO OPORTUNISTA: quando existe, a mensagem aponta para ela e
+     * o texto pode usar o numero e o estado; quando nao existe, a mensagem sai
+     * do mesmo jeito. Declarar a dependencia faria o modulo prometer algo que
+     * ele nao precisa — e empurraria, na primeira pressa, a comunicacao para
+     * dentro do fluxo da ordem.
+     *
+     * O CAMINHO INVERSO E O QUE MAIS IMPORTA (item 77): com a Comunicacao
+     * desligada, `notifyCustomerReady` continua movendo a OS para "aguardando
+     * retirada" e registrando na linha do tempo que o cliente foi avisado. O
+     * que deixa de acontecer e o envio — nunca a transicao (ADR-078).
+     */
+    type: 'OPTIONAL',
+    dependsOn: [FEATURES.CORE_CUSTOMERS],
   },
   {
     key: FEATURES.PLATFORM_MULTI_UNIT,

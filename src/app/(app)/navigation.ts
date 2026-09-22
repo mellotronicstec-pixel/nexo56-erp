@@ -42,7 +42,8 @@ export type NavIconKey =
   | 'warranty'
   | 'agenda'
   | 'task'
-  | 'work-center';
+  | 'work-center'
+  | 'message';
 
 export interface NavItem {
   href: string;
@@ -193,6 +194,22 @@ export const NAV_SECTIONS: readonly NavSection[] = [
         featureKey: FEATURES.OPERATIONS_AGENDA,
         permission: PERMISSIONS.AGENDA_VIEW,
         icon: 'task',
+      },
+      {
+        /**
+         * Comunicacao fica em Operacao, ao lado da Agenda, e nao numa secao
+         * propria: falar com o cliente e parte do atendimento, nao uma area da
+         * empresa. Quem abre a Agenda de manha e quem avisa que o aparelho
+         * ficou pronto.
+         *
+         * UM ITEM, nao dois: os modelos de texto sao configuracao que se
+         * visita raramente, e moram dentro da propria tela de Comunicacao.
+         */
+        href: '/comunicacao',
+        label: 'Comunicacao',
+        featureKey: FEATURES.COMMUNICATIONS_CORE,
+        permission: PERMISSIONS.COMMUNICATIONS_VIEW,
+        icon: 'message',
       },
     ],
   },

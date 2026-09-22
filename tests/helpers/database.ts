@@ -20,6 +20,13 @@ export async function migrateTestDatabase(): Promise<void> {
  */
 const TABLES_IN_DELETE_ORDER = [
   'audit_logs',
+  // Comunicacao antes de tudo: anexo e tentativa pendem da mensagem, e a
+  // mensagem pende de OS, cliente, unidade e garantia — sao as folhas mais
+  // externas que existem hoje.
+  'communication_attachments',
+  'communication_attempts',
+  'communication_messages',
+  'communication_templates',
   // Agenda primeiro: suas tarefas e compromissos apontam para OS, garantia,
   // aparelho e cliente, entao elas sao as folhas mais externas da arvore.
   'agenda_appointments',

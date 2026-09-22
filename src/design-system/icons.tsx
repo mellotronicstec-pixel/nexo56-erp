@@ -366,3 +366,11 @@ export const IconWorkCenter = (props: IconProps) => (
     <path d="M14 17h7" />
   </Icon>
 );
+
+/** Comunicacao: um balao de conversa. O aparelho nao entra — o canal muda, a conversa nao. */
+export const IconMessage = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="M20 12a7 7 0 0 1-7 7H8l-4 3v-4.5A7 7 0 0 1 11 5h2a7 7 0 0 1 7 7z" />
+    <path d="M9 11h6M9 14h4" />
+  </Icon>
+);
