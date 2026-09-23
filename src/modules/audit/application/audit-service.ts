@@ -190,6 +190,12 @@ export const AUDIT_ACTIONS = {
   MESSAGE_TEMPLATE_CREATED: 'communication_template.created',
   MESSAGE_TEMPLATE_UPDATED: 'communication_template.updated',
   MESSAGE_TEMPLATE_ARCHIVED: 'communication_template.archived',
+
+  // --- Prompt 17: portal do cliente ---------------------------------------
+  /** `userId` fica nulo aqui de proposito: quem autenticou nao e User. */
+  PORTAL_LOGIN_SUCCEEDED: 'portal.login.succeeded',
+  PORTAL_IDENTITY_BLOCKED: 'portal.identity.blocked',
+  PORTAL_IDENTITY_UNBLOCKED: 'portal.identity.unblocked',
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];

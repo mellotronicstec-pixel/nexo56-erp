@@ -27,6 +27,10 @@ const TABLES_IN_DELETE_ORDER = [
   'communication_attempts',
   'communication_messages',
   'communication_templates',
+  // Portal: sessao e token pendem da identidade, que pende do cliente.
+  'portal_sessions',
+  'portal_login_tokens',
+  'portal_identities',
   // Agenda primeiro: suas tarefas e compromissos apontam para OS, garantia,
   // aparelho e cliente, entao elas sao as folhas mais externas da arvore.
   'agenda_appointments',

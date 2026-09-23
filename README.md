@@ -5,7 +5,8 @@ Plataforma ERP/SaaS multiempresa para gestão de assistência técnica e reparo.
 **Estado atual: fundação completa + módulos de negócio Clientes, Equipamentos,
 Ordens de Serviço com workflow, Orçamentos, Estoque, Compras, Financeiro,
 Garantias com certificado em PDF real, Agenda e Tarefas, a Central de
-Trabalho e Comunicação com o cliente (Prompts 01 a 16).** Autenticação, sessões,
+Trabalho, Comunicação com o cliente e o Portal do Cliente (Prompts 01 a 17).**
+Autenticação, sessões,
 usuários, perfis, permissões com **escopo por unidade**, multi-tenancy,
 modularidade, auditoria, eventos, jobs, Design System, interface responsiva,
 **Clientes**, **Equipamentos e Recebimento** (com fotos em storage privado), a
@@ -28,12 +29,16 @@ Trabalho** (filas de OS por estado, sinais de atenção derivados, visão pessoa
 e da unidade) fecha o Prompt 15. A **Comunicação** (mensagens por WhatsApp,
 e-mail e SMS, modelos de texto sem `eval`, histórico de tentativas e um
 provedor de captura enquanto não há fornecedor contratado) fecha o Prompt 16.
-Os demais módulos serão construídos nos prompts seguintes.
+O **Portal do Cliente** (área externa, autenticação por link mágico sem
+senha, ordens de serviço, equipamentos e garantias em modo somente leitura,
+autorização por posse do registro — nunca por permissão interna) fecha o
+Prompt 17. Os demais módulos serão construídos nos prompts seguintes.
 
-**Estoque, Compras, Financeiro, Garantias, Agenda, Central de Trabalho e
-Comunicação são módulos OPCIONAIS** (`operations.inventory`,
+**Estoque, Compras, Financeiro, Garantias, Agenda, Central de Trabalho,
+Comunicação e Portal do Cliente são módulos OPCIONAIS** (`operations.inventory`,
 `operations.purchasing`, `finance.core`, `operations.warranties`,
-`operations.agenda`, `operations.work_center`, `communications.core`): a
+`operations.agenda`, `operations.work_center`, `communications.core`,
+`customer.portal`): a
 empresa pode desligá-los. Sem Estoque, o Orçamento continua inteiro com linha de peça
 escrita à mão ([modularidade do Estoque](docs/modules/inventory/modularity.md));
 sem Compras, o Estoque não percebe diferença nenhuma e a origem

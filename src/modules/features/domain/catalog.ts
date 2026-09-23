@@ -51,6 +51,7 @@ export const FEATURES = {
   OPERATIONS_AGENDA: 'operations.agenda',
   OPERATIONS_WORK_CENTER: 'operations.work_center',
   COMMUNICATIONS_CORE: 'communications.core',
+  CUSTOMER_PORTAL: 'customer.portal',
   PLATFORM_MULTI_UNIT: 'platform.multi_unit',
   PLATFORM_LABEL_RECOGNITION: 'platform.label_recognition',
 } as const;
@@ -349,6 +350,28 @@ export const FEATURE_CATALOG: readonly FeatureDefinition[] = [
      */
     type: 'OPTIONAL',
     dependsOn: [FEATURES.CORE_CUSTOMERS],
+  },
+  {
+    key: FEATURES.CUSTOMER_PORTAL,
+    name: 'Portal do cliente',
+    description:
+      'Area externa onde o cliente acompanha, por conta propria, as ordens de servico, os equipamentos e as garantias do seu cadastro.',
+    /**
+     * OPTIONAL, com a mesma prova de independencia da Comunicacao (Prompt 17,
+     * item 122): desligar o Portal nao muda UMA linha do funcionamento
+     * interno. Nenhum service da OS, do Equipamento ou da Garantia importa
+     * nada de `modules/portal` — a dependencia e de mao unica, do Portal para
+     * dentro, nunca o contrario.
+     *
+     * Desligar no MEIO de uma sessao ativa (item 122) derruba a sessao no
+     * proximo acesso: `getPortalContext` reavalia esta feature a cada
+     * requisicao, e nao guarda "estava ligado quando entrou".
+     *
+     * Depende de CLIENTES e ORDENS DE SERVICO porque e exatamente o que o
+     * Portal projeta para fora — sem os dois, nao ha o que mostrar.
+     */
+    type: 'OPTIONAL',
+    dependsOn: [FEATURES.CORE_CUSTOMERS, FEATURES.CORE_SERVICE_ORDERS],
   },
   {
     key: FEATURES.PLATFORM_MULTI_UNIT,

@@ -77,4 +77,11 @@ export function getRateLimitStore(): RateLimitStore {
 export const RATE_LIMITS = {
   /** Tentativas de login por identificador, por janela. */
   login: { limit: 5, windowMs: 5 * 60 * 1000 },
+  /**
+   * Pedidos de link magico do Portal, por CONTATO normalizado (Prompt 17,
+   * item 17). Janela mais longa que o login interno: um link por e-mail a
+   * cada poucos minutos e generoso para uso legitimo e caro para quem tenta
+   * descobrir, por tentativa e erro, quais contatos existem no sistema.
+   */
+  portalLoginRequest: { limit: 3, windowMs: 10 * 60 * 1000 },
 } as const;

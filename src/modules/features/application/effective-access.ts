@@ -108,10 +108,18 @@ export async function loadTenantAccessSnapshot(
   };
 }
 
-/** Avalia uma feature contra um snapshot ja carregado. */
+/**
+ * Avalia uma feature contra um snapshot ja carregado.
+ *
+ * `context` e nulo quando quem pergunta nao tem `TenantContext` nenhum — o
+ * caso do Portal do Cliente (Prompt 17, item 9), que nao e usuario interno e
+ * nunca tem papel/permissao para avaliar. Nesse caso `query.permission` tem
+ * de vir vazio: perguntar por uma permissao sem contexto para avalia-la e
+ * erro de quem chamou, nunca um "permitido" silencioso.
+ */
 export function evaluateAccess(
   snapshot: TenantAccessSnapshot,
-  context: TenantContext,
+  context: TenantContext | null,
   query: AccessQuery,
 ): AccessDecision {
   const { featureKey, permission } = query;
@@ -148,8 +156,8 @@ export function evaluateAccess(
     return deny(featureKey, 'DEPENDENCY_UNSATISFIED', { missingDependencies: missing });
   }
 
-  // 5. O usuario tem permissao?
-  if (permission && !hasPermission(context, permission)) {
+  // 5. O usuario tem permissao? So se aplica a quem TEM TenantContext.
+  if (permission && (!context || !hasPermission(context, permission))) {
     return deny(featureKey, 'PERMISSION_DENIED', { requiredPermission: permission });
   }
 
@@ -188,6 +196,19 @@ export async function listTenantFeatureStates(
     type: snapshot.knownFeatures.get(featureKey)?.type ?? 'OPTIONAL',
     decision: evaluateAccess(snapshot, context, { featureKey }),
   }));
+}
+
+/**
+ * Feature ligada para o tenant, SEM pessoa nem permissao envolvida (Prompt
+ * 17, item 9). E o que o Portal usa: ele sabe `tenantId` e `planId` do
+ * customer autenticado, e nunca deve ganhar `TenantContext`.
+ */
+export async function checkFeatureEnabledForTenant(
+  tenant: { tenantId: string; planId: string },
+  featureKey: string,
+): Promise<AccessDecision> {
+  const snapshot = await loadTenantAccessSnapshot(tenant);
+  return evaluateAccess(snapshot, null, { featureKey });
 }
 
 /** Util interno: features do catalogo que existem no banco. */

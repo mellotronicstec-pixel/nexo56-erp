@@ -205,12 +205,20 @@ tem `users.reset_password`, que entrega o código pessoalmente. O token, sua
 validade e o efeito de revogar todas as sessões já funcionam — falta só o canal
 de entrega.
 
-### Rate limit apenas no login
+### Rate limit apenas no login e no pedido de link do Portal
 
 Troca de senha, consumo de token de redefinição e operações administrativas não
 têm rate limit próprio. O risco é baixo: os tokens têm 256 bits, e as operações
 administrativas exigem sessão autenticada com permissão. Ainda assim, é uma
 superfície que um `RateLimitStore` compartilhado deveria cobrir quando existir.
+
+O **pedido de link do Portal** (`RATE_LIMITS.portalLoginRequest`, 3 pedidos a
+cada 10 minutos por contato) é limitado pelo mesmo motivo do login: sem
+limite, alguém poderia usar o formulário de "esqueci como entrar" para
+descobrir, por tentativa e erro, quais e-mails/telefones têm cadastro — a
+resposta em si já é idêntica em qualquer caso (Prompt 17, item 17), e o rate
+limit é a segunda camada contra o mesmo risco, medido em volume de tentativas
+em vez de conteúdo da resposta.
 
 ### Auditoria sem proteção contra adulteração privilegiada
 

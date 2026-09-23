@@ -22,7 +22,7 @@ import {
 } from '@/modules/warranties/domain/certificate-pdf';
 import { certificatePathFor, WARRANTY_TIMELINE_KINDS } from '@/modules/warranties/domain/warranty';
 import { getCertificatePdfRenderer } from '@/modules/warranties/infrastructure/pdf/certificate-pdf-renderer';
-import { warrantyCertificates } from '@/modules/warranties/infrastructure/schema';
+import { warrantyCertificates, warranties } from '@/modules/warranties/infrastructure/schema';
 import type { CertificateSnapshot } from './warranty-certificate-service';
 import { loadWarranty, writeWarrantyTimeline } from './warranty-service';
 
@@ -73,10 +73,7 @@ interface CertificateRow {
   pdfPageCount: number | null;
 }
 
-async function loadCertificateRow(
-  context: TenantContext,
-  warrantyId: string,
-): Promise<CertificateRow> {
+async function loadCertificateRow(tenantId: string, warrantyId: string): Promise<CertificateRow> {
   const [row] = await getDb()
     .select({
       id: warrantyCertificates.id,
@@ -93,10 +90,7 @@ async function loadCertificateRow(
     })
     .from(warrantyCertificates)
     .where(
-      and(
-        eq(warrantyCertificates.tenantId, context.tenantId),
-        eq(warrantyCertificates.warrantyId, warrantyId),
-      ),
+      and(eq(warrantyCertificates.tenantId, tenantId), eq(warrantyCertificates.warrantyId, warrantyId)),
     )
     .limit(1);
 
@@ -151,7 +145,32 @@ async function readStoredPdf(row: CertificateRow): Promise<Buffer | null> {
 }
 
 /**
- * Garante que existe um PDF para o certificado desta garantia.
+ * Le a garantia so pelo par (id, tenant) — SEM checar unidade autorizada nem
+ * permissao (Prompt 17, item 9). Quem decide se pode olhar e o CHAMADOR:
+ * `ensureCertificatePdf` chama `authorize()` antes de chegar aqui;
+ * `ensurePortalCertificatePdf` (modules/portal) confere ownership por
+ * `customerId` antes de chegar aqui. Nenhum dos dois herda a checagem do
+ * outro, e este helper nao decide autorizacao nenhuma sozinho.
+ */
+async function loadWarrantyRow(tenantId: string, warrantyId: string) {
+  const [row] = await getDb()
+    .select()
+    .from(warranties)
+    .where(and(eq(warranties.tenantId, tenantId), eq(warranties.id, warrantyId)))
+    .limit(1);
+
+  if (!row) throw new NotFoundError('Garantia nao encontrada.');
+  return row;
+}
+
+/**
+ * Garante que existe um PDF para o certificado desta garantia — O NUCLEO,
+ * sem autorizacao nenhuma (Prompt 17, item 9 e 49).
+ *
+ * `ensureCertificatePdf` (autorizado por RBAC interno) e o futuro caminho do
+ * Portal (autorizado por ownership) chamam ESTE MESMO nucleo, para que os
+ * dois produzam, byte a byte, o mesmo artefato a partir do mesmo snapshot —
+ * nunca dois geradores que podem divergir.
  *
  * IDEMPOTENTE POR VERSAO DE SNAPSHOT (itens 24 e 25). Dez cliques produzem UM
  * artefato; so um snapshot diferente justifica arquivo novo.
@@ -169,26 +188,14 @@ async function readStoredPdf(row: CertificateRow): Promise<Buffer | null> {
  * e um arquivo sem referencia, que nao mente para ninguem. A ordem inversa
  * produziria uma linha apontando para um arquivo inexistente.
  */
-export async function ensureCertificatePdf(
-  context: TenantContext,
+export async function ensureCertificatePdfForWarranty(
+  tenantId: string,
   warrantyId: string,
+  /** Nulo quando quem pediu nao e usuario interno (Portal). */
+  actorId: string | null,
 ): Promise<CertificatePdfArtifact> {
-  const warranty = await loadWarranty(context, warrantyId);
-
-  /**
-   * MESMA PERMISSAO DE VER O CERTIFICADO (item 31).
-   *
-   * O PDF nao revela nada alem do que a pessoa ja le na tela: e a mesma
-   * informacao, noutro formato. Criar `warranties.pdf.download` seria
-   * permissao por botao, que o item 31 proibe.
-   */
-  await authorize(context, {
-    permission: PERMISSIONS.WARRANTIES_VIEW,
-    featureKey: FEATURES.OPERATIONS_WARRANTIES,
-    unitId: warranty.unitId,
-  });
-
-  const row = await loadCertificateRow(context, warrantyId);
+  const warranty = await loadWarrantyRow(tenantId, warrantyId);
+  const row = await loadCertificateRow(tenantId, warrantyId);
   const snapshot = JSON.parse(row.snapshot) as CertificateSnapshot;
   const filename = certificatePdfFilename(snapshot.garantia.numero);
 
@@ -237,7 +244,7 @@ export async function ensureCertificatePdf(
       .where(
         and(
           eq(warrantyCertificates.id, row.id),
-          eq(warrantyCertificates.tenantId, context.tenantId),
+          eq(warrantyCertificates.tenantId, tenantId),
           /**
            * COMPARE-AND-SWAP NA CHAVE DO ARQUIVO.
            *
@@ -261,11 +268,11 @@ export async function ensureCertificatePdf(
 
     if (primeiraGeracao) {
       await writeWarrantyTimeline(tx as TransactionExecutor, {
-        tenantId: context.tenantId,
+        tenantId,
         warrantyId,
         kind: WARRANTY_TIMELINE_KINDS.CERTIFICATE_PDF_GENERATED,
         summary: 'Certificado em PDF gerado',
-        actorId: context.userId,
+        actorId,
         occurredAt: now,
       });
     }
@@ -275,9 +282,9 @@ export async function ensureCertificatePdf(
         action: AUDIT_ACTIONS.WARRANTY_CERTIFICATE_PDF_GENERATED,
         entityType: 'warranty_certificate',
         entityId: row.id,
-        tenantId: context.tenantId,
+        tenantId,
         unitId: warranty.unitId,
-        userId: context.userId,
+        userId: actorId,
         /** Identificadores e impressoes digitais; nunca o conteudo. */
         after: {
           warrantyId,
@@ -325,7 +332,7 @@ export async function ensureCertificatePdf(
     .remove(stored.key)
     .catch(() => undefined);
 
-  const vencedor = await loadCertificateRow(context, warrantyId);
+  const vencedor = await loadCertificateRow(tenantId, warrantyId);
   return {
     certificateId: vencedor.id,
     storageKey: vencedor.pdfStorageKey ?? stored.key,
@@ -337,6 +344,37 @@ export async function ensureCertificatePdf(
   };
 }
 
+/**
+ * MESMA PERMISSAO DE VER O CERTIFICADO (item 31).
+ *
+ * O PDF nao revela nada alem do que a pessoa ja le na tela: e a mesma
+ * informacao, noutro formato. Criar `warranties.pdf.download` seria
+ * permissao por botao, que o item 31 proibe.
+ */
+async function authorizeInternalCertificateAccess(
+  context: TenantContext,
+  warrantyId: string,
+): Promise<void> {
+  const warranty = await loadWarranty(context, warrantyId);
+  await authorize(context, {
+    permission: PERMISSIONS.WARRANTIES_VIEW,
+    featureKey: FEATURES.OPERATIONS_WARRANTIES,
+    unitId: warranty.unitId,
+  });
+}
+
+/**
+ * Wrapper AUTORIZADO por RBAC interno (Prompt 13.1). Continua sendo o unico
+ * caminho que qualquer tela do painel usa — nenhum comportamento mudou aqui.
+ */
+export async function ensureCertificatePdf(
+  context: TenantContext,
+  warrantyId: string,
+): Promise<CertificatePdfArtifact> {
+  await authorizeInternalCertificateAccess(context, warrantyId);
+  return ensureCertificatePdfForWarranty(context.tenantId, warrantyId, context.userId);
+}
+
 export interface CertificatePdfDownload {
   bytes: Buffer;
   filename: string;
@@ -346,16 +384,15 @@ export interface CertificatePdfDownload {
 }
 
 /**
- * Entrega os bytes para download (itens 29, 30, 36 e 54).
- *
- * Reutiliza o arquivo guardado quando ele esta integro; so renderiza de novo
- * quando nao ha arquivo, quando ele sumiu ou quando o snapshot mudou.
+ * O NUCLEO de leitura, sem autorizacao — mesma logica de
+ * `ensureCertificatePdfForWarranty` (Prompt 17, item 9 e 49).
  */
-export async function readCertificatePdf(
-  context: TenantContext,
+export async function readCertificatePdfForWarranty(
+  tenantId: string,
   warrantyId: string,
+  actorId: string | null,
 ): Promise<CertificatePdfDownload> {
-  const artefato = await ensureCertificatePdf(context, warrantyId);
+  const artefato = await ensureCertificatePdfForWarranty(tenantId, warrantyId, actorId);
   const bytes = await getFileStorage().read(artefato.storageKey);
 
   /**
@@ -374,4 +411,16 @@ export async function readCertificatePdf(
     checksum: artefato.checksum,
     mimeType: CERTIFICATE_PDF_MIME,
   };
+}
+
+/**
+ * Wrapper AUTORIZADO por RBAC interno. Comportamento identico ao de antes do
+ * Prompt 17 — so passou a delegar para o nucleo compartilhado.
+ */
+export async function readCertificatePdf(
+  context: TenantContext,
+  warrantyId: string,
+): Promise<CertificatePdfDownload> {
+  await authorizeInternalCertificateAccess(context, warrantyId);
+  return readCertificatePdfForWarranty(context.tenantId, warrantyId, context.userId);
 }
