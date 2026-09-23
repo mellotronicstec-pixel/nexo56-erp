@@ -40,6 +40,7 @@ export { FilterBar } from './filter-bar';
 // --- Conteudo --------------------------------------------------------------
 export { Card, CardBody, CardHeader, CardFooter } from './card';
 export { MetricCard } from './metric-card';
+export { BarList, type BarListItem } from './bar-list';
 export { Section, Divider } from './section';
 export { Badge } from './badge';
 export { Alert } from './alert';

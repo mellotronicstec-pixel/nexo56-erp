@@ -258,6 +258,17 @@ export const PERMISSIONS = {
   COMMUNICATIONS_VIEW: 'communications.view',
   COMMUNICATIONS_SEND: 'communications.send',
   COMMUNICATIONS_TEMPLATES_MANAGE: 'communications.templates.manage',
+
+  /**
+   * UMA chave so para o Painel (Prompt 18), pelo MESMO motivo de
+   * `work_center.view`: ela governa o ACESSO A TELA, nao os dados dentro
+   * dela. Um cartao financeiro so aparece — e so e CONSULTADO — para quem
+   * tambem tem `finance.view`; um cartao de garantia exige `warranties.view`;
+   * e assim por diante. `analytics.view` nunca supera a permissao de
+   * dominio: ela e condicao NECESSARIA para abrir o Painel, nunca suficiente
+   * para ver um numero especifico dentro dele.
+   */
+  ANALYTICS_VIEW: 'analytics.view',
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -781,6 +792,13 @@ export const PERMISSION_CATALOG: readonly PermissionDefinition[] = [
       'Cria, edita e arquiva os modelos de texto que a empresa usa para falar com o cliente.',
     featureKey: 'communications.core',
   },
+  {
+    key: PERMISSIONS.ANALYTICS_VIEW,
+    name: 'Ver o Painel',
+    description:
+      'Abre o Painel (indicadores e graficos). Cada cartao dentro dele continua exigindo a permissao do dominio de origem.',
+    featureKey: 'analytics.dashboard',
+  },
 ];
 
 /** Papeis estruturais criados no bootstrap de cada tenant. */
@@ -1042,6 +1060,12 @@ export const PERMISSION_GROUPS = [
     name: 'Modulos e auditoria',
     description: 'Configuracao de funcionalidades e trilha de auditoria.',
     permissions: [PERMISSIONS.FEATURES_VIEW, PERMISSIONS.FEATURES_MANAGE, PERMISSIONS.AUDIT_VIEW],
+  },
+  {
+    key: 'painel',
+    name: 'Painel',
+    description: 'Indicadores e graficos agregados dos modulos operacionais.',
+    permissions: [PERMISSIONS.ANALYTICS_VIEW],
   },
 ] as const satisfies ReadonlyArray<{
   key: string;

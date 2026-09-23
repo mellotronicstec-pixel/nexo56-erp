@@ -54,6 +54,16 @@ export const FEATURES = {
   CUSTOMER_PORTAL: 'customer.portal',
   PLATFORM_MULTI_UNIT: 'platform.multi_unit',
   PLATFORM_LABEL_RECOGNITION: 'platform.label_recognition',
+  /**
+   * Painel / BI (Prompt 18). OPTIONAL e dependente apenas de Ordens de
+   * Servico, pelo mesmo motivo da Central de Trabalho (Prompt 15): o
+   * restante dos dominios que o Painel pode mostrar (Financeiro, Estoque,
+   * Compras, Garantias, Agenda, Comunicacao) sao eles mesmos OPTIONAL — o
+   * Painel os consulta quando disponiveis e simplesmente nao mostra o
+   * cartao quando nao estao, sem precisar depender formalmente de nenhum
+   * deles.
+   */
+  ANALYTICS_DASHBOARD: 'analytics.dashboard',
 } as const;
 
 export type FeatureKey = (typeof FEATURES)[keyof typeof FEATURES];
@@ -394,6 +404,21 @@ export const FEATURE_CATALOG: readonly FeatureDefinition[] = [
      */
     type: 'OPTIONAL',
     dependsOn: [FEATURES.CORE_EQUIPMENT],
+  },
+  {
+    key: FEATURES.ANALYTICS_DASHBOARD,
+    name: 'Painel (Dashboards e BI)',
+    description:
+      'Indicadores e graficos agregados de leitura sobre os dominios operacionais. Nunca altera dado nenhum.',
+    /**
+     * OPTIONAL: o tenant que ainda esta comecando pode preferir a Central de
+     * Trabalho sozinha. Depende so de CORE_SERVICE_ORDERS porque e o unico
+     * dominio garantidamente presente — os demais cartoes (Financeiro,
+     * Estoque, Compras, Garantias, Agenda, Comunicacao) sao OPTIONAL por si
+     * so, e o Painel os consulta individualmente em vez de exigi-los.
+     */
+    type: 'OPTIONAL',
+    dependsOn: [FEATURES.CORE_SERVICE_ORDERS],
   },
 ];
 

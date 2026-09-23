@@ -41,6 +41,7 @@ import {
   IconPurchase,
   IconServiceOrder,
   IconSupplier,
+  IconDashboard,
 } from '@/design-system/icons';
 import { cn } from '@/design-system/cn';
 import type { NavIconKey, NavSection } from './navigation';
@@ -73,6 +74,7 @@ const NAV_ICONS: Record<NavIconKey, ComponentType<IconProps>> = {
   'work-center': IconWorkCenter,
   task: IconTask,
   message: IconMessage,
+  dashboard: IconDashboard,
 };
 
 /**

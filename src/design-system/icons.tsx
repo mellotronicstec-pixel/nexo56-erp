@@ -374,3 +374,10 @@ export const IconMessage = (props: IconProps) => (
     <path d="M9 11h6M9 14h4" />
   </Icon>
 );
+
+/** Painel: tres barras de alturas diferentes — indicador agregado, nao um grafico especifico. */
+export const IconDashboard = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="M4 20V10M12 20V4M20 20v-7" />
+  </Icon>
+);

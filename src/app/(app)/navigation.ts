@@ -43,7 +43,8 @@ export type NavIconKey =
   | 'agenda'
   | 'task'
   | 'work-center'
-  | 'message';
+  | 'message'
+  | 'dashboard';
 
 export interface NavItem {
   href: string;
@@ -78,6 +79,22 @@ export const NAV_SECTIONS: readonly NavSection[] = [
         featureKey: FEATURES.OPERATIONS_WORK_CENTER,
         permission: PERMISSIONS.WORK_CENTER_VIEW,
         icon: 'work-center',
+      },
+      {
+        /**
+         * O PAINEL VEM LOGO DEPOIS DA CENTRAL, nunca antes (Prompt 18).
+         *
+         * A Central responde "o que fazer agora?" — e disso que quem chega de
+         * manha precisa primeiro. O Painel responde outra pergunta, agregada e
+         * de tendencia: "como estamos indo?". Uma nunca substitui a outra
+         * (item 32), e por isso sao dois itens de menu, no lugar de abas de
+         * uma tela so.
+         */
+        href: '/painel',
+        label: 'Painel',
+        featureKey: FEATURES.ANALYTICS_DASHBOARD,
+        permission: PERMISSIONS.ANALYTICS_VIEW,
+        icon: 'dashboard',
       },
       {
         href: '/clientes',
@@ -308,6 +325,7 @@ export const NAV_SECTIONS: readonly NavSection[] = [
  * o nome real do registro e passa a trilha completa.
  */
 export const BREADCRUMB_LABELS: Readonly<Record<string, string>> = {
+  painel: 'Painel',
   clientes: 'Clientes',
   equipamentos: 'Equipamentos',
   recebimentos: 'Recebimentos',
