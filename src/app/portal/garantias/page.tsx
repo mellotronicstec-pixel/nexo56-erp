@@ -1,5 +1,12 @@
 import type { Metadata } from 'next';
-import { Badge, CardList, CardListItem, EmptyState, PageHeader, linkButtonClass } from '@/design-system/components';
+import {
+  Badge,
+  CardList,
+  CardListItem,
+  EmptyState,
+  PageHeader,
+  linkButtonClass,
+} from '@/design-system/components';
 import { requirePortalContextForPage } from '@/modules/portal/application/portal-context';
 import { listMyWarranties } from '@/modules/portal/application/portal-query-service';
 import { TEMPORAL_CLASS_LABEL, type TemporalClass } from '@/modules/warranties/domain/warranty';
@@ -20,7 +27,10 @@ export default async function PortalWarrantiesPage() {
 
   return (
     <PortalChrome>
-      <PageHeader title="Suas garantias" description="Cobertura, vigencia e certificado de cada garantia." />
+      <PageHeader
+        title="Suas garantias"
+        description="Cobertura, vigencia e certificado de cada garantia."
+      />
 
       {garantias.length === 0 ? (
         <EmptyState

@@ -7,7 +7,10 @@ import {
   normalizeLoginContact,
   PORTAL_VISIBLE_TIMELINE_KINDS,
 } from '@/modules/portal/domain/portal';
-import { SERVICE_ORDER_STATUS_LABEL, SERVICE_ORDER_STATUS_TONE } from '@/modules/service-orders/domain/workflow';
+import {
+  SERVICE_ORDER_STATUS_LABEL,
+  SERVICE_ORDER_STATUS_TONE,
+} from '@/modules/service-orders/domain/workflow';
 import { TIMELINE_KINDS } from '@/modules/service-orders/domain/service-order';
 
 describe('normalizeLoginContact', () => {
@@ -70,7 +73,12 @@ describe('projecao externa de status da OS', () => {
 
 describe('lista de permissao da linha do tempo (item 41 a 44)', () => {
   it('so os tipos explicitamente revisados aparecem ao cliente', () => {
-    const esperado = ['created', 'status_changed', 'customer_notification_requested', 'warranty_return_linked'];
+    const esperado = [
+      'created',
+      'status_changed',
+      'customer_notification_requested',
+      'warranty_return_linked',
+    ];
     expect([...PORTAL_VISIBLE_TIMELINE_KINDS].sort()).toEqual(esperado.sort());
   });
 

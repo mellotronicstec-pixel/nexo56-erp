@@ -4,7 +4,10 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { runWithContext } from '@/core/context/request-context';
 import { PORTAL_LOGIN_COOKIE } from '@/modules/portal/domain/portal';
-import { findActivePortalSession, revokePortalSession } from '@/modules/portal/application/portal-session-service';
+import {
+  findActivePortalSession,
+  revokePortalSession,
+} from '@/modules/portal/application/portal-session-service';
 
 export async function portalLogoutAction(): Promise<void> {
   await runWithContext({ origin: 'web' }, async () => {

@@ -72,7 +72,7 @@ certificado identifica um documento, nunca autentica uma pessoa.
    tabela de mensagens.
 
 4. **Consumo.** Clicar no link consome o token via `UPDATE ... WHERE
-   used_at IS NULL` (mesmo padrão CAS de ADR-044) — a corrida de duplo clique
+used_at IS NULL` (mesmo padrão CAS de ADR-044) — a corrida de duplo clique
    perde, não duplica sessão. Token consumido, expirado ou de outro tenant
    resulta no mesmo erro genérico.
 

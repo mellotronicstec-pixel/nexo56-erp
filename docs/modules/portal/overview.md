@@ -24,13 +24,13 @@ tem cadastro com o mesmo contato — nunca o contrário. Nenhuma delas é um
 
 ## O que ele é — e o que ele não é
 
-| É                                              | Não é                                        |
-| ----------------------------------------------- | --------------------------------------------- |
+| É                                                         | Não é                                           |
+| --------------------------------------------------------- | ----------------------------------------------- |
 | Projeção externa, somente leitura, de dados já existentes | Fonte de verdade de OS, equipamento ou garantia |
-| Autenticação própria (link mágico)             | Um segundo login com o RBAC interno           |
-| Autorização por ownership (`customerId`)       | Autorização por permissão/papel               |
-| Reaproveitamento do serviço oficial de PDF     | Um segundo gerador de certificado             |
-| Sempre 404 quando nega acesso                  | 403 em qualquer rota                          |
+| Autenticação própria (link mágico)                        | Um segundo login com o RBAC interno             |
+| Autorização por ownership (`customerId`)                  | Autorização por permissão/papel                 |
+| Reaproveitamento do serviço oficial de PDF                | Um segundo gerador de certificado               |
+| Sempre 404 quando nega acesso                             | 403 em qualquer rota                            |
 
 ## Autenticação: link mágico, nunca senha
 
@@ -56,31 +56,31 @@ mesmo erro que um registro inexistente (`assertOwned`, em
 
 ## O que é projetado, e o que fica de fora
 
-| Dado                        | Aparece no Portal?                                        |
-| ---------------------------- | ----------------------------------------------------------- |
-| Status da OS                 | Sim — mesmo rótulo do painel interno                       |
-| Relato do cliente            | Sim — é a fala do próprio cliente                          |
-| `internal_notes` da OS       | **Nunca**                                                   |
+| Dado                          | Aparece no Portal?                                                                                                                                   |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Status da OS                  | Sim — mesmo rótulo do painel interno                                                                                                                 |
+| Relato do cliente             | Sim — é a fala do próprio cliente                                                                                                                    |
+| `internal_notes` da OS        | **Nunca**                                                                                                                                            |
 | Linha do tempo                | Só os tipos da lista de permissão (`PORTAL_VISIBLE_TIMELINE_KINDS`) — técnico responsável, movimentação de estoque e tarefa de bancada ficam de fora |
-| Número de série do aparelho  | Mascarado — só os 4 últimos caracteres                     |
-| Garantia `draft`             | **Nunca** — é trabalho em andamento de quem concede         |
-| Custo da garantia            | **Nunca** — `warranty_costs` não tem projeção nenhuma        |
-| Certificado de garantia (PDF)| Sim — mesmo artefato do painel, via ownership               |
+| Número de série do aparelho   | Mascarado — só os 4 últimos caracteres                                                                                                               |
+| Garantia `draft`              | **Nunca** — é trabalho em andamento de quem concede                                                                                                  |
+| Custo da garantia             | **Nunca** — `warranty_costs` não tem projeção nenhuma                                                                                                |
+| Certificado de garantia (PDF) | Sim — mesmo artefato do painel, via ownership                                                                                                        |
 
 ## Onde cada coisa mora
 
-| Conceito                                   | Arquivo                                                          |
-| -------------------------------------------- | ------------------------------------------------------------------ |
-| Constantes, normalização, projeção, máscara | `domain/portal.ts`                                                |
-| Schema e migration                          | `infrastructure/schema.ts`, `drizzle/0015_portal.sql`             |
-| Sessão (criar, revogar, podar)              | `application/portal-session-service.ts`                          |
-| Link mágico (pedir, consumir)               | `application/portal-login-service.ts`                            |
-| Contexto (reavaliado a cada requisição)     | `application/portal-context.ts`                                  |
-| A única forma de negar acesso               | `application/portal-ownership.ts`                                 |
-| Projeção externa de OS, equipamento, garantia | `application/portal-query-service.ts`                          |
-| Download do certificado                     | `application/portal-warranty-certificate-service.ts`             |
-| Telas                                       | `src/app/portal/**`                                               |
-| Download autorizado (rota)                  | `src/app/api/portal/garantias/[warrantyId]/certificado/pdf`       |
+| Conceito                                      | Arquivo                                                     |
+| --------------------------------------------- | ----------------------------------------------------------- |
+| Constantes, normalização, projeção, máscara   | `domain/portal.ts`                                          |
+| Schema e migration                            | `infrastructure/schema.ts`, `drizzle/0015_portal.sql`       |
+| Sessão (criar, revogar, podar)                | `application/portal-session-service.ts`                     |
+| Link mágico (pedir, consumir)                 | `application/portal-login-service.ts`                       |
+| Contexto (reavaliado a cada requisição)       | `application/portal-context.ts`                             |
+| A única forma de negar acesso                 | `application/portal-ownership.ts`                           |
+| Projeção externa de OS, equipamento, garantia | `application/portal-query-service.ts`                       |
+| Download do certificado                       | `application/portal-warranty-certificate-service.ts`        |
+| Telas                                         | `src/app/portal/**`                                         |
+| Download autorizado (rota)                    | `src/app/api/portal/garantias/[warrantyId]/certificado/pdf` |
 
 ## O que este módulo NUNCA faz
 

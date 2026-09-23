@@ -14,7 +14,10 @@ import {
   type PortalContext,
 } from '@/modules/portal/domain/portal';
 import { assertOwned } from './portal-ownership';
-import { serviceOrders, serviceOrderTimeline } from '@/modules/service-orders/infrastructure/schema';
+import {
+  serviceOrders,
+  serviceOrderTimeline,
+} from '@/modules/service-orders/infrastructure/schema';
 import { tenants } from '@/modules/tenancy/infrastructure/schema';
 import {
   formatDuration,
@@ -66,7 +69,10 @@ export async function listMyServiceOrders(
     .from(serviceOrders)
     .innerJoin(equipment, eq(equipment.id, serviceOrders.equipmentId))
     .where(
-      and(eq(serviceOrders.tenantId, context.tenantId), eq(serviceOrders.customerId, context.customerId)),
+      and(
+        eq(serviceOrders.tenantId, context.tenantId),
+        eq(serviceOrders.customerId, context.customerId),
+      ),
     )
     .orderBy(desc(serviceOrders.openedAt));
 
@@ -181,7 +187,9 @@ export async function listMyEquipment(context: PortalContext): Promise<PortalEqu
       serial: equipment.serial,
     })
     .from(equipment)
-    .where(and(eq(equipment.tenantId, context.tenantId), eq(equipment.customerId, context.customerId)))
+    .where(
+      and(eq(equipment.tenantId, context.tenantId), eq(equipment.customerId, context.customerId)),
+    )
     .orderBy(desc(equipment.updatedAt));
 
   return rows.map((row) => ({

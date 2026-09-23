@@ -90,7 +90,10 @@ async function loadCertificateRow(tenantId: string, warrantyId: string): Promise
     })
     .from(warrantyCertificates)
     .where(
-      and(eq(warrantyCertificates.tenantId, tenantId), eq(warrantyCertificates.warrantyId, warrantyId)),
+      and(
+        eq(warrantyCertificates.tenantId, tenantId),
+        eq(warrantyCertificates.warrantyId, warrantyId),
+      ),
     )
     .limit(1);
 

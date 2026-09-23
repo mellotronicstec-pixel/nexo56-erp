@@ -4,7 +4,10 @@ import { runWithContext } from '@/core/context/request-context';
 import { getDb } from '@/core/db/client';
 import { AuthenticationError, NotFoundError } from '@/core/errors';
 import { getRateLimitStore } from '@/core/rate-limit/rate-limiter';
-import { getCaptureProvider, resetCaptureProviderForTesting } from '@/modules/communications/infrastructure/provider-registry';
+import {
+  getCaptureProvider,
+  resetCaptureProviderForTesting,
+} from '@/modules/communications/infrastructure/provider-registry';
 import { setTenantFeature } from '@/modules/features/application/tenant-configuration';
 import { FEATURES } from '@/modules/features/domain/catalog';
 import {
@@ -23,7 +26,12 @@ import { readPortalWarrantyCertificate } from '@/modules/portal/application/port
 import { portalIdentities, portalLoginTokens } from '@/modules/portal/infrastructure/schema';
 import { issueCertificate } from '@/modules/warranties/application/warranty-certificate-service';
 import { closeTestDatabase, migrateTestDatabase, truncateAll } from '../helpers/database';
-import { contextFor, createTenantFixture, seedCatalog, type TenantFixture } from '../helpers/fixtures';
+import {
+  contextFor,
+  createTenantFixture,
+  seedCatalog,
+  type TenantFixture,
+} from '../helpers/fixtures';
 import {
   createPortalScenario,
   insertWarrantyFixture,
@@ -59,8 +67,12 @@ beforeEach(async () => {
   tenantB = await createTenantFixture('portal-b', planId);
 
   for (const t of [tenantA, tenantB]) {
-    await run(() => setTenantFeature(t.context, { featureKey: FEATURES.CUSTOMER_PORTAL, enabled: true }));
-    await run(() => setTenantFeature(t.context, { featureKey: FEATURES.OPERATIONS_WARRANTIES, enabled: true }));
+    await run(() =>
+      setTenantFeature(t.context, { featureKey: FEATURES.CUSTOMER_PORTAL, enabled: true }),
+    );
+    await run(() =>
+      setTenantFeature(t.context, { featureKey: FEATURES.OPERATIONS_WARRANTIES, enabled: true }),
+    );
   }
   tenantA.context = await contextFor(tenantA.tenantId, tenantA.adminUserId, tenantA.unitId);
   tenantB.context = await contextFor(tenantB.tenantId, tenantB.adminUserId, tenantB.unitId);
@@ -165,7 +177,9 @@ describe('consumo do link (ADR-044: CAS)', () => {
 
     await run(() => requestPortalLogin(cenarioA.contactEmail));
     const segundoToken = await extractLatestToken();
-    await expect(run(() => consumePortalLoginToken(segundoToken))).rejects.toThrow(AuthenticationError);
+    await expect(run(() => consumePortalLoginToken(segundoToken))).rejects.toThrow(
+      AuthenticationError,
+    );
   });
 });
 
@@ -195,7 +209,9 @@ describe('desligar a feature no MEIO da sessao (item 122)', () => {
 
 describe('ownership: IDOR e enumeracao (item 46)', () => {
   it('OS de outro cliente do MESMO tenant devolve NotFoundError, igual a inexistente', async () => {
-    const outroCliente = await run(() => createPortalScenario(tenantA.context, { emailSuffix: 'a2' }));
+    const outroCliente = await run(() =>
+      createPortalScenario(tenantA.context, { emailSuffix: 'a2' }),
+    );
 
     const contextoIntruso = {
       tenantId: tenantA.tenantId,
@@ -232,7 +248,9 @@ describe('ownership: IDOR e enumeracao (item 46)', () => {
   });
 
   it('lista de OS nunca mistura clientes do mesmo tenant', async () => {
-    const outroCliente = await run(() => createPortalScenario(tenantA.context, { emailSuffix: 'a3' }));
+    const outroCliente = await run(() =>
+      createPortalScenario(tenantA.context, { emailSuffix: 'a3' }),
+    );
 
     const contextoA = {
       tenantId: tenantA.tenantId,
@@ -377,8 +395,8 @@ describe('certificado de garantia — reutiliza o servico oficial (item 49/50)',
       sessionId: 'x',
       sessionExpiresAt: new Date(),
     };
-    await expect(run(() => readPortalWarrantyCertificate(contextoIntruso, warrantyId))).rejects.toThrow(
-      NotFoundError,
-    );
+    await expect(
+      run(() => readPortalWarrantyCertificate(contextoIntruso, warrantyId)),
+    ).rejects.toThrow(NotFoundError);
   });
 });

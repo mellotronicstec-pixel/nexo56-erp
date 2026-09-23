@@ -29,7 +29,10 @@ export default async function PortalServiceOrderPage({ params }: PageProps) {
       <PageHeader
         title={`OS ${os.number}`}
         description={os.equipmentTitle}
-        breadcrumbs={[{ label: 'Ordens de servico', href: '/portal' }, { label: `OS ${os.number}` }]}
+        breadcrumbs={[
+          { label: 'Ordens de servico', href: '/portal' },
+          { label: `OS ${os.number}` },
+        ]}
         metadata={<Badge tone={os.statusTone}>{os.statusLabel}</Badge>}
       />
 

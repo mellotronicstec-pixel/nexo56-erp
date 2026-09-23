@@ -32,7 +32,7 @@ limit do login interno.
 ## Concorrência
 
 - **Consumo do link**: `UPDATE portal_login_tokens SET used_at = NOW() WHERE
-  id = ? AND used_at IS NULL AND expires_at > NOW()` — CAS clássico (ADR-044).
+id = ? AND used_at IS NULL AND expires_at > NOW()` — CAS clássico (ADR-044).
   Duplo clique, ou o link aberto em duas abas, só cria UMA sessão; a segunda
   tentativa recebe o mesmo erro genérico de link inválido.
 - **Identidade**: `INSERT ... ON DUPLICATE KEY UPDATE` com
@@ -56,20 +56,19 @@ partilhado).
 
 ## O que nunca vaza
 
-| Dado                                    | Por quê fica de fora                                              |
-| ------------------------------------------ | --------------------------------------------------------------------- |
-| `service_orders.internal_notes`            | Campo do PRÓPRIO schema já documenta: "não pode vazar para o Portal" |
-| Linha do tempo fora da allowlist           | Técnico responsável, estoque e tarefa de bancada são operação interna |
-| Número de série completo                   | Mesma razão do certificado de garantia: identifica o aparelho de forma única, sem necessidade para o cliente |
-| `warranty_costs`                           | Não tem projeção nenhuma — o Portal nem consulta a tabela            |
-| Garantia `draft`                           | Trabalho em andamento de quem concede, ainda não é fato do cliente   |
-| Existência de contato em outro tenant      | `requestPortalLogin` nunca diferencia a resposta                     |
-| Existência de registro de outro cliente    | `assertOwned` sempre devolve `NotFoundError`                         |
+| Dado                                    | Por quê fica de fora                                                                                         |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `service_orders.internal_notes`         | Campo do PRÓPRIO schema já documenta: "não pode vazar para o Portal"                                         |
+| Linha do tempo fora da allowlist        | Técnico responsável, estoque e tarefa de bancada são operação interna                                        |
+| Número de série completo                | Mesma razão do certificado de garantia: identifica o aparelho de forma única, sem necessidade para o cliente |
+| `warranty_costs`                        | Não tem projeção nenhuma — o Portal nem consulta a tabela                                                    |
+| Garantia `draft`                        | Trabalho em andamento de quem concede, ainda não é fato do cliente                                           |
+| Existência de contato em outro tenant   | `requestPortalLogin` nunca diferencia a resposta                                                             |
+| Existência de registro de outro cliente | `assertOwned` sempre devolve `NotFoundError`                                                                 |
 
 ## Provedor de e-mail/WhatsApp: mesma guarda de produção
 
-O link magico sai por `getCommunicationProvider()` — o mesmo port do Prompt
-16. Fora de produção, provedor de captura (não toca a rede). Em produção sem
+O link magico sai por `getCommunicationProvider()` — o mesmo port do Prompt 16. Fora de produção, provedor de captura (não toca a rede). Em produção sem
 provedor real configurado, `null`: o link fica registrado em
 `portal_login_tokens`, o cliente pode pedir de novo quando houver provedor,
 e o sistema nunca afirma ter enviado o que não enviou.

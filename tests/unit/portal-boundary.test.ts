@@ -60,7 +60,8 @@ describe('a dependencia e de mao unica: so o Portal importa os outros', () => {
   for (const modulo of INTERNAL_MODULES) {
     it(`modules/${modulo} nunca importa modules/portal`, () => {
       const alvo = FILES.filter(
-        ({ path }) => path.includes(join('modules', modulo)) && !path.includes(join('modules', 'portal')),
+        ({ path }) =>
+          path.includes(join('modules', modulo)) && !path.includes(join('modules', 'portal')),
       );
       const infratores = alvo.filter(({ code }) => code.includes('modules/portal'));
       expect(infratores.map((f) => f.path)).toEqual([]);
@@ -89,9 +90,11 @@ describe('o Portal nunca usa RBAC interno (item 9)', () => {
   });
 
   it('a camada de aplicacao do Portal nunca importa PERMISSIONS', () => {
-    const aplicacao = PORTAL.filter(({ path }) => path.includes(join('modules', 'portal', 'application')));
+    const aplicacao = PORTAL.filter(({ path }) =>
+      path.includes(join('modules', 'portal', 'application')),
+    );
     const infratores = aplicacao.filter(({ code }) =>
-      code.includes("access-control/domain/permissions"),
+      code.includes('access-control/domain/permissions'),
     );
     expect(infratores.map((f) => f.path)).toEqual([]);
   });

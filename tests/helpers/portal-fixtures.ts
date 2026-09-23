@@ -138,7 +138,11 @@ export async function insertCertificateFixture(input: {
           cobreServicoInteiro: true,
         },
         cliente: { nome: 'Cliente Teste' },
-        equipamento: { descricao: 'Notebook MarcaTeste ModeloX', marca: 'MarcaTeste', modelo: 'ModeloX' },
+        equipamento: {
+          descricao: 'Notebook MarcaTeste ModeloX',
+          marca: 'MarcaTeste',
+          modelo: 'ModeloX',
+        },
         ordemDeServico: null,
         cobertura: [],
         exclusoes: null,

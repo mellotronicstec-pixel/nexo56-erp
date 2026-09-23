@@ -104,7 +104,9 @@ export async function revokeAllPortalSessions(portalIdentityId: string): Promise
   await getDb()
     .update(portalSessions)
     .set({ revokedAt: new Date() })
-    .where(and(eq(portalSessions.portalIdentityId, portalIdentityId), isNull(portalSessions.revokedAt)));
+    .where(
+      and(eq(portalSessions.portalIdentityId, portalIdentityId), isNull(portalSessions.revokedAt)),
+    );
 }
 
 export async function pruneExpiredPortalSessions(reference = new Date()): Promise<number> {

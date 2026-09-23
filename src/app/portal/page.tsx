@@ -14,7 +14,10 @@ export default async function PortalHomePage() {
 
   return (
     <PortalChrome>
-      <PageHeader title="Suas ordens de servico" description="Acompanhe o andamento dos seus aparelhos." />
+      <PageHeader
+        title="Suas ordens de servico"
+        description="Acompanhe o andamento dos seus aparelhos."
+      />
 
       {ordens.length === 0 ? (
         <EmptyState
@@ -25,7 +28,10 @@ export default async function PortalHomePage() {
         <CardList label="Suas ordens de servico">
           {ordens.map((os) => (
             <CardListItem key={os.id}>
-              <Link href={`/portal/ordens/${os.id}`} className="flex items-center justify-between gap-3">
+              <Link
+                href={`/portal/ordens/${os.id}`}
+                className="flex items-center justify-between gap-3"
+              >
                 <div className="min-w-0">
                   <p className="font-medium text-ink-900">OS {os.number}</p>
                   <p className="truncate text-small text-ink-500">{os.equipmentTitle}</p>
