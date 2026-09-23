@@ -54,6 +54,21 @@ mesmo cabeçalho da rota interna equivalente. Documento de um cliente nunca
 fica em cache compartilhado (proxy, CDN, cache do navegador em disco
 partilhado).
 
+As páginas HTML do Portal (`/portal`, `/portal/ordens/[id]`,
+`/portal/equipamentos`, `/portal/garantias`) não fixam um `Cache-Control`
+manual — e não precisam: toda página chama `requirePortalContextForPage`,
+que lê `cookies()`, o que força o Next.js App Router a tratar a rota como
+dinâmica. Verificado empiricamente contra o build de produção real
+(`next build && next start`, nunca `next dev`): toda rota dinâmica —
+Portal e interna, autenticada e não autenticada — responde com
+`Cache-Control: private, no-cache, no-store, max-age=0, must-revalidate`,
+idêntico ao que uma rota interna equivalente (`/login`) já recebe sem
+nenhuma configuração manual. Esse cabeçalho é estritamente mais restritivo
+que `private, no-store` sozinho, então adicionar um `Cache-Control` manual
+nas páginas não mudaria o comportamento observado — apenas duplicaria, em
+código, o que o framework já garante por padrão para qualquer rota que leia
+a sessão a cada requisição.
+
 ## O que nunca vaza
 
 | Dado                                    | Por quê fica de fora                                                                                         |

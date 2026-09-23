@@ -23,7 +23,11 @@ import {
   listMyWarranties,
 } from '@/modules/portal/application/portal-query-service';
 import { readPortalWarrantyCertificate } from '@/modules/portal/application/portal-warranty-certificate-service';
-import { portalIdentities, portalLoginTokens } from '@/modules/portal/infrastructure/schema';
+import {
+  portalIdentities,
+  portalLoginTokens,
+  portalSessions,
+} from '@/modules/portal/infrastructure/schema';
 import { issueCertificate } from '@/modules/warranties/application/warranty-certificate-service';
 import { closeTestDatabase, migrateTestDatabase, truncateAll } from '../helpers/database';
 import {
@@ -180,6 +184,62 @@ describe('consumo do link (ADR-044: CAS)', () => {
     await expect(run(() => consumePortalLoginToken(segundoToken))).rejects.toThrow(
       AuthenticationError,
     );
+  });
+});
+
+describe('concorrencia REAL do consumo do link (5 chamadas simultaneas)', () => {
+  it('5 tentativas paralelas contra o MESMO token: exatamente 1 vencedora, 4 falhas, 1 sessao', async () => {
+    await run(() => requestPortalLogin(cenarioA.contactEmail));
+    const token = await extractLatestToken();
+
+    /**
+     * `Promise.allSettled`, nunca `for`/`await` sequencial: as 5 chamadas sao
+     * disparadas no MESMO instante, contra o MESMO token, e disputam a MESMA
+     * linha no MariaDB real (pool de conexoes de `getDb()`, nao mock).
+     */
+    const resultados = await Promise.allSettled(
+      Array.from({ length: 5 }, () => run(() => consumePortalLoginToken(token))),
+    );
+
+    const cumpridas = resultados.filter((r) => r.status === 'fulfilled');
+    const rejeitadas = resultados.filter((r) => r.status === 'rejected');
+
+    expect(cumpridas).toHaveLength(1);
+    expect(rejeitadas).toHaveLength(4);
+
+    for (const r of rejeitadas) {
+      if (r.status === 'rejected') expect(r.reason).toBeInstanceOf(AuthenticationError);
+    }
+
+    // A linha do token: usada exatamente uma vez, nunca duas.
+    const [linhaToken] = await getDb()
+      .select({ usedAt: portalLoginTokens.usedAt })
+      .from(portalLoginTokens)
+      .where(eq(portalLoginTokens.tenantId, tenantA.tenantId));
+    expect(linhaToken?.usedAt).not.toBeNull();
+
+    // Nenhum token adicional foi criado por esta corrida.
+    const todosOsTokens = await getDb()
+      .select({ id: portalLoginTokens.id })
+      .from(portalLoginTokens)
+      .where(eq(portalLoginTokens.tenantId, tenantA.tenantId));
+    expect(todosOsTokens).toHaveLength(1);
+
+    // Exatamente 1 sessao foi criada pela corrida inteira.
+    const sessoesCriadas = await getDb()
+      .select({ id: portalSessions.id })
+      .from(portalSessions)
+      .where(eq(portalSessions.customerId, cenarioA.customerId));
+    expect(sessoesCriadas).toHaveLength(1);
+
+    // Replay depois da corrida: continua recusado, e continua sem criar sessao nova.
+    await expect(run(() => consumePortalLoginToken(token))).rejects.toThrow(AuthenticationError);
+
+    const sessoesDepoisDoReplay = await getDb()
+      .select({ id: portalSessions.id })
+      .from(portalSessions)
+      .where(eq(portalSessions.customerId, cenarioA.customerId));
+    expect(sessoesDepoisDoReplay).toHaveLength(1);
   });
 });
 
@@ -398,5 +458,70 @@ describe('certificado de garantia — reutiliza o servico oficial (item 49/50)',
     await expect(
       run(() => readPortalWarrantyCertificate(contextoIntruso, warrantyId)),
     ).rejects.toThrow(NotFoundError);
+  });
+});
+
+describe('cache cross-customer: nenhuma resposta de A pode aparecer para B', () => {
+  it('requisicoes REAIS intercaladas (A, B, A, B, A, B) nunca misturam conteudo', async () => {
+    /**
+     * Regressao permanente do que a verificacao HTTP contra o build de
+     * producao ja provou manualmente: a MESMA "rota logica" (mesma funcao de
+     * consulta, equivalente a mesma URL `/portal`) chamada em paralelo para
+     * dois clientes nunca troca conteudo entre eles. Nao ha cache, memoizacao
+     * nem estado de modulo compartilhado entre chamadas — cada resposta e
+     * recomputada do zero a partir do `customerId` do proprio contexto.
+     */
+    const clienteB = await run(() =>
+      createPortalScenario(tenantA.context, { emailSuffix: 'cacheB' }),
+    );
+
+    const contextoA = {
+      tenantId: tenantA.tenantId,
+      customerId: cenarioA.customerId,
+      portalIdentityId: 'x',
+      sessionId: 'x',
+      sessionExpiresAt: new Date(),
+    };
+    const contextoB = {
+      tenantId: tenantA.tenantId,
+      customerId: clienteB.customerId,
+      portalIdentityId: 'x',
+      sessionId: 'x',
+      sessionExpiresAt: new Date(),
+    };
+
+    // A1, B, A2 sequenciais — o cenario minimo pedido.
+    const a1 = await run(() => listMyServiceOrders(contextoA));
+    const b = await run(() => listMyServiceOrders(contextoB));
+    const a2 = await run(() => listMyServiceOrders(contextoA));
+
+    for (const resposta of [a1, a2]) {
+      expect(resposta.map((os) => os.id)).toContain(cenarioA.serviceOrderId);
+      expect(resposta.map((os) => os.id)).not.toContain(clienteB.serviceOrderId);
+    }
+    expect(b.map((os) => os.id)).toContain(clienteB.serviceOrderId);
+    expect(b.map((os) => os.id)).not.toContain(cenarioA.serviceOrderId);
+
+    // Intercalado e REALMENTE concorrente (Promise.all, nunca sequencial):
+    // A, B, A, B, A, B disputando a mesma consulta ao mesmo tempo.
+    const contextosIntercalados = [
+      contextoA,
+      contextoB,
+      contextoA,
+      contextoB,
+      contextoA,
+      contextoB,
+    ];
+    const respostas = await Promise.all(
+      contextosIntercalados.map((contexto) => run(() => listMyServiceOrders(contexto))),
+    );
+
+    respostas.forEach((resposta, indice) => {
+      const esperadoDoCliente =
+        indice % 2 === 0 ? cenarioA.serviceOrderId : clienteB.serviceOrderId;
+      const alheio = indice % 2 === 0 ? clienteB.serviceOrderId : cenarioA.serviceOrderId;
+      expect(resposta.map((os) => os.id)).toContain(esperadoDoCliente);
+      expect(resposta.map((os) => os.id)).not.toContain(alheio);
+    });
   });
 });
