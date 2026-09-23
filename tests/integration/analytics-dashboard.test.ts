@@ -142,6 +142,63 @@ async function backdate(id: string, openedAt: string, statusChangedAt?: string):
     .where(eq(serviceOrders.id, id));
 }
 
+/**
+ * PROVA DE NAO-EXECUCAO POR DADO REAL (nao por spy).
+ *
+ * Este repositorio nao tem NENHUM precedente de `vi.spyOn`/`vi.mock` em
+ * nenhum dos 105 arquivos de teste da suite — toda garantia de "nao
+ * consultou" e provada plantando um dado real e detectavel, e confirmando
+ * que ele nunca atravessa a fronteira (mesmo padrao de
+ * `tests/integration/analytics-dashboard.test.ts` > "financeiro: Money e
+ * reversao" e de toda a suite de Portal/Central de Trabalho). Um valor
+ * bem conhecido (R$ 1.234,56) e liquidado de verdade; se
+ * `loadFinanceMetrics`/`loadFinanceOverview` fosse chamado, o numero
+ * apareceria em `dashboard.finance.settlementsInPeriod` — a asserção
+ * `finance === null` so passa se a consulta genuinamente nunca rodou.
+ */
+async function liquidarValorDetectavel(fixture: TenantFixture): Promise<void> {
+  await run(() => ensureFinanceDefaults(fixture.context));
+  const { customerId } = await run(() =>
+    createCustomer(fixture.context, {
+      kind: 'individual',
+      name: 'Cliente com liquidacao detectavel',
+      contacts: [{ type: 'phone', value: '11911112222', isWhatsapp: false }],
+    }),
+  );
+  const conta = await run(() =>
+    createFinancialAccount(fixture.context, {
+      name: 'Conta deteccao',
+      kind: 'bank',
+      unitId: fixture.unitId,
+    }),
+  );
+  const metodos = await run(() => listActivePaymentMethods(fixture.context));
+  const metodoId = metodos[0]!.id;
+
+  const titulo = await run(() =>
+    createFinancialTitle(fixture.context, {
+      unitId: fixture.unitId,
+      direction: 'receivable',
+      customerId,
+      description: 'Valor detectavel para prova de nao-execucao',
+      amount: '1234.56',
+      dueDate: todayIn('America/Sao_Paulo'),
+      installmentCount: 1,
+    }),
+  );
+  const parcelas = await run(() => listInstallmentsOfTitle(fixture.context, titulo.titleId));
+
+  await run(() =>
+    settleFinancialTitle(fixture.context, titulo.titleId, {
+      installmentId: parcelas[0]!.id,
+      amount: '1234.56',
+      financialAccountId: conta,
+      paymentMethodId: metodoId,
+      effectiveDate: todayIn('America/Sao_Paulo'),
+    }),
+  );
+}
+
 beforeAll(async () => {
   await migrateTestDatabase();
 });
@@ -242,7 +299,11 @@ describe('escopo de unidade', () => {
 // ---------------------------------------------------------------------------
 
 describe('permissao de dominio', () => {
-  it('analytics.view sem finance.view: Painel abre, financeiro fica ausente (item 147)', async () => {
+  it('analytics.view sem finance.view: query financeira NUNCA roda, mesmo com liquidacao real no banco (item 147)', async () => {
+    // Dado real e detectavel PLANTADO ANTES da checagem: se loadFinanceMetrics
+    // rodasse, dashboard.finance.settlementsInPeriod seria '1234.56'.
+    await liquidarValorDetectavel(tenantA);
+
     const userId = await createPlainUser(tenantA.tenantId, 'sem-financeiro@an-a.invalid');
     await grantMembership(tenantA.tenantId, userId, tenantA.unitId);
     const roleId = await createRoleWithPermissions(tenantA.tenantId, 'so-analytics', [
@@ -254,24 +315,34 @@ describe('permissao de dominio', () => {
 
     const dashboard = await run(() => loadDashboard(contexto));
 
+    // null, NUNCA um objeto com total zerado — a chave existe no DTO, o valor nao.
     expect(dashboard.finance).toBeNull();
+    expect(JSON.stringify(dashboard)).not.toContain('1234.56');
     expect(dashboard.serviceOrders).not.toBeNull();
   });
 
-  it('com finance.view, o cartao financeiro aparece', async () => {
+  it('com finance.view, o cartao financeiro aparece e reflete a liquidacao real', async () => {
+    await liquidarValorDetectavel(tenantA);
     const dashboard = await run(() => loadDashboard(tenantA.context));
     expect(dashboard.finance).not.toBeNull();
+    expect(dashboard.finance?.settlementsInPeriod).toBe('1234.56');
   });
 });
 
 describe('feature desligada nunca vaza contagem (item 26 e 148)', () => {
-  it('finance.core OFF: financeiro ausente mesmo com finance.view concedido', async () => {
+  it('finance.core OFF: query financeira NUNCA roda, mesmo com liquidacao real e permissao concedida', async () => {
+    // Liquidacao real feita ENQUANTO a feature ainda esta ligada — depois a
+    // feature e desligada e o mesmo usuario (com finance.view completo)
+    // consulta o Painel de novo.
+    await liquidarValorDetectavel(tenantA);
+
     await run(() =>
       setTenantFeature(tenantA.context, { featureKey: FEATURES.FINANCE_CORE, enabled: false }),
     );
 
     const dashboard = await run(() => loadDashboard(tenantA.context));
     expect(dashboard.finance).toBeNull();
+    expect(JSON.stringify(dashboard)).not.toContain('1234.56');
   });
 
   it('operations.warranties OFF: garantias ausentes', async () => {

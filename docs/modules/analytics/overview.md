@@ -57,7 +57,7 @@ migration final do repositório continua sendo `0015_portal.sql`.
 
 ## Métricas implementadas no V1
 
-21 métricas em 8 domínios: Ordens de Serviço (7), Orçamentos (4),
+23 métricas em 8 domínios: Ordens de Serviço (7), Orçamentos (4),
 Financeiro (3), Estoque (1), Compras (2), Garantias (2), Agenda (2),
 Comunicação (2). Lista completa com fórmula, fonte e permissão em
 `metric-catalog.md`.

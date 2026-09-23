@@ -76,7 +76,7 @@ URL sozinha, porque dois usuários do mesmo tenant com escopos de unidade
 diferentes não podem compartilhar resultado.
 
 **11. PII aparece em gráfico/tooltip?**
-Não. Todas as 21 métricas são contagens ou somas agregadas — nenhuma
+Não. Todas as 23 métricas são contagens ou somas agregadas — nenhuma
 retorna nome de cliente, telefone, e-mail, número de série ou qualquer
 identificador de registro individual. A distribuição por situação de OS e
 a antiguidade de backlog são contagens por categoria, nunca listas de
