@@ -36,7 +36,7 @@ export interface ResolvedTemplateContext {
 }
 
 export async function resolveTemplateContext(
-  context: TenantContext,
+  context: Pick<TenantContext, 'tenantId' | 'tenantName'>,
   subject: MessageSubject,
 ): Promise<ResolvedTemplateContext> {
   const [unidade] = await getDb()

@@ -25,3 +25,4 @@ export * from '@/modules/warranties/infrastructure/schema';
 export * from '@/modules/agenda/infrastructure/schema';
 export * from '@/modules/communications/infrastructure/schema';
 export * from '@/modules/portal/infrastructure/schema';
+export * from '@/modules/automations/infrastructure/schema';

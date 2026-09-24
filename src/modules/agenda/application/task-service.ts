@@ -12,6 +12,8 @@ import { PERMISSIONS } from '@/modules/access-control/domain/permissions';
 import { AUDIT_ACTIONS, recordAudit } from '@/modules/audit/application/audit-service';
 import { EVENT_TYPES } from '@/modules/events/domain/event';
 import { FEATURES } from '@/modules/features/domain/catalog';
+import { checkFeatureEnabledForTenant } from '@/modules/features/application/effective-access';
+import { tenants } from '@/modules/tenancy/infrastructure/schema';
 import type { TenantContext } from '@/modules/tenancy/domain/tenant-context';
 import {
   CANCEL_REASON_MAX,
@@ -25,6 +27,7 @@ import {
   TASK_TITLE_MAX,
 } from '@/modules/agenda/domain/agenda';
 import { agendaTasks } from '@/modules/agenda/infrastructure/schema';
+import { addDays, todayIn } from '@/core/time/civil-date';
 import { assertContextLinks } from './agenda-links';
 import { assertAssignee, blank, parse, resolveUnit } from './agenda-guards';
 
@@ -217,6 +220,188 @@ export async function createTask(context: TenantContext, rawInput: unknown): Pro
   }
 
   return { taskId, reused: false };
+}
+
+// ---------------------------------------------------------------------------
+// Acao de automacao (Prompt 19)
+// ---------------------------------------------------------------------------
+
+export interface AutomationTaskInput {
+  tenantId: string;
+  unitId: string;
+  /** Texto estatico da regra (item 37) — nunca interpretado, nunca eval. */
+  title: string;
+  notes?: string | null;
+  /** Dias corridos a partir de hoje, no fuso do tenant (item 38). Sem hora:
+   *  `agenda_tasks.due_date` e data civil, nunca instante (ADR-074). */
+  dueOffsetDays?: number;
+  serviceOrderId?: string | null;
+  customerId?: string | null;
+  equipmentId?: string | null;
+  warrantyId?: string | null;
+  /** `automation:{executionId}:action:{actionIndex}` (item 33). */
+  idempotencyKey: string;
+}
+
+export interface AutomationTaskResult {
+  outcome: 'created' | 'reused' | 'skipped';
+  taskId?: string;
+  errorCode?: string;
+  errorDetail?: string;
+}
+
+/**
+ * CRIA UMA TAREFA A PARTIR DE UMA REGRA DE AUTOMACAO — SEM `TenantContext`.
+ *
+ * Mesma justificativa de `createMessageFromAutomation` (item 65 a 68): a
+ * permissao de configurar esta acao ja foi checada quando uma pessoa criou
+ * ou habilitou a regra; em runtime o Motor so revalida a FEATURE do tenant
+ * e os invariantes do proprio dominio (vinculos existem? sao coerentes
+ * entre si?) — nunca finge ser um usuario.
+ *
+ * SEM RESPONSAVEL (item 35 e 36 do dominio): a tarefa nasce sem
+ * `assigneeId`, na mesma fila "sem dono" que qualquer tarefa manual sem
+ * atribuicao — o Motor nao decide QUEM faz o trabalho, so QUE o trabalho
+ * precisa existir.
+ */
+export async function createTaskFromAutomation(
+  input: AutomationTaskInput,
+): Promise<AutomationTaskResult> {
+  const [tenant] = await getDb()
+    .select({ planId: tenants.planId, timezone: tenants.timezone })
+    .from(tenants)
+    .where(eq(tenants.id, input.tenantId))
+    .limit(1);
+  if (!tenant) {
+    return {
+      outcome: 'skipped',
+      errorCode: 'TENANT_NOT_FOUND',
+      errorDetail: 'Tenant nao encontrado.',
+    };
+  }
+
+  const acesso = await checkFeatureEnabledForTenant(
+    { tenantId: input.tenantId, planId: tenant.planId },
+    FEATURES.OPERATIONS_AGENDA,
+  );
+  if (!acesso.allowed) {
+    return {
+      outcome: 'skipped',
+      errorCode: 'ACTION_FEATURE_DISABLED',
+      errorDetail: acesso.message,
+    };
+  }
+
+  const existing = await getDb()
+    .select({ id: agendaTasks.id })
+    .from(agendaTasks)
+    .where(
+      and(
+        eq(agendaTasks.tenantId, input.tenantId),
+        eq(agendaTasks.idempotencyKey, input.idempotencyKey),
+      ),
+    )
+    .limit(1);
+  if (existing[0]) return { outcome: 'reused', taskId: existing[0].id };
+
+  let links: Awaited<ReturnType<typeof assertContextLinks>>;
+  try {
+    links = await assertContextLinks(
+      { tenantId: input.tenantId },
+      {
+        unitId: input.unitId,
+        serviceOrderId: input.serviceOrderId ?? null,
+        customerId: input.customerId ?? null,
+        equipmentId: input.equipmentId ?? null,
+        warrantyId: input.warrantyId ?? null,
+      },
+    );
+  } catch (error) {
+    return {
+      outcome: 'skipped',
+      errorCode: 'ACTION_VALIDATION_FAILED',
+      errorDetail: error instanceof Error ? error.message : String(error),
+    };
+  }
+
+  const dueDate =
+    input.dueOffsetDays === undefined
+      ? null
+      : addDays(todayIn(tenant.timezone), input.dueOffsetDays);
+
+  const taskId = newId();
+  const now = new Date();
+
+  try {
+    await runInTransaction(async (tx, emit) => {
+      await tx.insert(agendaTasks).values({
+        id: taskId,
+        tenantId: input.tenantId,
+        unitId: input.unitId,
+        title: input.title,
+        notes: blank(input.notes ?? undefined),
+        status: 'open',
+        priority: 'normal',
+        dueDate,
+        assigneeId: null,
+        /** Nulo de proposito: quem criou foi o Motor, nao uma pessoa. */
+        createdBy: null,
+        idempotencyKey: input.idempotencyKey,
+        serviceOrderId: links.serviceOrderId,
+        customerId: links.customerId,
+        equipmentId: links.equipmentId,
+        warrantyId: links.warrantyId,
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      await recordAudit(
+        {
+          action: AUDIT_ACTIONS.TASK_CREATED,
+          entityType: 'agenda_task',
+          entityId: taskId,
+          tenantId: input.tenantId,
+          unitId: input.unitId,
+          userId: null,
+          after: {
+            priority: 'normal',
+            hasDueDate: Boolean(dueDate),
+            hasAssignee: false,
+            serviceOrderId: links.serviceOrderId,
+          },
+        },
+        tx,
+      );
+
+      await emit({
+        type: EVENT_TYPES.TASK_CREATED,
+        tenantId: input.tenantId,
+        payload: {
+          taskId,
+          unitId: input.unitId,
+          assigneeId: null,
+          serviceOrderId: links.serviceOrderId,
+        },
+      });
+    });
+  } catch (error) {
+    if (isDuplicateKeyError(error)) {
+      const [winner] = await getDb()
+        .select({ id: agendaTasks.id })
+        .from(agendaTasks)
+        .where(
+          and(
+            eq(agendaTasks.tenantId, input.tenantId),
+            eq(agendaTasks.idempotencyKey, input.idempotencyKey),
+          ),
+        )
+        .limit(1);
+      if (winner) return { outcome: 'reused', taskId: winner.id };
+    }
+    throw error;
+  }
+
+  return { outcome: 'created', taskId };
 }
 
 interface TaskRow {

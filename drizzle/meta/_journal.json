@@ -113,6 +113,13 @@
       "when": 1790133874602,
       "tag": "0015_portal",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "5",
+      "when": 1790212343722,
+      "tag": "0016_automations",
+      "breakpoints": true
     }
   ]
 }

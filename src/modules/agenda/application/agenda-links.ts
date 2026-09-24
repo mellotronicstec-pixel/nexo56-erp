@@ -78,7 +78,7 @@ function conciliar(
  * uma tarefa que aponta para duas realidades ao mesmo tempo.
  */
 export async function assertContextLinks(
-  context: TenantContext,
+  context: Pick<TenantContext, 'tenantId'>,
   input: ContextLinkInput,
 ): Promise<ContextLinks> {
   const db = getDb();

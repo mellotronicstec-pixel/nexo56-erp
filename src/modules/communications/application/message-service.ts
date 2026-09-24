@@ -5,6 +5,7 @@ import { affectedRows } from '@/core/db/affected-rows';
 import { getDb } from '@/core/db/client';
 import { isDuplicateKeyError } from '@/core/db/duplicate-key';
 import { runInTransaction } from '@/core/db/unit-of-work';
+import { getContext } from '@/core/context/request-context';
 import { BusinessRuleError, InternalError, NotFoundError, ValidationError } from '@/core/errors';
 import { newId } from '@/core/ids/id';
 import { logger } from '@/core/logging/logger';
@@ -13,6 +14,8 @@ import { PERMISSIONS } from '@/modules/access-control/domain/permissions';
 import { AUDIT_ACTIONS, recordAudit } from '@/modules/audit/application/audit-service';
 import { EVENT_TYPES } from '@/modules/events/domain/event';
 import { FEATURES } from '@/modules/features/domain/catalog';
+import { checkFeatureEnabledForTenant } from '@/modules/features/application/effective-access';
+import { tenants } from '@/modules/tenancy/infrastructure/schema';
 import type { TenantContext } from '@/modules/tenancy/domain/tenant-context';
 import { readCertificatePdf } from '@/modules/warranties/application/warranty-certificate-pdf-service';
 import {
@@ -44,7 +47,13 @@ import {
   type OutboundAttachment,
   sanitizeProviderDetail,
 } from './communication-provider';
-import { blank, parse, resolveRecipient, resolveUnit } from './communication-guards';
+import {
+  blank,
+  parse,
+  resolveAutomaticRecipient,
+  resolveRecipient,
+  resolveUnit,
+} from './communication-guards';
 import { resolveTemplateContext } from './message-context';
 
 /**
@@ -240,6 +249,245 @@ export async function createMessage(
   await processMessage({ messageId, tenantId: context.tenantId, context });
 
   return { messageId, reused: false };
+}
+
+// ---------------------------------------------------------------------------
+// Acao de automacao (Prompt 19)
+// ---------------------------------------------------------------------------
+
+export interface AutomationMessageInput {
+  tenantId: string;
+  unitId: string;
+  customerId: string;
+  channel: CommunicationChannel;
+  /** SEMPRE um modelo (item 32 e 139) — o Motor nunca digita texto livre. */
+  templateId: string;
+  serviceOrderId?: string | null;
+  purpose?: (typeof MESSAGE_PURPOSES)[number];
+  /** `automation:{executionId}:action:{actionIndex}` (item 33). */
+  idempotencyKey: string;
+  sourceEventId?: string | null;
+}
+
+export interface AutomationMessageResult {
+  outcome: 'created' | 'reused' | 'skipped';
+  messageId?: string;
+  /** Codigo estavel (item 150), presente quando `outcome === 'skipped'`. */
+  errorCode?: string;
+  errorDetail?: string;
+}
+
+/**
+ * CRIA UMA MENSAGEM A PARTIR DE UMA REGRA DE AUTOMACAO — SEM `TenantContext`.
+ *
+ * `TenantContext` "so pode ser construido a partir de uma SESSAO VALIDA no
+ * servidor" (regra critica do proprio tipo) — o Motor roda sem sessao, e
+ * inventar um contexto sintetico com permissoes forjadas seria exatamente o
+ * "magic superuser" que a arquitetura de automacao proibe (item 66).
+ *
+ * Por isso este caminho NAO chama `authorize()`. A permissao de quem PODE
+ * enviar mensagem ja foi checada uma vez, em CONFIG-TIME, quando uma pessoa
+ * autorizada criou ou habilitou a regra (item 68) — o Motor, em RUNTIME,
+ * revalida apenas o que pode ter mudado desde entao: a FEATURE do tenant
+ * (`checkFeatureEnabledForTenant`, o mesmo mecanismo do Portal do Cliente,
+ * que tambem nao tem `TenantContext`) e os INVARIANTES do proprio dominio —
+ * modelo ativo, canal compativel, destinatario elegivel. Tudo o que exige
+ * julgamento humano (anexo de garantia, por exemplo) continua fora do
+ * alcance desta funcao: o Motor V1 nunca anexa nada.
+ */
+export async function createMessageFromAutomation(
+  input: AutomationMessageInput,
+): Promise<AutomationMessageResult> {
+  const [tenant] = await getDb()
+    .select({ planId: tenants.planId, name: tenants.name })
+    .from(tenants)
+    .where(eq(tenants.id, input.tenantId))
+    .limit(1);
+  if (!tenant) {
+    return {
+      outcome: 'skipped',
+      errorCode: 'TENANT_NOT_FOUND',
+      errorDetail: 'Tenant nao encontrado.',
+    };
+  }
+
+  const acesso = await checkFeatureEnabledForTenant(
+    { tenantId: input.tenantId, planId: tenant.planId },
+    FEATURES.COMMUNICATIONS_CORE,
+  );
+  if (!acesso.allowed) {
+    return {
+      outcome: 'skipped',
+      errorCode: 'ACTION_FEATURE_DISABLED',
+      errorDetail: acesso.message,
+    };
+  }
+
+  const existente = await findByIdempotencyKey(input.tenantId, input.idempotencyKey);
+  if (existente) return { outcome: 'reused', messageId: existente };
+
+  const destinatario = await resolveAutomaticRecipient(
+    { tenantId: input.tenantId },
+    { customerId: input.customerId, channel: input.channel },
+  );
+  if (!destinatario) {
+    return {
+      outcome: 'skipped',
+      errorCode: 'INVALID_RECIPIENT',
+      errorDetail: 'O cliente nao tem um contato principal elegivel para este canal.',
+    };
+  }
+
+  const [modelo] = await getDb()
+    .select({
+      id: communicationTemplates.id,
+      channel: communicationTemplates.channel,
+      subject: communicationTemplates.subject,
+      body: communicationTemplates.body,
+      status: communicationTemplates.status,
+    })
+    .from(communicationTemplates)
+    .where(
+      and(
+        eq(communicationTemplates.id, input.templateId),
+        eq(communicationTemplates.tenantId, input.tenantId),
+      ),
+    )
+    .limit(1);
+
+  if (!modelo) {
+    return {
+      outcome: 'skipped',
+      errorCode: 'ACTION_VALIDATION_FAILED',
+      errorDetail: 'Modelo nao encontrado.',
+    };
+  }
+  if (modelo.status !== 'active') {
+    return {
+      outcome: 'skipped',
+      errorCode: 'ACTION_VALIDATION_FAILED',
+      errorDetail: 'Este modelo foi arquivado e nao pode mais ser usado.',
+    };
+  }
+  if (modelo.channel !== input.channel) {
+    return {
+      outcome: 'skipped',
+      errorCode: 'ACTION_VALIDATION_FAILED',
+      errorDetail: 'Este modelo foi escrito para outro canal.',
+    };
+  }
+
+  const contexto = await resolveTemplateContext(
+    { tenantId: input.tenantId, tenantName: tenant.name },
+    {
+      customerId: destinatario.customerId,
+      customerName: destinatario.customerName,
+      unitId: input.unitId,
+      serviceOrderId: input.serviceOrderId ?? null,
+    },
+  );
+
+  const usaAssunto = channelUsesSubject(input.channel);
+  let texto: ResolvedText;
+  try {
+    texto = {
+      subject:
+        usaAssunto && modelo.subject
+          ? renderTemplate(modelo.subject, contexto.values, contexto.scopes)
+          : null,
+      body: renderTemplate(modelo.body, contexto.values, contexto.scopes),
+      templateId: modelo.id,
+    };
+  } catch (error) {
+    return {
+      outcome: 'skipped',
+      errorCode: 'ACTION_VALIDATION_FAILED',
+      errorDetail: error instanceof Error ? error.message : String(error),
+    };
+  }
+
+  const recipient = buildRecipient({
+    channel: input.channel,
+    rawValue: destinatario.rawValue,
+    customerId: destinatario.customerId,
+  });
+
+  const messageId = newId();
+  const now = new Date();
+  const correlationId = getContext()?.correlationId ?? null;
+
+  try {
+    await runInTransaction(async (tx, emit) => {
+      await tx.insert(communicationMessages).values({
+        id: messageId,
+        tenantId: input.tenantId,
+        unitId: input.unitId,
+        channel: input.channel,
+        status: 'queued',
+        /** Origem e o evento de dominio, nunca "manual" (item 27 do catalogo). */
+        origin: 'domain_event',
+        purpose: input.purpose ?? 'generic',
+        recipientValue: recipient.value,
+        recipientDisplay: recipient.display,
+        customerId: recipient.customerId,
+        subject: texto.subject,
+        body: texto.body,
+        templateId: texto.templateId,
+        serviceOrderId: input.serviceOrderId ?? null,
+        /** Nulo de proposito: quem pediu foi o Motor reagindo a um evento, nao uma pessoa. */
+        requestedBy: null,
+        sourceEventId: input.sourceEventId ?? null,
+        idempotencyKey: input.idempotencyKey,
+        correlationId,
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      await recordAudit(
+        {
+          action: AUDIT_ACTIONS.MESSAGE_CREATED,
+          entityType: 'communication_message',
+          entityId: messageId,
+          tenantId: input.tenantId,
+          unitId: input.unitId,
+          userId: null,
+          after: {
+            channel: input.channel,
+            purpose: input.purpose ?? 'generic',
+            origin: 'domain_event',
+            customerId: recipient.customerId,
+            serviceOrderId: input.serviceOrderId ?? null,
+            hasAttachment: false,
+          },
+        },
+        tx,
+      );
+
+      await emit({
+        type: EVENT_TYPES.MESSAGE_CREATED,
+        tenantId: input.tenantId,
+        payload: {
+          messageId,
+          unitId: input.unitId,
+          channel: input.channel,
+          purpose: input.purpose ?? 'generic',
+          customerId: recipient.customerId,
+          serviceOrderId: input.serviceOrderId ?? null,
+        },
+      });
+    });
+  } catch (error) {
+    if (isDuplicateKeyError(error)) {
+      const vencedor = await findByIdempotencyKey(input.tenantId, input.idempotencyKey);
+      if (vencedor) return { outcome: 'reused', messageId: vencedor };
+    }
+    throw error;
+  }
+
+  /** COMMIT feito. A entrega, como no caminho manual, e problema separado. */
+  await processMessage({ messageId, tenantId: input.tenantId, context: null });
+
+  return { outcome: 'created', messageId };
 }
 
 async function findByIdempotencyKey(tenantId: string, key: string): Promise<string | null> {

@@ -15,4 +15,8 @@ export async function register(): Promise<void> {
   const { registerCommunicationSubscriptions } =
     await import('@/modules/communications/application/subscriptions');
   registerCommunicationSubscriptions();
+
+  const { registerAutomationSubscriptions } =
+    await import('@/modules/automations/application/subscriptions');
+  registerAutomationSubscriptions();
 }

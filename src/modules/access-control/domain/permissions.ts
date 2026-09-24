@@ -269,6 +269,19 @@ export const PERMISSIONS = {
    * para ver um numero especifico dentro dele.
    */
   ANALYTICS_VIEW: 'analytics.view',
+
+  // --- Prompt 19: motor de automacoes --------------------------------------
+  /** Ver a lista de regras e o historico de execucoes. */
+  AUTOMATIONS_VIEW: 'automations.view',
+  /**
+   * Criar, editar, habilitar, desabilitar e arquivar regra (item 63).
+   *
+   * NAO basta sozinha para configurar QUALQUER acao (item 64): uma regra com
+   * acao de Comunicacao exige tambem `communications.send` no escopo, e uma
+   * com acao de Agenda exige `agenda.tasks.create` — checado no momento de
+   * salvar, pela RuleValidator, nunca herdado.
+   */
+  AUTOMATIONS_MANAGE: 'automations.manage',
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -799,6 +812,19 @@ export const PERMISSION_CATALOG: readonly PermissionDefinition[] = [
       'Abre o Painel (indicadores e graficos). Cada cartao dentro dele continua exigindo a permissao do dominio de origem.',
     featureKey: 'analytics.dashboard',
   },
+  {
+    key: PERMISSIONS.AUTOMATIONS_VIEW,
+    name: 'Ver automacoes',
+    description: 'Consulta a lista de regras de automacao e o historico de execucoes.',
+    featureKey: 'automation.core',
+  },
+  {
+    key: PERMISSIONS.AUTOMATIONS_MANAGE,
+    name: 'Gerenciar automacoes',
+    description:
+      'Cria, edita, habilita, desabilita e arquiva regras de automacao. Configurar uma acao especifica (Comunicacao, Agenda) exige tambem a permissao daquele modulo no mesmo escopo.',
+    featureKey: 'automation.core',
+  },
 ];
 
 /** Papeis estruturais criados no bootstrap de cada tenant. */
@@ -1066,6 +1092,12 @@ export const PERMISSION_GROUPS = [
     name: 'Painel',
     description: 'Indicadores e graficos agregados dos modulos operacionais.',
     permissions: [PERMISSIONS.ANALYTICS_VIEW],
+  },
+  {
+    key: 'automacoes',
+    name: 'Motor de Automacoes',
+    description: 'Regras que reagem a eventos ou horarios e disparam acoes controladas.',
+    permissions: [PERMISSIONS.AUTOMATIONS_VIEW, PERMISSIONS.AUTOMATIONS_MANAGE],
   },
 ] as const satisfies ReadonlyArray<{
   key: string;

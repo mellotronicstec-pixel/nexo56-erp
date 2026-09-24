@@ -20,6 +20,14 @@ export async function migrateTestDatabase(): Promise<void> {
  */
 const TABLES_IN_DELETE_ORDER = [
   'audit_logs',
+  // Motor de Automacoes (Prompt 19): tentativa pende da execucao, execucao e
+  // versao pendem da regra, unidade da regra pende da regra. Nenhuma FK para
+  // OS/cliente/etc — as referencias a outros modulos sao idRef sem FK.
+  'automation_action_attempts',
+  'automation_executions',
+  'automation_rule_versions',
+  'automation_rule_units',
+  'automation_rules',
   // Comunicacao antes de tudo: anexo e tentativa pendem da mensagem, e a
   // mensagem pende de OS, cliente, unidade e garantia — sao as folhas mais
   // externas que existem hoje.

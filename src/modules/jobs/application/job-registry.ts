@@ -5,6 +5,10 @@ import { sweepStuckMessages } from '@/modules/communications/application/stuck-m
 import { sweepLowStock } from '@/modules/inventory/application/low-stock-job';
 import { expireOverdueQuotes } from '@/modules/quotes/application/quote-expiry-job';
 import { sweepOverdueFollowUps } from '@/modules/service-orders/application/follow-up-job';
+import {
+  dispatchEventJob,
+  scheduleTickJob,
+} from '@/modules/automations/application/automation-jobs';
 import type { JobHandler } from '@/modules/jobs/domain/job';
 
 /**
@@ -107,6 +111,8 @@ const HANDLERS: readonly JobHandler<never>[] = [
   quoteExpiryJob as JobHandler<never>,
   lowStockSweepJob as JobHandler<never>,
   stuckMessagesJob as JobHandler<never>,
+  dispatchEventJob as JobHandler<never>,
+  scheduleTickJob as JobHandler<never>,
 ];
 
 const BY_NAME = new Map(HANDLERS.map((handler) => [handler.name, handler]));
@@ -150,4 +156,11 @@ export const RECURRING_JOBS = [
    * envio em curso.
    */
   { name: 'communication.sweep-stuck', everyMinutes: 15 },
+  /**
+   * Coordenador de agendamento do Motor de Automacoes (Prompt 19). O
+   * intervalo e o mesmo `TICK_INTERVAL_MINUTES` de `schedule-coordinator.ts`
+   * — os dois precisam concordar, ou uma regra configurada perto do fim de
+   * uma janela poderia ficar sem tick nenhum que a cubra.
+   */
+  { name: 'automation.schedule-tick', everyMinutes: 5 },
 ] as const;

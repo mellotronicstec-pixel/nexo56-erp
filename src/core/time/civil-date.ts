@@ -98,6 +98,22 @@ export function isOverdue(civil: string, timeZone: string, now: Date = new Date(
   return civil < todayIn(timeZone, now);
 }
 
+/**
+ * Hora civil `HH:mm` de agora, no fuso indicado (Prompt 19, item 19).
+ *
+ * O Schedule Coordinator compara isto contra o horario configurado na regra
+ * — nunca `now.getUTCHours()`, que daria "09:00" errado para qualquer fuso
+ * diferente de UTC (a mesma armadilha que `todayIn` evita para datas).
+ */
+export function nowTimeIn(timeZone: string, now: Date = new Date()): string {
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).format(now);
+}
+
 /** Exibicao curta em pt-BR, sem passar por `Date` (que reintroduziria fuso). */
 export function formatCivilDateBR(civil: string): string {
   const [year, month, day] = civil.split('-');

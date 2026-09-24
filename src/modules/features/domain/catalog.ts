@@ -64,6 +64,17 @@ export const FEATURES = {
    * deles.
    */
   ANALYTICS_DASHBOARD: 'analytics.dashboard',
+  /**
+   * Motor de Automacoes (Prompt 19). OPTIONAL e SEM dependencia declarada,
+   * pelo mesmo raciocinio do Painel (item 70 a 73): as duas acoes que o
+   * Motor pode orquestrar (Comunicacao, Agenda) sao elas mesmas OPTIONAL, e
+   * cada ACAO revalida a SUA propria feature em tempo de execucao — nunca a
+   * configuracao antiga de uma regra supera o Feature Catalog atual (item
+   * 69). Declarar aqui uma dependencia de `communications.core` ou
+   * `operations.agenda` obrigaria ligar um modulo operacional so para poder
+   * configurar automacao nenhuma acao nenhuma.
+   */
+  AUTOMATION_CORE: 'automation.core',
 } as const;
 
 export type FeatureKey = (typeof FEATURES)[keyof typeof FEATURES];
@@ -419,6 +430,14 @@ export const FEATURE_CATALOG: readonly FeatureDefinition[] = [
      */
     type: 'OPTIONAL',
     dependsOn: [FEATURES.CORE_SERVICE_ORDERS],
+  },
+  {
+    key: FEATURES.AUTOMATION_CORE,
+    name: 'Motor de Automacoes',
+    description:
+      'Regras que reagem a fatos do sistema (eventos) ou a horarios agendados e disparam acoes controladas: enviar uma comunicacao por modelo, criar uma tarefa na Agenda.',
+    type: 'OPTIONAL',
+    dependsOn: [],
   },
 ];
 

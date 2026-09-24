@@ -381,3 +381,11 @@ export const IconDashboard = (props: IconProps) => (
     <path d="M4 20V10M12 20V4M20 20v-7" />
   </Icon>
 );
+
+/** Automacao: raio num contorno — fato dispara acao, sem interpretar nada por conta propria. */
+export const IconAutomation = (props: IconProps) => (
+  <Icon {...props}>
+    <rect x="3" y="3" width="18" height="18" rx="4" />
+    <path d="M13 7l-4 6h3l-1 4 4-6h-3l1-4z" />
+  </Icon>
+);

@@ -196,6 +196,18 @@ export const AUDIT_ACTIONS = {
   PORTAL_LOGIN_SUCCEEDED: 'portal.login.succeeded',
   PORTAL_IDENTITY_BLOCKED: 'portal.identity.blocked',
   PORTAL_IDENTITY_UNBLOCKED: 'portal.identity.unblocked',
+
+  // --- Prompt 19: motor de automacoes -------------------------------------
+  /**
+   * Auditoria de CONFIGURACAO (item 144), separada do historico de execucao
+   * (`automation_executions` ja e o historico daquilo — item 145). Toda
+   * acao aqui tem `userId` real: quem mexeu na regra.
+   */
+  AUTOMATION_RULE_CREATED: 'automation_rule.created',
+  AUTOMATION_RULE_VERSION_PUBLISHED: 'automation_rule.version_published',
+  AUTOMATION_RULE_ENABLED: 'automation_rule.enabled',
+  AUTOMATION_RULE_DISABLED: 'automation_rule.disabled',
+  AUTOMATION_RULE_ARCHIVED: 'automation_rule.archived',
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];

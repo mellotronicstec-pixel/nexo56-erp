@@ -952,3 +952,78 @@ A migration também corrige a descrição da tarefa sistêmica de preparação, 
 `(service_order_id, kind, open_marker)` — texto não identifica nada, então a
 correção não duplica, não reabre e não toca em estado
 ([ADR-075](../adr/ADR-075-compatibilidade-com-o-follow-up-historico.md)).
+
+---
+
+## Motor de Automações (Prompt 19, migration 0016)
+
+Cinco tabelas novas. Nenhuma tabela existente ganhou coluna. Ver
+[ADR-082](../adr/ADR-082-motor-de-automacoes-fechado-por-catalogo.md) e
+[ADR-083](../adr/ADR-083-autoridade-de-configuracao-nao-e-autoridade-de-runtime.md),
+e `docs/modules/automations/` para o detalhamento por assunto.
+
+### `automation_rules`
+
+Ponteiro mutável: nome, se está habilitada, escopo e qual versão está ativa.
+
+| Coluna               | Tipo          | Nota                                                               |
+| -------------------- | ------------- | ------------------------------------------------------------------ |
+| `enabled`            | `boolean`     | desabilitada nunca produz execução nova                            |
+| `scope_kind`         | `varchar(20)` | `UNIT_SET` \| `TENANT_WIDE` — `CHECK`                              |
+| `current_version_id` | `varchar(36)` | **referência sem FK** (evita ciclo com `automation_rule_versions`) |
+| `archived_at`        | `instant()`   | arquivar preserva histórico; nunca dispara de novo                 |
+
+Índice `ix_automation_rule_tenant_enabled (tenant_id, enabled)` — hot path do
+disparo por evento e do tick de agendamento (ver
+`docs/modules/automations/performance.md`).
+
+### `automation_rule_units`
+
+Escopo de unidade **persistido** na criação — nunca "todas as unidades que o
+usuário tem hoje" recalculado dinamicamente. PK composta
+`(rule_id, unit_id)`.
+
+### `automation_rule_versions`
+
+Definição **imutável** da regra: gatilho, condições, ações. Editar a regra
+sempre grava uma versão nova; nunca sobrescreve a existente.
+
+| Coluna           | Tipo           | Nota                                                        |
+| ---------------- | -------------- | ----------------------------------------------------------- |
+| `version_number` | `int unsigned` | `UNIQUE (rule_id, version_number)`                          |
+| `trigger_kind`   | `varchar(20)`  | `domain_event` \| `schedule` — `CHECK`                      |
+| `trigger_key`    | `varchar(80)`  | chave do `AutomationTriggerCatalog`, nunca string livre     |
+| `definition`     | `json`         | condições + ações, sempre validadas por Zod antes de gravar |
+
+### `automation_executions`
+
+Um disparo real de uma regra contra um evento ou uma ocorrência de
+agendamento.
+
+| Coluna            | Tipo           | Nota                                                                                  |
+| ----------------- | -------------- | ------------------------------------------------------------------------------------- |
+| `trigger_ref`     | `varchar(190)` | id do evento de domínio, ou a ocorrência agendada (`YYYY-MM-DD`)                      |
+| `idempotency_key` | `varchar(240)` | **a trava real**: `UNIQUE (tenant_id, idempotency_key)`, nunca `SELECT`-then-`INSERT` |
+| `status`          | `varchar(20)`  | `skipped` \| `running` \| `succeeded` \| `failed` — `CHECK`                           |
+| `input_snapshot`  | `json`         | mínimo necessário para explicar o disparo; nunca a entidade inteira, nunca PII        |
+
+### `automation_action_attempts`
+
+Append-only: uma linha por tentativa de uma ação de uma execução.
+
+| Coluna              | Tipo           | Nota                                                                                                                |
+| ------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `action_index`      | `int unsigned` | posição da ação na lista da versão (0-based)                                                                        |
+| `attempt_number`    | `int unsigned` | `UNIQUE (execution_id, action_index, attempt_number)` — trava de claim concorrente                                  |
+| `error_code`        | `varchar(60)`  | código estável (`PROVIDER_NOT_CONFIGURED`, `INVALID_RECIPIENT`, ...)                                                |
+| `domain_result_ref` | `varchar(36)`  | **sem FK**: id da linha produzida no módulo alvo (messageId/taskId) — Automations lê o resultado, nunca é dono dele |
+
+### Por que cinco tabelas, e não três
+
+A tentação óbvia seria uma tabela `automation_rules` com a definição embutida
+e uma `automation_executions`. Separar Rule de RuleVersion é o que permite
+"editar não apaga histórico" sem duplicar a regra inteira a cada edição — só
+a definição, que é o que realmente muda. Separar Execution de ActionAttempt é
+o que permite uma execução com várias ações, cada uma com seu próprio
+histórico de tentativas (retry), sem misturar o status agregado da execução
+com o status de cada passo.

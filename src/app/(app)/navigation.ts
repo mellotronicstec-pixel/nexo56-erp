@@ -44,7 +44,8 @@ export type NavIconKey =
   | 'task'
   | 'work-center'
   | 'message'
-  | 'dashboard';
+  | 'dashboard'
+  | 'automation';
 
 export interface NavItem {
   href: string;
@@ -276,6 +277,28 @@ export const NAV_SECTIONS: readonly NavSection[] = [
     ],
   },
   {
+    /**
+     * Configuracoes e SECAO PROPRIA, separada de Administracao (Prompt 19).
+     *
+     * Administracao e sobre a ESTRUTURA do tenant (quem existe, quem pode o
+     * que, quais modulos estao ligados). Automacoes e CONFIGURACAO DE
+     * COMPORTAMENTO — regras que a empresa desenha, nao papeis nem unidades.
+     * A distincao importa porque `automations.manage` e uma permissao de
+     * NEGOCIO, tipicamente concedida a quem configura o atendimento, nao a
+     * quem administra o tenant.
+     */
+    title: 'Configuracoes',
+    items: [
+      {
+        href: '/configuracoes/automacoes',
+        label: 'Automacoes',
+        featureKey: FEATURES.AUTOMATION_CORE,
+        permission: PERMISSIONS.AUTOMATIONS_VIEW,
+        icon: 'automation',
+      },
+    ],
+  },
+  {
     title: 'Administracao',
     items: [
       {
@@ -352,4 +375,8 @@ export const BREADCRUMB_LABELS: Readonly<Record<string, string>> = {
   modulos: 'Modulos e funcionalidades',
   auditoria: 'Auditoria',
   'minha-conta': 'Minha conta',
+  configuracoes: 'Configuracoes',
+  automacoes: 'Automacoes',
+  nova: 'Nova automacao',
+  execucoes: 'Execucoes',
 };

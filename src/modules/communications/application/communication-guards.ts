@@ -81,7 +81,7 @@ export interface ResolvedRecipient {
  * provedor, cobrada, depois de a tela ter dito "enviando".
  */
 export async function resolveRecipient(
-  context: TenantContext,
+  context: Pick<TenantContext, 'tenantId'>,
   input: { customerId: string; contactValue: string; channel: CommunicationChannel },
 ): Promise<ResolvedRecipient> {
   const [cliente] = await getDb()
@@ -120,6 +120,51 @@ export async function resolveRecipient(
         : 'Escolha um contato que esteja no cadastro deste cliente.',
     );
   }
+
+  return { customerId: cliente.id, customerName: cliente.name, rawValue: encontrado };
+}
+
+/**
+ * DESTINATARIO PARA UMA ACAO DE AUTOMACAO (Prompt 19, itens 139 e 140).
+ *
+ * O Motor NUNCA aceita telefone digitado na regra (item 139) — o destino sai
+ * do cadastro no momento em que a acao roda, nunca de um snapshot congelado
+ * na versao da regra, porque o contato do cliente pode ter mudado depois
+ * (item 140). Diferente de `resolveRecipient` (que confirma um valor que a
+ * TELA already mostrou escolhido), aqui ninguem escolheu nada: a unica
+ * fonte inambigua e o CONTATO PRINCIPAL do cliente, do tipo que o canal
+ * exige. Sem contato principal elegivel, a acao falha explicitamente
+ * (`NO_ELIGIBLE_RECIPIENT`) — o Motor nunca adivinha qual dos varios
+ * contatos usar.
+ */
+export async function resolveAutomaticRecipient(
+  context: Pick<TenantContext, 'tenantId'>,
+  input: { customerId: string; channel: CommunicationChannel },
+): Promise<ResolvedRecipient | null> {
+  const [cliente] = await getDb()
+    .select({ id: customers.id, name: customers.name })
+    .from(customers)
+    .where(and(eq(customers.id, input.customerId), eq(customers.tenantId, context.tenantId)))
+    .limit(1);
+
+  if (!cliente) return null;
+
+  const tipo = CHANNEL_CONTACT_TYPE[input.channel];
+  const exigeWhatsapp = input.channel === 'whatsapp';
+
+  const linhas = await getDb().execute(sql`
+    SELECT c.value
+      FROM customer_contacts c
+     WHERE c.customer_id = ${input.customerId}
+       AND c.tenant_id = ${context.tenantId}
+       AND c.type = ${tipo}
+       AND c.is_primary = 1
+       ${exigeWhatsapp ? sql`AND c.is_whatsapp = 1` : sql``}
+     LIMIT 1
+  `);
+
+  const encontrado = (linhas as unknown as Array<Array<{ value: string }>>)[0]?.[0]?.value;
+  if (!encontrado) return null;
 
   return { customerId: cliente.id, customerName: cliente.name, rawValue: encontrado };
 }

@@ -13,7 +13,10 @@ fronteira com o workflow); 037–039 do Prompt 08 (workflow centralizado,
 concorrência otimista e follow-up); 040–042 do Prompt 09 (Orçamentos); 043–047
 do Prompt 10 (Estoque e Peças); 048–052 do Prompt 11 (Fornecedores e Compras);
 053–061 do Prompt 12 (Financeiro); 062–071 do Prompt 13 (Garantias); 072 do
-Prompt 13.1 (certificado em PDF).
+Prompt 13.1 (certificado em PDF); 073–076 do Prompt 14 (Agenda e Tarefas); 077
+do Prompt 15 (Central de Trabalho); 078–079 do Prompt 16 (Comunicação); 080 do
+Prompt 17 (Portal do Cliente); 081 do Prompt 18 (Painel/Analytics); 082–083 do
+Prompt 19 (Motor de Automações).
 
 Um ADR não é reescrito quando a decisão muda: cria-se um novo ADR que o
 substitui, e o antigo passa a `Substituído por ADR-XXX`.
@@ -100,3 +103,6 @@ substitui, e o antigo passa a `Substituído por ADR-XXX`.
 | [078](ADR-078-comunicacao-nao-e-fonte-de-verdade.md)                       | A Comunicação informa o fato; ela não é o fato        | Aceito |
 | [079](ADR-079-template-sem-eval.md)                                        | Template é texto com lacunas, nunca programa          | Aceito |
 | [080](ADR-080-autenticacao-externa-do-portal.md)                           | Autenticação do Portal é link mágico, nunca senha     | Aceito |
+| [081](ADR-081-o-painel-e-live-query-sem-data-warehouse.md)                 | O Painel é live query, sem Data Warehouse             | Aceito |
+| [082](ADR-082-motor-de-automacoes-fechado-por-catalogo.md)                 | O Motor de Automações é fechado por catálogo          | Aceito |
+| [083](ADR-083-autoridade-de-configuracao-nao-e-autoridade-de-runtime.md)   | Autoridade de configuração ≠ autoridade de runtime    | Aceito |
