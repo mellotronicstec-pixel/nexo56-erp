@@ -216,6 +216,22 @@ export const automationExecutions = mysqlTable(
     errorSummary: varchar('error_summary', { length: 500 }),
     correlationId: varchar('correlation_id', { length: 36 }),
 
+    /**
+     * CLAIM ATOMICO DO PROCESSAMENTO (Prompt 19, fechamento — migration 0017).
+     *
+     * Mesmo padrao de `jobs.locked_by`/`jobs.locked_at`: um `UPDATE`
+     * condicional (`WHERE id=? AND (locked_at IS NULL OR locked_at < stale)`)
+     * decide, via `affectedRows`, qual dos processadores concorrentes de
+     * `runExecutionActions` para ESTA execucao e o UNICO que pode avancar o
+     * laco de acoes. Os perdedores nunca chegam a inserir tentativa nem a
+     * chamar o servico oficial — resolve por construcao o caso em que
+     * `nextAttemptNumber` (SELECT MAX+1) computaria numeros diferentes para
+     * processadores que apenas ficaram fora de ordem, nao realmente
+     * concorrentes na mesma tentativa.
+     */
+    lockedBy: varchar('locked_by', { length: 64 }),
+    lockedAt: instant('locked_at'),
+
     createdAt: instant('created_at').notNull(),
   },
   (table) => [

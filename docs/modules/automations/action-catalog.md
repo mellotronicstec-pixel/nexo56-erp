@@ -21,6 +21,16 @@ principal do cliente no canal do modelo
 é WhatsApp). Se não houver contato principal no canal, a ação falha com
 `INVALID_RECIPIENT` — o Motor nunca adivinha um destinatário.
 
+**Sucesso da ação exige entrega aceita, não apenas fila.** `createMessageFromAutomation`
+propaga o resultado real de `processMessage` (o mesmo passo que decide se a
+mensagem vira `sent` ou `failed` no caminho manual) — nunca considera a ação
+bem-sucedida só por ter enfileirado a mensagem. Se o provedor recusa, não
+responde, ou não existe (`provider_not_configured`/`provider_unavailable`
+— ver `error-codes.ts`), a ação (e a execução) ficam `failed`. Uma mensagem
+já existente (mesma `idempotencyKey`) reaproveitada continua com o status
+real que ela já tinha: reuso de uma mensagem `failed` nunca vira sucesso da
+ação só por causa do reuso.
+
 ## `agenda.create_task`
 
 Config: `{ title, notes?, dueOffsetDays? }` (0 a 90 dias corridos, sem hora —

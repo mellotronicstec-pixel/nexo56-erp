@@ -1,6 +1,7 @@
 import 'server-only';
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, isNull, lt, or } from 'drizzle-orm';
 import { getDb } from '@/core/db/client';
+import { affectedRows } from '@/core/db/affected-rows';
 import { isDuplicateKeyError } from '@/core/db/duplicate-key';
 import { newId } from '@/core/ids/id';
 import { logger } from '@/core/logging/logger';
@@ -40,28 +41,100 @@ import {
  * terminou com sucesso. Uma falha PARA a sequencia — nao pula para a
  * proxima (item 44).
  *
+ * SINGLE-CLAIM DA EXECUCAO (fechamento do Prompt 19, migration 0017):
+ * `nextAttemptNumber` (SELECT MAX+1) por si so NAO impede dois
+ * processadores concorrentes de avancarem para NUMEROS DE TENTATIVA
+ * diferentes — um deles pode legitimamente ver a tentativa anterior ja
+ * commitada e "retomar" com o numero seguinte, mesmo que a tentativa
+ * anterior tenha tido SUCESSO (nao falhado). Isso produzia mais de uma
+ * `automation_action_attempt` `succeeded` para a MESMA acao sob concorrencia
+ * genuina — medido, nao suposto. A correcao mora ANTES do laco de acoes:
+ * `claimExecution` e um `UPDATE` condicional (`WHERE status='running' AND
+ * (locked_at IS NULL OR locked_at < stale)`), mesmo idioma de
+ * `jobs.locked_by`/`jobs.locked_at`, que so deixa UM processo entrar no laco
+ * por vez. Os perdedores nunca inserem tentativa nem chamam o servico
+ * oficial — reconhecem o estado real (ja terminou / outro processo ainda
+ * dentro do prazo) sem registrar sucesso algum.
+ *
  * RESUMIVEL POR CONSTRUCAO (item 89 e 155): a chave de idempotencia que
  * chega ao servico de dominio (`automation:{executionId}:action:{index}`)
  * NUNCA muda entre tentativas — so o numero da TENTATIVA (`attempt_number`,
- * append-only, item 45) incrementa. Se o worker morrer depois do efeito
- * colateral mas antes de marcar sucesso, o proximo processamento desta
- * MESMA execucao encontra a acao "sem tentativa bem-sucedida", tenta de
- * novo, e o servico de dominio devolve `reused: true` — nunca uma segunda
- * mensagem, nunca uma segunda tarefa.
+ * append-only, item 45) incrementa. Se o worker vencedor do claim morrer
+ * DEPOIS do efeito colateral mas ANTES de marcar sucesso, o claim fica
+ * obsoleto (`locked_at` mais velho que `LOCK_STALE_MS`) e um processamento
+ * seguinte pode reclama-lo: encontra a acao "ja com tentativa bem-sucedida"
+ * (`hasSucceededAttempt`) e converge para `succeeded` sem chamar o servico
+ * oficial de novo — e, mesmo se chamasse, a chave de idempotencia do
+ * servico de dominio (camada 3) ainda impediria uma segunda mensagem/tarefa.
+ * As duas camadas continuam existindo: single-claim aqui, idempotencia de
+ * destino em Communications/Agenda — uma nao substitui a outra (item 5 do
+ * fechamento).
  */
 
 export function deriveActionIdempotencyKey(executionId: string, actionIndex: number): string {
   return `automation:${executionId}:action:${actionIndex}`;
 }
 
+/** Claim obsoleto apos este intervalo sem atualizacao — permite retomada
+ *  apos queda de worker sem exigir heartbeat. */
+const LOCK_STALE_MS = 5 * 60 * 1000;
+
 interface RunOutcome {
-  status: 'succeeded' | 'failed';
+  /** `claim_not_acquired`: este processo NAO era o unico a tentar processar
+   *  esta execucao agora e perdeu a disputa — nao rodou nenhuma acao, nao
+   *  registrou nenhuma tentativa. Nunca confundir com `failed`, que sempre
+   *  significa "uma acao rodou e falhou permanentemente". */
+  status: 'succeeded' | 'failed' | 'claim_not_acquired';
   errorSummary?: string;
+}
+
+type ClaimResult = { claimed: true } | { claimed: false; currentStatus: string };
+
+/**
+ * SINGLE-CLAIM ATOMICO (Secao 3 do fechamento do Prompt 19).
+ *
+ * `UPDATE ... WHERE id=? AND tenant_id=? AND status='running' AND
+ * (locked_at IS NULL OR locked_at < stale)` — o mesmo idioma de
+ * `claimNextJob`/`processMessage` (CAS por `UPDATE` condicional, nunca
+ * `SELECT`-then-decide, nunca mutex em memoria, nunca dependencia de
+ * processo unico). `affectedRows === 1` e a UNICA prova de vitoria: o
+ * proprio MariaDB serializa a decisao entre conexoes concorrentes.
+ */
+async function claimExecution(executionId: string, tenantId: string): Promise<ClaimResult> {
+  const db = getDb();
+  const now = new Date();
+  const staleBefore = new Date(now.getTime() - LOCK_STALE_MS);
+
+  const result = await db
+    .update(automationExecutions)
+    .set({ lockedBy: newId(), lockedAt: now })
+    .where(
+      and(
+        eq(automationExecutions.id, executionId),
+        eq(automationExecutions.tenantId, tenantId),
+        eq(automationExecutions.status, 'running'),
+        or(isNull(automationExecutions.lockedAt), lt(automationExecutions.lockedAt, staleBefore)),
+      ),
+    );
+
+  if (affectedRows(result) === 1) return { claimed: true };
+
+  const [current] = await db
+    .select({ status: automationExecutions.status })
+    .from(automationExecutions)
+    .where(
+      and(eq(automationExecutions.id, executionId), eq(automationExecutions.tenantId, tenantId)),
+    )
+    .limit(1);
+  if (!current) throw new Error(`Execucao de automacao nao encontrada: ${executionId}`);
+  return { claimed: false, currentStatus: current.status };
 }
 
 /**
  * Roda (ou retoma) as acoes de UMA execucao ja criada. Idempotente: chamar
- * duas vezes para a mesma execucao nunca produz efeito colateral duplicado.
+ * duas vezes para a mesma execucao nunca produz efeito colateral duplicado
+ * — e, sob concorrencia genuina, exatamente UM processo chega a rodar
+ * qualquer acao (ver `claimExecution`).
  */
 export async function runExecutionActions(
   executionId: string,
@@ -81,6 +154,23 @@ export async function runExecutionActions(
   }
   if (execution.status === 'succeeded' || execution.status === 'skipped') {
     return { status: 'succeeded' };
+  }
+  if (execution.status === 'failed') {
+    return { status: 'failed', errorSummary: execution.errorSummary ?? undefined };
+  }
+
+  const claim = await claimExecution(executionId, tenantId);
+  if (!claim.claimed) {
+    if (claim.currentStatus === 'succeeded' || claim.currentStatus === 'skipped') {
+      return { status: 'succeeded' };
+    }
+    if (claim.currentStatus === 'failed') {
+      return { status: 'failed' };
+    }
+    /** Ainda `running`, mas o claim pertence a outro processo dentro do
+     *  prazo (`locked_at` recente) — nem `succeeded` nem `failed`: este
+     *  processo simplesmente nao processou nada agora. */
+    return { status: 'claim_not_acquired' };
   }
 
   const [version] = await db
@@ -122,15 +212,17 @@ export async function runExecutionActions(
       });
     } catch (error) {
       /**
-       * CLAIM ATOMICO DA ACAO (item 81 e 126). Dois processadores concorrentes
-       * desta MESMA execucao podem chegar aqui ao mesmo tempo; o UNIQUE
-       * `(execution_id, action_index, attempt_number)` deixa so um vencer o
-       * INSERT. Quem perde nao tenta de novo aqui — devolve a execucao como
-       * "ainda em andamento" e sai: o vencedor e quem decide o resultado
-       * desta acao e quem chama `finishExecution` no final do laco.
+       * DEFESA EM PROFUNDIDADE (item 81 e 126) — nao a trava principal.
+       * `claimExecution`, acima, ja garante que so UM processo entra neste
+       * laco por execucao; isto so dispara no caso raro de um claim ficar
+       * obsoleto (`LOCK_STALE_MS`) enquanto o dono original ainda esta
+       * genuinamente processando (sem renovar o lease). O UNIQUE
+       * `(execution_id, action_index, attempt_number)` decide o empate; quem
+       * perde nao inventa sucesso nenhum — `claim_not_acquired`, igual ao
+       * caso de nao vencer o claim da execucao.
        */
       if (isDuplicateKeyError(error)) {
-        return { status: 'failed', errorSummary: 'Outro processo ja esta executando esta acao.' };
+        return { status: 'claim_not_acquired' };
       }
       throw error;
     }
@@ -287,7 +379,7 @@ async function runOneAction(
 }
 
 function toActionResult(
-  outcome: 'created' | 'reused' | 'skipped',
+  outcome: 'created' | 'reused' | 'skipped' | 'failed',
   resultId: string | null,
   errorCode: string | undefined,
   errorDetail: string | undefined,
@@ -325,6 +417,12 @@ async function finishExecution(
       completedAt: new Date(),
       errorSummary:
         status === 'failed' ? (errorSummary ?? 'Falha nao especificada.').slice(0, 500) : null,
+      /** Libera o claim na MESMA escrita que fecha a execucao — nenhum
+       *  processo futuro precisa esperar `LOCK_STALE_MS` para reconhecer que
+       *  ela ja terminou (o proprio `status` terminal ja basta, mas limpar o
+       *  lock evita um `locked_at` antigo e enganoso no registro). */
+      lockedBy: null,
+      lockedAt: null,
     })
     .where(
       and(eq(automationExecutions.id, executionId), eq(automationExecutions.tenantId, tenantId)),

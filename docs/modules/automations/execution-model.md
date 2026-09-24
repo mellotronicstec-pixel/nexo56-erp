@@ -63,8 +63,27 @@ chave de idempotência da chamada ao módulo-alvo é estável por
 `(execution, actionIndex)`, não por tentativa. Se o worker cair entre a ação
 0 e a ação 1, retomar a execução não reenvia a ação 0 (ver `idempotency.md`).
 
+Antes de iterar qualquer ação, `runExecutionActions` disputa o **claim** da
+execução (`automation_executions.locked_by`/`locked_at`, item 1.5 de
+`idempotency.md`) — só o vencedor entra no laço. Isto é o que garante, sob
+concorrência genuína, que **exatamente um** processo chega a chamar o
+serviço oficial de cada ação, não só que o efeito final não duplica.
+
 ## Status de execução
 
 `skipped` (condição não bateu) · `running` (em andamento ou retomável) ·
-`succeeded` · `failed` (alguma ação com erro permanente — ver
-`error-codes.ts`, `PERMANENT_ERROR_CODES`).
+`succeeded` (toda ação convergiu com efeito real aceito pelo módulo-alvo) ·
+`failed` (alguma ação com erro permanente — ver `error-codes.ts`,
+`PERMANENT_ERROR_CODES`). `succeeded` nunca significa apenas "uma linha foi
+criada": para `communication.send_template`, o critério é o resultado real
+de `processMessage` — se o provedor recusa, não responde, ou não existe
+(`provider_not_configured`/`provider_unavailable`), a ação e a execução ficam
+`failed`, nunca `succeeded` com uma mensagem `failed` por baixo (ver
+`action-catalog.md`).
+
+`runExecutionActions` também devolve, só para quem chama (nunca persistido
+como status de execução), um terceiro valor de retorno —
+`claim_not_acquired` — quando este processo não venceu a disputa pelo claim
+e por isso não rodou nenhuma ação nem registrou tentativa nenhuma. Nunca
+confundir com `failed`, que sempre significa "uma ação rodou e falhou de
+verdade".

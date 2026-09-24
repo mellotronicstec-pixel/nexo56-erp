@@ -14,6 +14,7 @@ import {
 } from '@/modules/service-orders/application/service-order-actions';
 import { serviceOrders, serviceOrderTasks } from '@/modules/service-orders/infrastructure/schema';
 import { createTemplate } from '@/modules/communications/application/template-service';
+import { createMessageFromAutomation } from '@/modules/communications/application/message-service';
 import {
   communicationAttempts,
   communicationMessages,
@@ -578,8 +579,8 @@ describe('costura com o event-bus (item 74/75): assinatura enfileira job, nunca 
  * testes de concorrencia ja existentes acima (que provam a corrida na
  * CRIACAO da execucao, nao o claim de uma acao ja pendente).
  */
-describe('claim concorrente da MESMA action pendente (Secao 2 do fechamento)', () => {
-  it('Comunicacao: 5 claims simultaneos (Promise.allSettled) da mesma action pendente -> 1 processamento efetivo, 1 mensagem', async () => {
+describe('claim concorrente da MESMA action pendente (Secao 2/3/6/7 do fechamento)', () => {
+  it('Comunicacao: 5 workers simultaneos (Promise.allSettled) -> exatamente 1 claim vencedor, 1 tentativa succeeded, 1 processamento, 1 message, 1 communication_attempt de envio real', async () => {
     const templateId = await criarModeloWhatsapp(tenantA);
     const ruleId = await criarRegraDeComunicacao(tenantA, templateId);
     const osId = await ordemProntaParaAvisar(tenantA);
@@ -591,39 +592,56 @@ describe('claim concorrente da MESMA action pendente (Secao 2 do fechamento)', (
       ),
     );
 
-    const fulfilled = resultados.filter((r) => r.status === 'fulfilled');
-    const rejected = resultados.filter((r) => r.status === 'rejected');
-    expect(rejected.length).toBe(0);
+    const fulfilled = resultados
+      .filter(
+        (r): r is PromiseFulfilledResult<Awaited<ReturnType<typeof runExecutionActions>>> =>
+          r.status === 'fulfilled',
+      )
+      .map((r) => r.value);
+    expect(resultados.filter((r) => r.status === 'rejected').length).toBe(0);
     expect(fulfilled.length).toBe(5);
 
-    const tentativas = await contarTentativasDaAcao(executionId);
-    const sucedidas = tentativas.filter((t) => t.status === 'succeeded');
     /**
-     * O QUE E REALMENTE GARANTIDO (medido, nao suposto): com 5 chamadas
-     * genuinamente concorrentes, o `nextAttemptNumber` (SELECT MAX+1) de cada
-     * uma pode computar um numero DIFERENTE antes de qualquer INSERT
-     * commitar — nesse caso nao ha colisao no UNIQUE de
-     * `automation_action_attempts`, e mais de uma tentativa chega a
-     * `succeeded`. A garantia de EXATAMENTE 1 efeito real nao vem dessa
-     * camada aqui — vem da CAMADA 3 (a chave de idempotencia estavel
-     * `automation:{executionId}:action:{index}` em `communication_messages`/
-     * `agenda_tasks`): so a PRIMEIRA tentativa a commitar cria a linha real;
-     * as demais recebem `outcome: 'reused'` do servico oficial e por isso
-     * TAMBEM terminam `succeeded` (ver `idempotency.md`). Por isso a
-     * asserção forte aqui e sobre o efeito de dominio, nao sobre a contagem
-     * de tentativas.
+     * SINGLE-CLAIM REAL (Secao 3): dos 5 workers, exatamente 1 recebe
+     * `status: 'succeeded'` (o vencedor do claim, que rodou a acao); os
+     * outros 4 recebem `claim_not_acquired` — nunca `succeeded`, nunca
+     * `failed` (que so descreveria uma acao que rodou e falhou).
      */
-    expect(sucedidas.length).toBeGreaterThanOrEqual(1);
+    expect(fulfilled.filter((r) => r.status === 'succeeded').length).toBe(1);
+    expect(fulfilled.filter((r) => r.status === 'claim_not_acquired').length).toBe(4);
+    expect(fulfilled.every((r) => r.status !== 'failed')).toBe(true);
+
+    const tentativas = await contarTentativasDaAcao(executionId);
+    // EXATAMENTE 1 tentativa e criada no total — os perdedores do claim da
+    // EXECUCAO nunca chegam a inserir tentativa nenhuma (Secao 4).
+    expect(tentativas.length).toBe(1);
+    expect(tentativas[0]?.status).toBe('succeeded');
+
     expect(await contarMensagens(tenantA.tenantId)).toBe(1);
+    const [mensagem] = await getDb()
+      .select({ id: communicationMessages.id, status: communicationMessages.status })
+      .from(communicationMessages)
+      .where(eq(communicationMessages.tenantId, tenantA.tenantId));
+    expect(mensagem?.status).toBe('sent');
+
+    // NENHUMA segunda chamada ao provedor: so o unico worker vencedor chegou
+    // a `processMessage`.
+    const tentativasDeEnvio = await getDb()
+      .select()
+      .from(communicationAttempts)
+      .where(eq(communicationAttempts.messageId, mensagem!.id));
+    expect(tentativasDeEnvio.length).toBe(1);
+    expect(tentativasDeEnvio[0]?.outcome).toBe('accepted');
 
     const [execucaoFinal] = await getDb()
-      .select({ status: automationExecutions.status })
+      .select({ status: automationExecutions.status, lockedBy: automationExecutions.lockedBy })
       .from(automationExecutions)
       .where(eq(automationExecutions.id, executionId));
     expect(execucaoFinal?.status).toBe('succeeded');
+    expect(execucaoFinal?.lockedBy).toBeNull();
   });
 
-  it('Agenda: 5 claims simultaneos (Promise.allSettled) da mesma action pendente -> 1 tarefa real, protegida pela chave de idempotencia (camada 3), mesmo quando mais de uma tentativa chega a succeeded', async () => {
+  it('Agenda: 5 workers simultaneos -> exatamente 1 claim vencedor, 1 tentativa succeeded, 1 tarefa', async () => {
     const ruleId = await criarRegraDeAgenda(tenantA);
     const osId = await ordemProntaParaAvisar(tenantA);
     const executionId = await materializarExecucaoPendente(tenantA, ruleId, osId);
@@ -634,27 +652,106 @@ describe('claim concorrente da MESMA action pendente (Secao 2 do fechamento)', (
       ),
     );
 
-    const rejected = resultados.filter((r) => r.status === 'rejected');
-    expect(rejected.length).toBe(0);
-    expect(resultados.filter((r) => r.status === 'fulfilled').length).toBe(5);
+    const fulfilled = resultados
+      .filter(
+        (r): r is PromiseFulfilledResult<Awaited<ReturnType<typeof runExecutionActions>>> =>
+          r.status === 'fulfilled',
+      )
+      .map((r) => r.value);
+    expect(resultados.filter((r) => r.status === 'rejected').length).toBe(0);
+    expect(fulfilled.length).toBe(5);
+    expect(fulfilled.filter((r) => r.status === 'succeeded').length).toBe(1);
+    expect(fulfilled.filter((r) => r.status === 'claim_not_acquired').length).toBe(4);
 
     const tentativas = await contarTentativasDaAcao(executionId);
-    const sucedidas = tentativas.filter((t) => t.status === 'succeeded');
-    // Mesma ressalva do teste de Comunicacao acima: a garantia forte e sobre
-    // o efeito real (1 tarefa), nao sobre a contagem de tentativas.
-    expect(sucedidas.length).toBeGreaterThanOrEqual(1);
+    expect(tentativas.length).toBe(1);
+    expect(tentativas[0]?.status).toBe('succeeded');
     expect(await contarTarefas(tenantA.tenantId)).toBe(1);
 
     const [execucaoFinal] = await getDb()
-      .select({ status: automationExecutions.status })
+      .select({ status: automationExecutions.status, lockedBy: automationExecutions.lockedBy })
       .from(automationExecutions)
       .where(eq(automationExecutions.id, executionId));
     expect(execucaoFinal?.status).toBe('succeeded');
+    expect(execucaoFinal?.lockedBy).toBeNull();
   });
 });
 
-describe('guarda de producao: Communication sem provider real (Secao 5 do fechamento)', () => {
-  it('NODE_ENV=production, sem provider configurado: mensagem fica failed, execucao succeeded (criar/enfileirar != entregar), nada de delivered/read inventado, OS intocada', async () => {
+describe('crash/retry apos claim (Secao 8/18-C/18-D do fechamento)', () => {
+  it('Comunicacao: claim fica obsoleto antes de terminar (worker morreu) -> novo processamento reclama, converge, sem segunda mensagem', async () => {
+    const templateId = await criarModeloWhatsapp(tenantA);
+    const ruleId = await criarRegraDeComunicacao(tenantA, templateId);
+    const osId = await ordemProntaParaAvisar(tenantA);
+    const executionId = await materializarExecucaoPendente(tenantA, ruleId, osId);
+
+    // Simula: um worker venceu o claim, RODOU a acao (efeito real existe),
+    // mas morreu antes de marcar a execucao como succeeded — o claim fica
+    // parado em `running`, com `locked_at` velho.
+    const jaExecutou = await run(() => runExecutionActions(executionId, tenantA.tenantId));
+    expect(jaExecutou.status).toBe('succeeded');
+    expect(await contarMensagens(tenantA.tenantId)).toBe(1);
+
+    // Reabre a execucao como se o worker tivesse morrido ANTES de
+    // `finishExecution` (que e o que realmente limpa o lock) — mas o efeito
+    // (mensagem real) ja aconteceu, exatamente como o cenario da Secao 8.
+    const staleAt = new Date(Date.now() - 10 * 60 * 1000);
+    await getDb()
+      .update(automationExecutions)
+      .set({ status: 'running', completedAt: null, lockedBy: 'worker-morto', lockedAt: staleAt })
+      .where(eq(automationExecutions.id, executionId));
+
+    const retomado = await run(() => runExecutionActions(executionId, tenantA.tenantId));
+    expect(retomado.status).toBe('succeeded');
+
+    // Convergiu sem rodar a acao de novo: `hasSucceededAttempt` already-true
+    // pula a acao no laco, entao nenhuma tentativa nova foi criada.
+    const tentativas = await contarTentativasDaAcao(executionId);
+    expect(tentativas.length).toBe(1);
+    expect(await contarMensagens(tenantA.tenantId)).toBe(1);
+  });
+
+  it('Agenda: mesmo cenario de claim obsoleto -> sem segunda tarefa', async () => {
+    const ruleId = await criarRegraDeAgenda(tenantA);
+    const osId = await ordemProntaParaAvisar(tenantA);
+    const executionId = await materializarExecucaoPendente(tenantA, ruleId, osId);
+
+    const jaExecutou = await run(() => runExecutionActions(executionId, tenantA.tenantId));
+    expect(jaExecutou.status).toBe('succeeded');
+    expect(await contarTarefas(tenantA.tenantId)).toBe(1);
+
+    const staleAt = new Date(Date.now() - 10 * 60 * 1000);
+    await getDb()
+      .update(automationExecutions)
+      .set({ status: 'running', completedAt: null, lockedBy: 'worker-morto', lockedAt: staleAt })
+      .where(eq(automationExecutions.id, executionId));
+
+    const retomado = await run(() => runExecutionActions(executionId, tenantA.tenantId));
+    expect(retomado.status).toBe('succeeded');
+    expect(await contarTarefas(tenantA.tenantId)).toBe(1);
+  });
+
+  it('claim ainda fresco (dentro de LOCK_STALE_MS) NAO e reclamado por outro processamento', async () => {
+    const ruleId = await criarRegraDeAgenda(tenantA);
+    const osId = await ordemProntaParaAvisar(tenantA);
+    const executionId = await materializarExecucaoPendente(tenantA, ruleId, osId);
+
+    // Simula um worker que acabou de pegar o claim (locked_at = agora) e
+    // ainda esta "trabalhando" — nunca chegou a inserir tentativa nem a
+    // rodar a acao.
+    await getDb()
+      .update(automationExecutions)
+      .set({ lockedBy: 'worker-ativo', lockedAt: new Date() })
+      .where(eq(automationExecutions.id, executionId));
+
+    const resultado = await run(() => runExecutionActions(executionId, tenantA.tenantId));
+    expect(resultado.status).toBe('claim_not_acquired');
+    expect(await contarTentativasDaAcao(executionId)).toHaveLength(0);
+    expect(await contarTarefas(tenantA.tenantId)).toBe(0);
+  });
+});
+
+describe('guarda de producao: Communication sem provider real (Secao 9/10/11/12 do fechamento)', () => {
+  it('NODE_ENV=production, sem provider configurado: message failed, communication_attempt failed/provider_not_configured, automation action failed, execution failed, OS intocada, nada de delivered/read inventado', async () => {
     const templateId = await criarModeloWhatsapp(tenantA);
     const ruleId = await criarRegraDeComunicacao(tenantA, templateId);
     const osId = await ordemProntaParaAvisar(tenantA);
@@ -671,15 +768,18 @@ describe('guarda de producao: Communication sem provider real (Secao 5 do fecham
     await run(() => processAutomationEvent(evento));
     desligarProducao();
 
-    // "Criar/enfileirar a mensagem via servico oficial" e o criterio de
-    // sucesso da ACAO do Motor (mesmo criterio do caminho manual — ver
-    // message-service.ts linha ~488, que nunca inspeciona o resultado de
-    // processMessage antes de devolver `outcome: 'created'`). A execucao do
-    // Motor reflete isso: `succeeded` significa "entregou a mensagem ao
-    // servico oficial", NUNCA "o provedor confirmou entrega".
+    /**
+     * CORRECAO DO DEFEITO 2 (Secao 9-10 do fechamento): `provider_not_configured`
+     * e SEM efeito real — a acao configurada e "delegar ao servico oficial e
+     * obter resultado coerente com a politica desse modulo", nao apenas
+     * "criar uma linha". O resultado de `processMessage` agora e propagado
+     * por `createMessageFromAutomation` (`message-service.ts`) em vez de
+     * ser descartado; `toActionResult` mapeia `outcome:'failed'` para
+     * `ok:false`, e `finishExecution` fecha a execucao como `failed`.
+     */
     expect(await contarExecucoes(tenantA.tenantId, ruleId)).toBe(1);
     const [execucao] = await getDb()
-      .select({ status: automationExecutions.status })
+      .select()
       .from(automationExecutions)
       .where(
         and(
@@ -687,7 +787,13 @@ describe('guarda de producao: Communication sem provider real (Secao 5 do fecham
           eq(automationExecutions.ruleId, ruleId),
         ),
       );
-    expect(execucao?.status).toBe('succeeded');
+    expect(execucao?.status).toBe('failed');
+    expect(execucao?.errorSummary).toBeTruthy();
+
+    const tentativaDaAcao = await contarTentativasDaAcao(execucao!.id);
+    expect(tentativaDaAcao.length).toBe(1);
+    expect(tentativaDaAcao[0]?.status).toBe('failed');
+    expect(tentativaDaAcao[0]?.errorCode).toBe('PROVIDER_NOT_CONFIGURED');
 
     // O FATO REAL — nenhum provedor real disponivel em producao — fica
     // registrado onde a entrega de fato e decidida: a propria mensagem e
@@ -707,15 +813,132 @@ describe('guarda de producao: Communication sem provider real (Secao 5 do fecham
     expect(tentativasDeEnvio.length).toBe(1);
     expect(tentativasDeEnvio[0]?.outcome).toBe('failed');
     expect(tentativasDeEnvio[0]?.errorCode).toBe('provider_not_configured');
-    // Retry e finito e coerente: um unico attempt terminal por chamada,
-    // status final `failed` (nunca fica preso em `sending`/`queued`, nunca
-    // reenviado sozinho — reenviar exige acao explicita fora do Motor).
+    /**
+     * RETRY POLICY (Secao 12): `PROVIDER_NOT_CONFIGURED` e um dos
+     * `PERMANENT_ERROR_CODES` (`error-codes.ts`) — nunca melhora sozinho, um
+     * retry automatico seria desperdicio. Um unico attempt terminal por
+     * chamada, sem reenvio automatico (reenviar exige acao explicita fora
+     * do Motor); nenhum job de retry e agendado.
+     */
 
     const [osDepois] = await getDb()
       .select({ status: serviceOrders.status })
       .from(serviceOrders)
       .where(eq(serviceOrders.id, osId));
     expect(osDepois?.status).toBe(osAntes?.status);
+  });
+});
+
+describe('reuso de mensagem existente via idempotencyKey (Secao 13 do fechamento)', () => {
+  it('mensagem existente FAILED reaproveitada pela idempotencia NAO vira action succeeded', async () => {
+    const templateId = await criarModeloWhatsapp(tenantA);
+    const ruleId = await criarRegraDeComunicacao(tenantA, templateId);
+    const osId = await ordemProntaParaAvisar(tenantA);
+    const executionId = await materializarExecucaoPendente(tenantA, ruleId, osId);
+
+    // Primeira tentativa, em producao sem provider: cria a mensagem, ela
+    // fica `failed`, a acao fica `failed` (mesmo cenario do teste acima).
+    ligarProducao();
+    const primeira = await run(() => runExecutionActions(executionId, tenantA.tenantId));
+    desligarProducao();
+    expect(primeira.status).toBe('failed');
+    expect(await contarMensagens(tenantA.tenantId)).toBe(1);
+
+    // Reabre a execucao (simulando um novo processamento/retry externo) e
+    // roda de novo — SEM provider ainda ausente (fora de producao agora),
+    // mas a mensagem ja existe com idempotencyKey igual e status `failed`.
+    await getDb()
+      .update(automationExecutions)
+      .set({ status: 'running', completedAt: null, errorSummary: null })
+      .where(eq(automationExecutions.id, executionId));
+
+    const segunda = await run(() => runExecutionActions(executionId, tenantA.tenantId));
+
+    // O REUSE nao virou sucesso so porque a linha ja existia: a mensagem
+    // reaproveitada continua `failed`, entao a acao (e a execucao) tambem.
+    expect(segunda.status).toBe('failed');
+    expect(await contarMensagens(tenantA.tenantId)).toBe(1); // nunca uma segunda
+
+    const [execucaoFinal] = await getDb()
+      .select({ status: automationExecutions.status })
+      .from(automationExecutions)
+      .where(eq(automationExecutions.id, executionId));
+    expect(execucaoFinal?.status).toBe('failed');
+  });
+
+  it('mensagem existente SENT (sucesso real) reaproveitada pela idempotencia converge para action succeeded, sem novo side effect', async () => {
+    const templateId = await criarModeloWhatsapp(tenantA);
+    const ruleId = await criarRegraDeComunicacao(tenantA, templateId);
+    const osId = await ordemProntaParaAvisar(tenantA);
+    const executionId = await materializarExecucaoPendente(tenantA, ruleId, osId);
+
+    // Primeira tentativa, fora de producao (capture provider aceita) — a
+    // mensagem fica `sent`.
+    const primeira = await run(() => runExecutionActions(executionId, tenantA.tenantId));
+    expect(primeira.status).toBe('succeeded');
+    expect(await contarMensagens(tenantA.tenantId)).toBe(1);
+    const [mensagemAntes] = await getDb()
+      .select({ id: communicationMessages.id, status: communicationMessages.status })
+      .from(communicationMessages)
+      .where(eq(communicationMessages.tenantId, tenantA.tenantId));
+    expect(mensagemAntes?.status).toBe('sent');
+
+    // Reabre a execucao e roda de novo: a mensagem ja existe, ja SENT.
+    await getDb()
+      .update(automationExecutions)
+      .set({ status: 'running', completedAt: null })
+      .where(eq(automationExecutions.id, executionId));
+
+    const segunda = await run(() => runExecutionActions(executionId, tenantA.tenantId));
+    expect(segunda.status).toBe('succeeded');
+    // Convergiu sem novo side effect: continua exatamente 1 mensagem, e e a
+    // MESMA linha (mesmo id), nunca uma segunda.
+    expect(await contarMensagens(tenantA.tenantId)).toBe(1);
+    const [mensagemDepois] = await getDb()
+      .select({ id: communicationMessages.id })
+      .from(communicationMessages)
+      .where(eq(communicationMessages.tenantId, tenantA.tenantId));
+    expect(mensagemDepois?.id).toBe(mensagemAntes?.id);
+  });
+
+  it('createMessageFromAutomation chamado 2x com a MESMA idempotencyKey: 1a cria e envia, 2a reconhece reuse de sucesso sem chamar o provedor de novo', async () => {
+    const templateId = await criarModeloWhatsapp(tenantA);
+    const osId = await ordemProntaParaAvisar(tenantA);
+    const [os] = await getDb()
+      .select({ customerId: serviceOrders.customerId })
+      .from(serviceOrders)
+      .where(eq(serviceOrders.id, osId));
+    const idempotencyKey = `test:reuse-direto:${newId()}`;
+    const input = {
+      tenantId: tenantA.tenantId,
+      unitId: tenantA.unitId,
+      customerId: os!.customerId,
+      channel: 'whatsapp' as const,
+      templateId,
+      serviceOrderId: osId,
+      idempotencyKey,
+    };
+
+    const primeira = await run(() => createMessageFromAutomation(input));
+    expect(primeira.outcome).toBe('created');
+    const [mensagem] = await getDb()
+      .select({ status: communicationMessages.status })
+      .from(communicationMessages)
+      .where(eq(communicationMessages.id, primeira.messageId!));
+    expect(mensagem?.status).toBe('sent');
+
+    const segunda = await run(() => createMessageFromAutomation(input));
+    expect(segunda.outcome).toBe('reused');
+    expect(segunda.messageId).toBe(primeira.messageId);
+    expect(await contarMensagens(tenantA.tenantId)).toBe(1);
+
+    const tentativas = await getDb()
+      .select()
+      .from(communicationAttempts)
+      .where(eq(communicationAttempts.messageId, primeira.messageId!));
+    // A 2a chamada nunca tentou entregar de novo: so 1 tentativa de envio
+    // real existe (a da criacao original).
+    expect(tentativas.length).toBe(1);
   });
 });
 

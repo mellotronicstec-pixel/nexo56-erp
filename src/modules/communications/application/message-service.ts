@@ -270,11 +270,42 @@ export interface AutomationMessageInput {
 }
 
 export interface AutomationMessageResult {
-  outcome: 'created' | 'reused' | 'skipped';
+  /**
+   * `created`/`reused` (sucesso real, com efeito): o servico oficial
+   * entregou a mensagem ao provedor (ou reaproveitou uma entrega anterior
+   * que TINHA sido aceita). `skipped` (nunca chegou a existir mensagem):
+   * pre-condicao falhou antes de qualquer tentativa — tenant, feature,
+   * destinatario ou modelo invalidos. `failed` (existe mensagem, mas SEM
+   * efeito real): o servico oficial tentou entregar e o provedor recusou,
+   * nao respondeu, ou nao existe — fechamento do Prompt 19, Secao 9/10: o
+   * Motor NUNCA pode tratar isto como sucesso da acao so porque uma linha
+   * foi criada.
+   */
+  outcome: 'created' | 'reused' | 'skipped' | 'failed';
   messageId?: string;
-  /** Codigo estavel (item 150), presente quando `outcome === 'skipped'`. */
+  /** Codigo estavel (item 150), presente quando `outcome !== 'created'`. */
   errorCode?: string;
   errorDetail?: string;
+}
+
+/**
+ * `communication_messages.last_error_code`/`ProcessResult.error` guardam o
+ * vocabulario PROPRIO de Comunicacao (`DeliveryError`, ADR-078/079) — nunca
+ * o vocabulario do Motor. Esta funcao e a UNICA ponte entre os dois, e
+ * devolve apenas STRINGS (nunca importa `AUTOMATION_ERROR_CODES`): o modulo
+ * alvo nao pode depender do modulo que o consome (item 16 do fechamento).
+ * `provider_not_configured` e `invalid_recipient` nunca melhoram sozinhos —
+ * mapeiam para os mesmos códigos permanentes que o catalogo de automacoes ja
+ * reserva para eles. `provider_unavailable`/`rate_limited`/`timeout` sao a
+ * unica categoria em que um retry futuro poderia ter resultado diferente.
+ */
+function mapDeliveryErrorToAutomationCode(error: DeliveryError | null | undefined): string {
+  if (error === 'invalid_recipient') return 'INVALID_RECIPIENT';
+  if (error === 'provider_not_configured') return 'PROVIDER_NOT_CONFIGURED';
+  if (error === 'provider_unavailable' || error === 'rate_limited' || error === 'timeout') {
+    return 'PROVIDER_UNAVAILABLE';
+  }
+  return 'UNKNOWN';
 }
 
 /**
@@ -324,7 +355,34 @@ export async function createMessageFromAutomation(
   }
 
   const existente = await findByIdempotencyKey(input.tenantId, input.idempotencyKey);
-  if (existente) return { outcome: 'reused', messageId: existente };
+  if (existente) {
+    /**
+     * REUSE NAO E SUCESSO AUTOMATICO (Secao 13 do fechamento). Encontrar a
+     * chave de idempotencia so prova que uma tentativa anterior chegou ate
+     * aqui — nao prova que ELA deu certo. Uma mensagem `failed` reaproveitada
+     * continua `failed`: o Motor precisa saber que nenhum efeito real
+     * aconteceu, mesmo sem criar uma segunda linha.
+     */
+    const [mensagemExistente] = await getDb()
+      .select({
+        status: communicationMessages.status,
+        lastErrorCode: communicationMessages.lastErrorCode,
+      })
+      .from(communicationMessages)
+      .where(eq(communicationMessages.id, existente))
+      .limit(1);
+    if (mensagemExistente?.status === 'failed') {
+      return {
+        outcome: 'failed',
+        messageId: existente,
+        errorCode: mapDeliveryErrorToAutomationCode(
+          mensagemExistente.lastErrorCode as DeliveryError | null,
+        ),
+        errorDetail: 'A mensagem (reaproveitada pela idempotencia) ja tinha falhado antes.',
+      };
+    }
+    return { outcome: 'reused', messageId: existente };
+  }
 
   const destinatario = await resolveAutomaticRecipient(
     { tenantId: input.tenantId },
@@ -484,8 +542,24 @@ export async function createMessageFromAutomation(
     throw error;
   }
 
-  /** COMMIT feito. A entrega, como no caminho manual, e problema separado. */
-  await processMessage({ messageId, tenantId: input.tenantId, context: null });
+  /**
+   * COMMIT feito. A entrega, como no caminho manual, e um passo separado —
+   * mas para o Motor de Automacoes (fechamento do Prompt 19, Secao 9/10) o
+   * RESULTADO dessa entrega decide se a ACAO foi bem-sucedida. Ao contrario
+   * do caminho manual (onde o humano ve o status da mensagem depois, na
+   * tela), a acao do Motor SO tem esta chamada para saber o que aconteceu —
+   * por isso, aqui, o resultado de `processMessage` e propagado, nunca
+   * descartado.
+   */
+  const resultado = await processMessage({ messageId, tenantId: input.tenantId, context: null });
+  if (resultado.outcome === 'failed') {
+    return {
+      outcome: 'failed',
+      messageId,
+      errorCode: mapDeliveryErrorToAutomationCode(resultado.error),
+      errorDetail: 'O provedor nao aceitou a mensagem.',
+    };
+  }
 
   return { outcome: 'created', messageId };
 }

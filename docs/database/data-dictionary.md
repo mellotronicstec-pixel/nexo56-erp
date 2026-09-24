@@ -1006,6 +1006,8 @@ agendamento.
 | `idempotency_key` | `varchar(240)` | **a trava real**: `UNIQUE (tenant_id, idempotency_key)`, nunca `SELECT`-then-`INSERT` |
 | `status`          | `varchar(20)`  | `skipped` \| `running` \| `succeeded` \| `failed` — `CHECK`                           |
 | `input_snapshot`  | `json`         | mínimo necessário para explicar o disparo; nunca a entidade inteira, nunca PII        |
+| `locked_by`       | `varchar(64)`  | claim do processamento (migration 0017) — mesmo idioma de `jobs.locked_by`            |
+| `locked_at`       | `datetime(3)`  | claim obsoleto após 5 min sem atualização; liberado por `finishExecution`             |
 
 ### `automation_action_attempts`
 
