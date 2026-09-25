@@ -631,3 +631,163 @@ describe('protecao de injecao e de significado tecnico, ponta a ponta (itens 49,
     expect(aiErrorCode(erro)).toBe('AI_INSUFFICIENT_CONTEXT');
   });
 });
+
+describe('Semantic Claim Guard, ponta a ponta contra MariaDB real (correcao final do Technical Meaning Guard)', () => {
+  it('escalada de certeza (item 4): "possivel falha" nao pode virar "falha confirmada" — rejeitado, OS intocada', async () => {
+    const serviceOrderId = await abrirOs(tenant, { internalNotes: 'possivel falha na fonte' });
+    getCaptureAiProvider()?.respondNext({
+      outcome: 'generated',
+      text: 'falha na fonte confirmada',
+      inputTokens: null,
+      outputTokens: null,
+    });
+
+    const antes = await getDb()
+      .select()
+      .from(serviceOrders)
+      .where(eq(serviceOrders.id, serviceOrderId))
+      .limit(1);
+
+    const erro = await run(() =>
+      generateAiDraft(tenant.context, {
+        surfaceKey: 'service_order.internal_notes',
+        taskKey: 'CORRIGIR_PORTUGUES',
+        entityId: serviceOrderId,
+        currentText: 'possivel falha na fonte',
+      }),
+    ).catch((e: unknown) => e);
+
+    expect(aiErrorCode(erro)).toBe('AI_TECHNICAL_MEANING_RISK');
+
+    const depois = await getDb()
+      .select()
+      .from(serviceOrders)
+      .where(eq(serviceOrders.id, serviceOrderId))
+      .limit(1);
+    expect(depois).toEqual(antes);
+
+    const [linha] = await getDb()
+      .select({ status: aiRequests.status, errorCode: aiRequests.errorCode })
+      .from(aiRequests)
+      .where(eq(aiRequests.entityId, serviceOrderId))
+      .limit(1);
+    expect(linha?.status).toBe('failed');
+    expect(linha?.errorCode).toBe('AI_TECHNICAL_MEANING_RISK');
+  });
+
+  it('teste/constatacao inventada (item 8): parecer nao pode afirmar teste realizado que o contexto nao sustenta — rejeitado, OS intocada', async () => {
+    const serviceOrderId = await abrirOs(tenant, {
+      customerReport: 'Equipamento nao liga.',
+      internalNotes: 'verificar fonte',
+    });
+    getCaptureAiProvider()?.respondNext({
+      outcome: 'generated',
+      text: 'Apos os testes realizados, foi constatado defeito na fonte.',
+      inputTokens: null,
+      outputTokens: null,
+    });
+
+    const antes = await getDb()
+      .select()
+      .from(serviceOrders)
+      .where(eq(serviceOrders.id, serviceOrderId))
+      .limit(1);
+
+    const erro = await run(() =>
+      generateAiDraft(tenant.context, {
+        surfaceKey: 'service_order.internal_notes',
+        taskKey: 'GERAR_PARECER_TECNICO',
+        entityId: serviceOrderId,
+      }),
+    ).catch((e: unknown) => e);
+
+    expect(aiErrorCode(erro)).toBe('AI_TECHNICAL_MEANING_RISK');
+
+    const depois = await getDb()
+      .select()
+      .from(serviceOrders)
+      .where(eq(serviceOrders.id, serviceOrderId))
+      .limit(1);
+    expect(depois).toEqual(antes);
+  });
+
+  it('garantia inventada (item 7): contexto sem garantia, saida com garantia — rejeitado, OS intocada', async () => {
+    const serviceOrderId = await abrirOs(tenant, { internalNotes: 'equipamento sem ligar' });
+    getCaptureAiProvider()?.respondNext({
+      outcome: 'generated',
+      text: 'Servico coberto pela garantia.',
+      inputTokens: null,
+      outputTokens: null,
+    });
+
+    const antes = await getDb()
+      .select()
+      .from(serviceOrders)
+      .where(eq(serviceOrders.id, serviceOrderId))
+      .limit(1);
+
+    const erro = await run(() =>
+      generateAiDraft(tenant.context, {
+        surfaceKey: 'service_order.internal_notes',
+        taskKey: 'CORRIGIR_PORTUGUES',
+        entityId: serviceOrderId,
+        currentText: 'equipamento sem ligar',
+      }),
+    ).catch((e: unknown) => e);
+
+    expect(aiErrorCode(erro)).toBe('AI_TECHNICAL_MEANING_RISK');
+
+    const depois = await getDb()
+      .select()
+      .from(serviceOrders)
+      .where(eq(serviceOrders.id, serviceOrderId))
+      .limit(1);
+    expect(depois).toEqual(antes);
+  });
+
+  it('reescrita incerta valida (item 9): incerteza preservada, sem elevar certeza — aceito', async () => {
+    const serviceOrderId = await abrirOs(tenant, { internalNotes: 'possivel falha na fonte' });
+    getCaptureAiProvider()?.respondNext({
+      outcome: 'generated',
+      text: 'Ha indicios de possivel falha na fonte, ainda em analise.',
+      inputTokens: null,
+      outputTokens: null,
+    });
+
+    const resultado = await run(() =>
+      generateAiDraft(tenant.context, {
+        surfaceKey: 'service_order.internal_notes',
+        taskKey: 'DEIXAR_MAIS_PROFISSIONAL',
+        entityId: serviceOrderId,
+        currentText: 'possivel falha na fonte',
+      }),
+    );
+
+    expect(resultado.text).toBe('Ha indicios de possivel falha na fonte, ainda em analise.');
+  });
+
+  it('GERAR_PARECER_TECNICO com contexto real, sem fato novo — aceito', async () => {
+    const serviceOrderId = await abrirOs(tenant, {
+      customerReport: 'Equipamento nao liga.',
+      internalNotes: 'Fonte com cheiro de queimado, possivel falha na fonte.',
+    });
+    getCaptureAiProvider()?.respondNext({
+      outcome: 'generated',
+      text: 'O equipamento nao liga. Ha possivel falha na fonte, que apresenta cheiro de queimado.',
+      inputTokens: null,
+      outputTokens: null,
+    });
+
+    const resultado = await run(() =>
+      generateAiDraft(tenant.context, {
+        surfaceKey: 'service_order.internal_notes',
+        taskKey: 'GERAR_PARECER_TECNICO',
+        entityId: serviceOrderId,
+      }),
+    );
+
+    expect(resultado.text).toBe(
+      'O equipamento nao liga. Ha possivel falha na fonte, que apresenta cheiro de queimado.',
+    );
+  });
+});

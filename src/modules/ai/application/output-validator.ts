@@ -1,4 +1,5 @@
 import { checkTechnicalAnchors } from '../domain/technical-anchors';
+import { checkSemanticClaims } from '../domain/semantic-claims';
 import type { AiTaskDefinition } from '../domain/task-catalog';
 
 /**
@@ -9,6 +10,15 @@ import type { AiTaskDefinition } from '../domain/task-catalog';
  * primeiro. Falhar aqui nunca tenta "consertar" o texto com regex e devolver
  * mesmo assim (item 60) — rejeita e o texto original do usuario continua
  * intacto.
+ *
+ * TECHNICAL MEANING GUARD = Technical Anchor Guard (numero/unidade/codigo/
+ * modelo/data, `technical-anchors.ts`) + Semantic Claim Guard (certeza/
+ * acao de reparo/promessa/garantia/teste realizado, `semantic-claims.ts`).
+ * As duas camadas rodam sempre juntas, aqui: a ancora cobre o que MUDA sem
+ * precisar entender o texto (digito trocado); a afirmacao semantica cobre
+ * o que muda de sentido SEM nenhum digito envolvido ("possivel" virar
+ * "confirmado"). Qualquer uma das duas reprovando e suficiente para
+ * `technical_meaning_risk`.
  */
 
 export type OutputRejectionReason =
@@ -56,6 +66,9 @@ export function validateAiOutput(params: {
 
   const anchors = checkTechnicalAnchors(sourceTextForAnchors, sanitized, task.technicalPolicy);
   if (!anchors.ok) return { ok: false, reason: 'technical_meaning_risk' };
+
+  const claims = checkSemanticClaims(sourceTextForAnchors, sanitized);
+  if (!claims.ok) return { ok: false, reason: 'technical_meaning_risk' };
 
   return { ok: true, text: sanitized };
 }
