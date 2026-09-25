@@ -294,6 +294,18 @@ export const PERMISSIONS = {
    * `generateAiDraft`, nunca herdado desta permissao sozinha.
    */
   AI_USE: 'ai.use',
+
+  // --- Prompt 21: Busca de Pecas ---------------------------------------------
+  /**
+   * Buscar peca (interna e, quando configurada, externa) a partir da OS.
+   *
+   * Composta com a feature `ai.part_search` E com `service_orders.view` na
+   * mesma unidade quando a busca parte de uma OS (item 74) — esta permissao
+   * sozinha nao abre nenhuma OS nem eleva acesso a Estoque/Compras: ver
+   * `part_search_candidates` continua exigindo `inventory.view`, e criar
+   * necessidade de compra continua exigindo `purchases.create` (item 76).
+   */
+  PARTS_SEARCH: 'parts.search',
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -844,6 +856,13 @@ export const PERMISSION_CATALOG: readonly PermissionDefinition[] = [
       'Gera rascunho com o Nexo56 AI (corrigir portugues, profissionalizar, resumir, deixar claro para o cliente, gerar parecer tecnico). Exige tambem a permissao do modulo do campo onde a acao roda — esta permissao sozinha nao concede acesso a nenhum registro.',
     featureKey: 'ai.writing',
   },
+  {
+    key: PERMISSIONS.PARTS_SEARCH,
+    name: 'Buscar pecas',
+    description:
+      'Busca peca por termo ou codigo, a partir da OS: estoque e historico de compra internos, e fontes externas quando configuradas. Selecionar um resultado nao compra nem reserva nada; criar necessidade de compra a partir da selecao exige tambem "Criar solicitacoes de compra".',
+    featureKey: 'ai.part_search',
+  },
 ];
 
 /** Papeis estruturais criados no bootstrap de cada tenant. */
@@ -1121,8 +1140,8 @@ export const PERMISSION_GROUPS = [
   {
     key: 'nexo56-ai',
     name: 'Nexo56 AI',
-    description: 'Rascunhos de escrita assistida sobre campos autorizados.',
-    permissions: [PERMISSIONS.AI_USE],
+    description: 'Rascunhos de escrita assistida sobre campos autorizados e busca de pecas.',
+    permissions: [PERMISSIONS.AI_USE, PERMISSIONS.PARTS_SEARCH],
   },
 ] as const satisfies ReadonlyArray<{
   key: string;

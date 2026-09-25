@@ -885,6 +885,104 @@ erDiagram
     TENANTS ||--o{ AI_REQUESTS : isola
     UNITS ||--o{ AI_REQUESTS : "escopo, quando aplicavel"
     USERS ||--o{ AI_REQUESTS : pede
+
+    PART_SEARCH_SESSIONS {
+        char36 id PK
+        char36 tenant_id FK
+        char36 unit_id FK "busca sempre numa unidade"
+        char36 service_order_id FK "anulavel - busca avulsa permitida"
+        char36 equipment_id FK "anulavel - denormalizado da OS"
+        char36 requested_by FK
+        varchar query_term "termo normalizado, nunca PII"
+        varchar query_search_key
+        varchar part_number_hint
+        varchar status "requested running completed partial failed"
+        tinyint external_requested
+        datetime created_at
+        datetime updated_at
+    }
+
+    PART_SEARCH_CANDIDATES {
+        char36 id PK
+        char36 tenant_id FK
+        char36 session_id FK
+        varchar source_type "internal_inventory purchase_history external"
+        varchar title
+        varchar part_number
+        varchar brand
+        char36 part_id FK "anulavel - NUNCA e o Inventory Item, so referencia"
+        varchar compatibility_label "5 rotulos oficiais - CHECK"
+        varchar dedupe_key "deduplicacao conservadora"
+        datetime created_at
+    }
+
+    PART_SEARCH_EVIDENCE {
+        char36 id PK
+        char36 tenant_id FK
+        char36 candidate_id FK
+        varchar source
+        varchar type "8 categorias fechadas - CHECK"
+        datetime observed_at
+        varchar field
+        varchar value
+    }
+
+    PART_SEARCH_OFFERS {
+        char36 id PK
+        char36 tenant_id FK
+        char36 candidate_id FK
+        varchar source_key "internal_stock purchase_history ou provedor"
+        varchar provider_offer_id
+        varchar seller_name
+        decimal price "Money, nunca float"
+        varchar currency "BRL"
+        varchar availability "in_stock available unavailable unknown"
+        int lead_time_days
+        decimal freight
+        decimal total_cost "so quando price E freight conhecidos"
+        varchar url "http(s) validado"
+        tinyint is_historical "ultima compra registrada, nunca disponivel agora"
+        datetime observed_at "temporal - nunca reescrito"
+        datetime created_at
+    }
+
+    PART_SEARCH_PROVIDER_CALLS {
+        char36 id PK
+        char36 tenant_id FK
+        char36 session_id FK
+        varchar provider_key
+        varchar status "ok error timeout not_configured"
+        int result_count
+        varchar error_code
+        int latency_ms
+        datetime requested_at
+    }
+
+    PART_SEARCH_SELECTIONS {
+        char36 id PK
+        char36 tenant_id FK
+        char36 session_id FK
+        char36 candidate_id FK
+        char36 offer_id FK "anulavel"
+        char36 selected_by FK
+        datetime selected_at
+        tinyint unverified_acknowledged
+        char36 purchase_need_id "SEM FK - referencia a Compras, mesma logica de automations"
+    }
+
+    TENANTS ||--o{ PART_SEARCH_SESSIONS : isola
+    UNITS ||--o{ PART_SEARCH_SESSIONS : escopo
+    SERVICE_ORDERS ||--o{ PART_SEARCH_SESSIONS : "origem opcional"
+    EQUIPMENT ||--o{ PART_SEARCH_SESSIONS : "contexto opcional"
+    USERS ||--o{ PART_SEARCH_SESSIONS : busca
+    PART_SEARCH_SESSIONS ||--o{ PART_SEARCH_CANDIDATES : produz
+    PARTS ||--o{ PART_SEARCH_CANDIDATES : "referencia de leitura, quando existe"
+    PART_SEARCH_CANDIDATES ||--o{ PART_SEARCH_EVIDENCE : sustenta
+    PART_SEARCH_CANDIDATES ||--o{ PART_SEARCH_OFFERS : "condicao comercial"
+    PART_SEARCH_SESSIONS ||--o{ PART_SEARCH_PROVIDER_CALLS : observa
+    PART_SEARCH_SESSIONS ||--o{ PART_SEARCH_SELECTIONS : "escolha humana"
+    PART_SEARCH_CANDIDATES ||--o{ PART_SEARCH_SELECTIONS : seleciona
+    PART_SEARCH_OFFERS ||--o{ PART_SEARCH_SELECTIONS : "oferta escolhida, quando aplicavel"
 ```
 
 ### Destaques do diagrama
@@ -984,51 +1082,54 @@ erDiagram
 
 ### Invariantes já decididas
 
-| Decisão                                                                              | Motivo                                                                                                                     |
-| ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
-| `service_orders.unit_id` **obrigatório**                                             | A OS acontece fisicamente em uma unidade                                                                                   |
-| `quotes.unit_id` **obrigatório**                                                     | Vem da OS; sustenta a FK `(service_order_id, unit_id)` (ADR-040)                                                           |
-| `clients.unit_id` **não define ownership**                                           | O mesmo cliente é atendido em qualquer filial                                                                              |
-| `equipments` pertence a tenant + cliente                                             | Não se duplica por passar em outra unidade                                                                                 |
-| Número da OS **único por tenant**                                                    | Sem ambiguidade em QR, portal, suporte e garantia                                                                          |
-| `warranties` é **entidade própria**                                                  | **Implementado no Prompt 13**: nunca um booleano dentro da OS (item 63)                                                    |
-| **não existe `status = 'expired'`**                                                  | **Prompt 13**: vigência é derivada, no fuso da empresa (ADR-064)                                                           |
-| retorno cria **OS nova**                                                             | **Prompt 13**: a original nunca reabre e o número nunca é reaproveitado (ADR-065)                                          |
-| `service_orders.classification` **não é status**                                     | **Prompt 13**: é o que a ordem é, não onde ela está (ADR-067)                                                              |
-| a garantia guarda **snapshot** dos termos                                            | **Prompt 13**: mudar a política não reescreve o que já foi prometido (ADR-062)                                             |
-| `warranty_costs` **não gera lançamento financeiro**                                  | **Prompt 13**: conserto em garantia válida é gratuito por definição (ADR-071)                                              |
-| o token do certificado é **opaco**                                                   | **Prompt 13**: identifica, não autoriza; nunca carrega dado pessoal (ADR-070)                                              |
-| `stock_balances` é **por unidade**                                                   | **Implementado no Prompt 10**: estoque é físico (item 64)                                                                  |
-| `suppliers` **não tem `unit_id`**                                                    | **Prompt 11**: a empresa negocia com o distribuidor, não a loja (ADR-052)                                                  |
-| `purchase_orders.unit_id` **obrigatório**                                            | **Prompt 11**: a mercadoria chega em um endereço; pedido sem destino não existe                                            |
-| necessidade e pedido são **entidades distintas**                                     | **Prompt 11**: uma necessidade vira zero, um ou vários pedidos (ADR-048)                                                   |
-| `received_quantity <= quantity` é **CHECK**                                          | **Prompt 11**: a trava de over-receipt vive no banco, não na aplicação (ADR-050)                                           |
-| `purchase_price_history` é **append-only**                                           | **Prompt 11**: o preço anterior nunca é sobrescrito (ADR-051)                                                              |
-| `stock_movements` é **append-only**                                                  | **Implementado no Prompt 10**: saldo sem histórico é saldo não auditável (ADR-043)                                         |
-| reserva é **entidade própria**                                                       | **Prompt 10**: reservar não tira nada da prateleira (ADR-045)                                                              |
-| `quote_items.part_id` é **anulável**                                                 | **Prompt 10**: linha PART escrita à mão continua válida para sempre (ADR-047)                                              |
-| `quotes` guarda **snapshot** de preço                                                | **Implementado no Prompt 09**: a linha guarda o valor proposto, e a revisão preserva cada versão (ADR-041)                 |
-| `financial_titles` usa **uma tabela com `direction`**                                | **Prompt 12**: a trava de over-settlement existe uma vez só (ADR-053)                                                      |
-| `financial_movements` é **append-only**                                              | **Prompt 12**: sem `updated_at`, sem `version`. Estorno é contramovimento (ADR-054)                                        |
-| **não existe `status = 'overdue'`**                                                  | **Prompt 12**: vencido é derivado, no fuso da empresa (ADR-055)                                                            |
-| todo título tem **ao menos uma parcela**                                             | **Prompt 12**: à vista é 1 de 1; elimina o `if` de toda consulta (ADR-056)                                                 |
-| uma conta a pagar **por recebimento**                                                | **Prompt 12**: entregas parciais somam exatamente (ADR-058)                                                                |
-| `financial_accounts.unit_id` é **anulável**                                          | **Prompt 12**: nulo = conta da empresa; preenchido = caixa da loja (ADR-059)                                               |
-| `cash_sessions.open_marker` existe **só para o índice**                              | **Prompt 12**: o MySQL trata cada `NULL` como distinto num UNIQUE (ADR-060)                                                |
-| o Financeiro **nunca escreve** em módulo operacional                                 | **Prompt 12**: receber não entrega o aparelho; pagar não recebe mercadoria                                                 |
-| `payments` usa **DECIMAL exato**                                                     | Nunca float (item 65)                                                                                                      |
-| `agenda_tasks` é **tabela separada** de `service_order_tasks`                        | **Prompt 14**: uma é escrita por pessoa, a outra pela máquina de estados (ADR-073)                                         |
-| `agenda_tasks.service_order_id` é **anulável**                                       | **Prompt 14**: "conferir a documentação do fornecedor" não tem OS nenhuma                                                  |
-| **não existe `overdue`** em `agenda_tasks`                                           | **Prompt 14**: atraso é derivado, no fuso da empresa (ADR-074)                                                             |
-| **não existe `service_order_follow_ups`**                                            | **Prompt 14**: o follow-up sempre foi coluna da própria OS (ADR-075)                                                       |
-| compromisso guarda **instante OU dia civil**, nunca os dois                          | **Prompt 14**: dia inteiro não é "00:00 às 23:59 UTC" (ADR-074)                                                            |
-| `agenda_appointments` **não tem `done`**                                             | **Prompt 14**: o tempo passar não prova que a visita aconteceu (ADR-073)                                                   |
-| `fk_agenda_task_order_unit` é **composta**                                           | **Prompt 14**: a OS vinculada é obrigatoriamente da mesma unidade da tarefa                                                |
-| `attachments` guarda **chave de storage**                                            | Binário não vai para tabela de negócio (item 60)                                                                           |
-| `automation_rules.current_version_id` é **referência sem FK**                        | **Prompt 19**: evita ciclo Rule↔RuleVersion, mesmo padrão de `communication_messages.source_event_id` (ADR-082)            |
-| `automation_rule_versions` é **imutável**                                            | **Prompt 19**: editar cria versão nova; a execução aponta pra versão que rodou, nunca só pra regra (ADR-082)               |
-| `automation_executions` trava duplicata por **UNIQUE**, nunca `SELECT`-then-`INSERT` | **Prompt 19**: `UNIQUE(tenant_id, idempotency_key)` decide a corrida no próprio banco (ADR-082)                            |
-| `automation_action_attempts` é **append-only**                                       | **Prompt 19**: uma linha por tentativa; claim de ação concorrente por `UNIQUE(execution_id, action_index, attempt_number)` |
-| `automation_rule_units` **nunca deriva** "todas as unidades" dinamicamente           | **Prompt 19**: escopo fixado na criação da regra, mesmo se a autorização do criador mudar depois                           |
-| `ai_requests` **não tem nenhuma coluna de texto**                                    | **Prompt 20**: telemetria operacional, nunca conteúdo — por construção de assinatura, não por convenção (ADR-085)          |
-| `ai_requests.entity_id` é **referência sem FK**                                      | **Prompt 20**: mesmo padrão de `automation_action_attempts.domain_result_ref` — a IA lê o dado, nunca é dona dele          |
+| Decisão                                                                              | Motivo                                                                                                                                   |
+| ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `service_orders.unit_id` **obrigatório**                                             | A OS acontece fisicamente em uma unidade                                                                                                 |
+| `quotes.unit_id` **obrigatório**                                                     | Vem da OS; sustenta a FK `(service_order_id, unit_id)` (ADR-040)                                                                         |
+| `clients.unit_id` **não define ownership**                                           | O mesmo cliente é atendido em qualquer filial                                                                                            |
+| `equipments` pertence a tenant + cliente                                             | Não se duplica por passar em outra unidade                                                                                               |
+| Número da OS **único por tenant**                                                    | Sem ambiguidade em QR, portal, suporte e garantia                                                                                        |
+| `warranties` é **entidade própria**                                                  | **Implementado no Prompt 13**: nunca um booleano dentro da OS (item 63)                                                                  |
+| **não existe `status = 'expired'`**                                                  | **Prompt 13**: vigência é derivada, no fuso da empresa (ADR-064)                                                                         |
+| retorno cria **OS nova**                                                             | **Prompt 13**: a original nunca reabre e o número nunca é reaproveitado (ADR-065)                                                        |
+| `service_orders.classification` **não é status**                                     | **Prompt 13**: é o que a ordem é, não onde ela está (ADR-067)                                                                            |
+| a garantia guarda **snapshot** dos termos                                            | **Prompt 13**: mudar a política não reescreve o que já foi prometido (ADR-062)                                                           |
+| `warranty_costs` **não gera lançamento financeiro**                                  | **Prompt 13**: conserto em garantia válida é gratuito por definição (ADR-071)                                                            |
+| o token do certificado é **opaco**                                                   | **Prompt 13**: identifica, não autoriza; nunca carrega dado pessoal (ADR-070)                                                            |
+| `stock_balances` é **por unidade**                                                   | **Implementado no Prompt 10**: estoque é físico (item 64)                                                                                |
+| `suppliers` **não tem `unit_id`**                                                    | **Prompt 11**: a empresa negocia com o distribuidor, não a loja (ADR-052)                                                                |
+| `purchase_orders.unit_id` **obrigatório**                                            | **Prompt 11**: a mercadoria chega em um endereço; pedido sem destino não existe                                                          |
+| necessidade e pedido são **entidades distintas**                                     | **Prompt 11**: uma necessidade vira zero, um ou vários pedidos (ADR-048)                                                                 |
+| `received_quantity <= quantity` é **CHECK**                                          | **Prompt 11**: a trava de over-receipt vive no banco, não na aplicação (ADR-050)                                                         |
+| `purchase_price_history` é **append-only**                                           | **Prompt 11**: o preço anterior nunca é sobrescrito (ADR-051)                                                                            |
+| `stock_movements` é **append-only**                                                  | **Implementado no Prompt 10**: saldo sem histórico é saldo não auditável (ADR-043)                                                       |
+| reserva é **entidade própria**                                                       | **Prompt 10**: reservar não tira nada da prateleira (ADR-045)                                                                            |
+| `quote_items.part_id` é **anulável**                                                 | **Prompt 10**: linha PART escrita à mão continua válida para sempre (ADR-047)                                                            |
+| `quotes` guarda **snapshot** de preço                                                | **Implementado no Prompt 09**: a linha guarda o valor proposto, e a revisão preserva cada versão (ADR-041)                               |
+| `financial_titles` usa **uma tabela com `direction`**                                | **Prompt 12**: a trava de over-settlement existe uma vez só (ADR-053)                                                                    |
+| `financial_movements` é **append-only**                                              | **Prompt 12**: sem `updated_at`, sem `version`. Estorno é contramovimento (ADR-054)                                                      |
+| **não existe `status = 'overdue'`**                                                  | **Prompt 12**: vencido é derivado, no fuso da empresa (ADR-055)                                                                          |
+| todo título tem **ao menos uma parcela**                                             | **Prompt 12**: à vista é 1 de 1; elimina o `if` de toda consulta (ADR-056)                                                               |
+| uma conta a pagar **por recebimento**                                                | **Prompt 12**: entregas parciais somam exatamente (ADR-058)                                                                              |
+| `financial_accounts.unit_id` é **anulável**                                          | **Prompt 12**: nulo = conta da empresa; preenchido = caixa da loja (ADR-059)                                                             |
+| `cash_sessions.open_marker` existe **só para o índice**                              | **Prompt 12**: o MySQL trata cada `NULL` como distinto num UNIQUE (ADR-060)                                                              |
+| o Financeiro **nunca escreve** em módulo operacional                                 | **Prompt 12**: receber não entrega o aparelho; pagar não recebe mercadoria                                                               |
+| `payments` usa **DECIMAL exato**                                                     | Nunca float (item 65)                                                                                                                    |
+| `agenda_tasks` é **tabela separada** de `service_order_tasks`                        | **Prompt 14**: uma é escrita por pessoa, a outra pela máquina de estados (ADR-073)                                                       |
+| `agenda_tasks.service_order_id` é **anulável**                                       | **Prompt 14**: "conferir a documentação do fornecedor" não tem OS nenhuma                                                                |
+| **não existe `overdue`** em `agenda_tasks`                                           | **Prompt 14**: atraso é derivado, no fuso da empresa (ADR-074)                                                                           |
+| **não existe `service_order_follow_ups`**                                            | **Prompt 14**: o follow-up sempre foi coluna da própria OS (ADR-075)                                                                     |
+| compromisso guarda **instante OU dia civil**, nunca os dois                          | **Prompt 14**: dia inteiro não é "00:00 às 23:59 UTC" (ADR-074)                                                                          |
+| `agenda_appointments` **não tem `done`**                                             | **Prompt 14**: o tempo passar não prova que a visita aconteceu (ADR-073)                                                                 |
+| `fk_agenda_task_order_unit` é **composta**                                           | **Prompt 14**: a OS vinculada é obrigatoriamente da mesma unidade da tarefa                                                              |
+| `attachments` guarda **chave de storage**                                            | Binário não vai para tabela de negócio (item 60)                                                                                         |
+| `automation_rules.current_version_id` é **referência sem FK**                        | **Prompt 19**: evita ciclo Rule↔RuleVersion, mesmo padrão de `communication_messages.source_event_id` (ADR-082)                          |
+| `automation_rule_versions` é **imutável**                                            | **Prompt 19**: editar cria versão nova; a execução aponta pra versão que rodou, nunca só pra regra (ADR-082)                             |
+| `automation_executions` trava duplicata por **UNIQUE**, nunca `SELECT`-then-`INSERT` | **Prompt 19**: `UNIQUE(tenant_id, idempotency_key)` decide a corrida no próprio banco (ADR-082)                                          |
+| `automation_action_attempts` é **append-only**                                       | **Prompt 19**: uma linha por tentativa; claim de ação concorrente por `UNIQUE(execution_id, action_index, attempt_number)`               |
+| `automation_rule_units` **nunca deriva** "todas as unidades" dinamicamente           | **Prompt 19**: escopo fixado na criação da regra, mesmo se a autorização do criador mudar depois                                         |
+| `ai_requests` **não tem nenhuma coluna de texto**                                    | **Prompt 20**: telemetria operacional, nunca conteúdo — por construção de assinatura, não por convenção (ADR-085)                        |
+| `ai_requests.entity_id` é **referência sem FK**                                      | **Prompt 20**: mesmo padrão de `automation_action_attempts.domain_result_ref` — a IA lê o dado, nunca é dona dele                        |
+| `part_search_candidates.part_id` é **referência de leitura, nunca o dono**           | **Prompt 21**: `parts` (Estoque) continua a única fonte de verdade do catálogo; o candidate só aponta pra ela (ADR-086)                  |
+| `part_search_offers` é **imutável, nunca reescrita**                                 | **Prompt 21**: preço/disponibilidade externos são temporais; um refresh seria uma linha nova, nunca um `UPDATE` (ADR-086)                |
+| `part_search_selections.purchase_need_id` é **referência sem FK**                    | **Prompt 21**: mesmo padrão de `automation_action_attempts.domain_result_ref` — Compras nunca depende do schema de Part Search (ADR-086) |

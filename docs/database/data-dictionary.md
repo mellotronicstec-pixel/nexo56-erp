@@ -1074,3 +1074,57 @@ código deliberada e revisada.
 Sem hash de conteúdo por decisão explícita (item 23): um hash de texto curto
 é adivinhável e viraria fingerprint do próprio dado sensível que a tabela
 existe para não guardar.
+
+## Busca de Peças (Prompt 21, migration 0019)
+
+Cinco tabelas. Ver [ADR-086](../adr/ADR-086-busca-de-pecas-candidato-vs-oferta-e-compatibilidade-antes-do-preco.md)
+e `docs/modules/part-search/` para o detalhamento por assunto.
+
+### `part_search_sessions`
+
+A busca em si. `unit_id` não-anulável (a busca sempre acontece numa
+unidade — estoque/preço são locais); `service_order_id`/`equipment_id`
+anuláveis (busca avulsa é permitida); FK composta
+`(service_order_id, unit_id)` garante que a OS referenciada é da mesma
+unidade (mesmo padrão de `quotes`). `query_term` é o termo normalizado
+(nunca PII); `status` é `requested`\|`running`\|`completed`\|`partial`\|`failed`.
+
+### `part_search_candidates`
+
+Identidade técnica observada — **nunca** um `Inventory Item`. `part_id`
+anulável, referência de leitura quando o candidate corresponde a uma peça
+real do catálogo (`parts`); `compatibility_label` é um dos cinco rótulos
+oficiais (`CHECK`), calculado uma vez no momento da busca (snapshot
+congelado). `dedupe_key` implementa a deduplicação conservadora (item 54).
+
+### `part_search_evidence`
+
+Proveniência da classificação: `source`, `type` (oito categorias
+fechadas, `CHECK`), `observed_at`, `field`/`value` opcionais.
+
+### `part_search_offers`
+
+Condição comercial de UMA fonte, num instante — nunca reescrita
+(`observed_at` imutável; um refresh seria uma nova linha, fora de escopo
+desta V1). `price`/`freight`/`total_cost` em `DECIMAL(14,2)` via `Money`
+— nunca float; `is_historical` distingue "última compra registrada" de
+oferta viva; `total_cost` só preenchido quando `price` e `freight` são
+ambos conhecidos.
+
+### `part_search_provider_calls`
+
+Observabilidade operacional da chamada externa — nunca o snapshot
+comercial (esse é `part_search_offers`). `status`
+`ok`\|`error`\|`timeout`\|`not_configured`; `error_code` é um
+`PartSearchErrorCode`, nunca o corpo/stack cru do provedor.
+
+### `part_search_selections`
+
+A escolha humana — nunca criada pela busca sozinha. `purchase_need_id`
+é referência **sem FK** a `purchase_needs` (mesmo padrão do Motor de
+Automações para referência a outro módulo, item 71): Part Search pode ler
+Compras pela porta oficial, mas nunca vira dependência estrutural do
+schema de Compras.
+
+**PII: nenhuma.** Nenhuma coluna guarda nome/documento/contato de
+cliente; `query_term` é validado a 200 caracteres, técnico por natureza.

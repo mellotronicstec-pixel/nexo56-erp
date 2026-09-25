@@ -27,3 +27,4 @@ export * from '@/modules/communications/infrastructure/schema';
 export * from '@/modules/portal/infrastructure/schema';
 export * from '@/modules/automations/infrastructure/schema';
 export * from '@/modules/ai/infrastructure/schema';
+export * from '@/modules/part-search/infrastructure/schema';

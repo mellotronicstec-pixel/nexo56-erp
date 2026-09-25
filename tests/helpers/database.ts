@@ -20,6 +20,16 @@ export async function migrateTestDatabase(): Promise<void> {
  */
 const TABLES_IN_DELETE_ORDER = [
   'audit_logs',
+  // Busca de Pecas (Prompt 21): selecao/chamada de provedor pendem da
+  // sessao; offer/evidencia pendem do candidate; candidate pende da sessao.
+  // Nenhuma tabela de outro modulo referencia estas (part_id em
+  // part_search_candidates e so leitura restrict, nao filha).
+  'part_search_selections',
+  'part_search_provider_calls',
+  'part_search_offers',
+  'part_search_evidence',
+  'part_search_candidates',
+  'part_search_sessions',
   // Nexo56 AI (Prompt 20): folha pura — referencia tenant/unit/user, nada
   // referencia `ai_requests`. Nunca guarda conteudo, so metadados.
   'ai_requests',

@@ -88,6 +88,17 @@ export const FEATURES = {
    */
   AI_CORE: 'ai.core',
   AI_WRITING: 'ai.writing',
+  /**
+   * Busca de Pecas por IA (Prompt 21). Cumpre exatamente a promessa
+   * registrada no comentario de `AI_CORE`: sua PROPRIA feature, dependente
+   * de `ai.core`, sem reabrir o bloco de escrita.
+   *
+   * OPTIONAL: desligada, a acao "Buscar peca (IA)" some da OS, nenhuma
+   * `part_search_session` nova e criada, e Estoque/Compras/OS continuam
+   * funcionando inteiros (item 70/136) — a busca de pecas por LIKE que o
+   * Estoque ja tem (`partSearchKey`) e completamente independente disto.
+   */
+  AI_PART_SEARCH: 'ai.part_search',
 } as const;
 
 export type FeatureKey = (typeof FEATURES)[keyof typeof FEATURES];
@@ -465,6 +476,14 @@ export const FEATURE_CATALOG: readonly FeatureDefinition[] = [
     name: 'Nexo56 AI — Assistencia de escrita',
     description:
       'Rascunhos de texto em portugues: corrigir, profissionalizar, resumir, deixar claro para o cliente e gerar parecer tecnico. Sempre rascunho revisado por humano, nunca escrita automatica.',
+    type: 'OPTIONAL',
+    dependsOn: [FEATURES.AI_CORE],
+  },
+  {
+    key: FEATURES.AI_PART_SEARCH,
+    name: 'Nexo56 AI — Busca de Pecas',
+    description:
+      'Busca peca por termo ou codigo a partir da OS: cruza estoque e historico de compra internos, e opcionalmente fontes externas configuradas, classificando cada resultado por compatibilidade (nunca por preco). Nenhuma compra, reserva ou movimentacao de estoque acontece sozinha — selecionar um resultado exige confirmacao humana.',
     type: 'OPTIONAL',
     dependsOn: [FEATURES.AI_CORE],
   },

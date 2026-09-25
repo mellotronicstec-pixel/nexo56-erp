@@ -69,6 +69,7 @@ import {
   WorkflowPanel,
   type TransitionOption,
 } from './workflow-panel';
+import { PartSearchPanel } from './part-search-panel';
 import {
   listReservationsForServiceOrder,
   searchPartsForPicker,
@@ -324,6 +325,20 @@ export default async function ServiceOrderDetailPage({
   const canCreateNeedDecision = await can(context, {
     permission: PERMISSIONS.PURCHASES_CREATE,
     featureKey: FEATURES.OPERATIONS_PURCHASING,
+    unitId: order.unitId,
+  });
+
+  /**
+   * BUSCA DE PECAS POR IA (Prompt 21). ACAO/FERRAMENTA, nao status (item
+   * 80) — ao contrario de `PartPickupPanel`, nao depende de
+   * `order.status === 'awaiting_part'`: a pessoa pode buscar uma peca a
+   * qualquer momento do atendimento. `ai.part_search` e OPTIONAL e
+   * dependente de `ai.core` (Prompt 21/ADR-086): desligada, o botao
+   * simplesmente nao aparece e a OS continua inteira.
+   */
+  const canSearchPartsDecision = await can(context, {
+    permission: PERMISSIONS.PARTS_SEARCH,
+    featureKey: FEATURES.AI_PART_SEARCH,
     unitId: order.unitId,
   });
 
@@ -635,6 +650,19 @@ export default async function ServiceOrderDetailPage({
             */}
             {order.status === 'awaiting_part' && canTasksDecision.allowed ? (
               <PartPickupPanel serviceOrderId={order.id} action={requestPartPickupAction} />
+            ) : null}
+
+            {/*
+              "Buscar peca (IA)" — ferramenta de busca tecnica, disponivel em
+              qualquer situacao da OS (item 80). NAO substitui o painel acima:
+              aquele cria uma tarefa manual de retirada; este classifica
+              candidatos por compatibilidade e nunca compra/reserva sozinho.
+            */}
+            {canSearchPartsDecision.allowed ? (
+              <PartSearchPanel
+                serviceOrderId={order.id}
+                canCreatePurchaseNeed={canCreateNeedDecision.allowed}
+              />
             ) : null}
 
             {/*
