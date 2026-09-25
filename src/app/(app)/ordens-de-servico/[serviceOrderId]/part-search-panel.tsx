@@ -14,14 +14,17 @@ import type {
 } from '@/modules/part-search/application/search-service';
 
 /**
- * "BUSCAR PECA (IA)" — painel da OS (Prompt 21, itens 80 a 96, 147 a 163).
+ * "BUSCAR PECA" — painel da OS (Prompt 21, itens 80 a 96, 147 a 163;
+ * label sem "(IA)" desde a correcao de modularidade pos-CI #33: a busca e
+ * deterministica, independente do Nexo56 AI — ver `FEATURES.OPERATIONS_PART_SEARCH`).
  *
  * ACAO/FERRAMENTA, nunca status (item 80): disponivel em QUALQUER situacao
- * da OS, ao contrario de "Buscar Peca" (o `PartPickupPanel` acima, que cria
- * uma TAREFA manual de retirada e so aparece em Aguardando Peca — os dois
- * NAO SAO A MESMA COISA, deliberadamente: aqui e busca tecnica de
- * candidatos com classificacao de compatibilidade; aquele e "lembrete para
- * ir buscar a peca que ja se sabe qual e").
+ * da OS. NAO deve ser confundida com "Registrar busca de peca" (o
+ * `PartPickupPanel` acima, que cria uma TAREFA manual de retirada e so
+ * aparece em Aguardando Peca — os dois NAO SAO A MESMA COISA,
+ * deliberadamente: aqui e busca tecnica de candidatos com classificacao de
+ * compatibilidade; aquele e "lembrete para ir buscar a peca que ja se sabe
+ * qual e").
  *
  * Selecionar um resultado NUNCA compra nem reserva nada (item 95/146) — so
  * registra a escolha. Criar necessidade de compra e um segundo passo
@@ -237,7 +240,7 @@ export function PartSearchPanel({
   return (
     <>
       <Button variant="secondary" onClick={() => setOpen(true)}>
-        Buscar peça (IA)
+        Buscar peça
       </Button>
 
       <Modal

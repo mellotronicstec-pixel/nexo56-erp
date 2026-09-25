@@ -180,6 +180,34 @@ describe('o catalogo de acoes de automations nao ganhou nenhuma acao de compra d
   });
 });
 
+describe('independente do Nexo56 AI (correcao de modularidade pos-CI #33)', () => {
+  it('nunca importa modules/ai/application nem modules/ai/infrastructure (nenhum AiGateway/AiProvider real no fluxo principal)', () => {
+    const infratores = PART_SEARCH_MODULE.filter(({ code }) =>
+      /modules\/ai\/(application|infrastructure)\//.test(code),
+    );
+    expect(infratores.map((f) => f.path)).toEqual([]);
+  });
+
+  it('a UNICA importacao de modules/ai e a funcao pura extractTechnicalAnchors (domain, sem chamada de rede/IA)', () => {
+    const padrao = /from\s+'@\/modules\/ai\/([a-z/-]+)'/g;
+    for (const { path, code } of PART_SEARCH_MODULE) {
+      const matches = [...code.matchAll(padrao)];
+      for (const match of matches) {
+        expect(
+          match[1],
+          `${path} importa modules/ai/${match[1]} — so modules/ai/domain/technical-anchors e permitido`,
+        ).toBe('domain/technical-anchors');
+      }
+    }
+  });
+
+  it('nenhum arquivo referencia FEATURES.AI_CORE nem FEATURES.AI_WRITING (a busca nao gateia por feature de IA)', () => {
+    const padrao = /FEATURES\.AI_(CORE|WRITING)\b/;
+    const infratores = PART_SEARCH_MODULE.filter(({ code }) => padrao.test(code));
+    expect(infratores.map((f) => f.path)).toEqual([]);
+  });
+});
+
 describe('toda tabela do modulo e tenant-scoped', () => {
   it('o schema do modulo usa tenantId() em todas as tabelas', () => {
     const schema = PART_SEARCH_MODULE.find(({ path }) =>

@@ -58,10 +58,17 @@ let sequencial = 0;
 
 const run = <T>(work: () => Promise<T>) => runWithContext({ origin: 'test' }, work);
 
+/**
+ * Liga SOMENTE o que a Busca de Pecas realmente precisa — deliberadamente
+ * SEM `ai.core` (correcao de modularidade pos-CI #33): `ai.core` nunca e
+ * ligado neste arquivo inteiro, provando por construcao, em toda busca
+ * executada nesta suite, que a capacidade principal e independente do
+ * Nexo56 AI. Ver `describe('independente de ai.core ...')` abaixo para as
+ * provas explicitas.
+ */
 async function ligarBusca(alvo: TenantFixture): Promise<void> {
-  await run(() => setTenantFeature(alvo.context, { featureKey: FEATURES.AI_CORE, enabled: true }));
   await run(() =>
-    setTenantFeature(alvo.context, { featureKey: FEATURES.AI_PART_SEARCH, enabled: true }),
+    setTenantFeature(alvo.context, { featureKey: FEATURES.OPERATIONS_PART_SEARCH, enabled: true }),
   );
   await run(() =>
     setTenantFeature(alvo.context, { featureKey: FEATURES.OPERATIONS_INVENTORY, enabled: true }),
@@ -215,11 +222,9 @@ afterEach(() => {
 });
 
 describe('feature e permissao (composta)', () => {
-  it('feature ai.part_search desligada: PART_SEARCH_FEATURE_DISABLED e nenhuma sessao gravada', async () => {
+  it('feature operations.part_search desligada: PART_SEARCH_FEATURE_DISABLED e nenhuma sessao gravada', async () => {
+    // Tenant SEM nenhuma feature ligada — nem ai.core, nem operations.part_search.
     const semBusca = await createTenantFixture('ps-integ-sem-busca', planId);
-    await run(() =>
-      setTenantFeature(semBusca.context, { featureKey: FEATURES.AI_CORE, enabled: true }),
-    );
 
     const erro = await run(() =>
       performPartSearch(semBusca.context, { term: 'placa fonte', unitId: semBusca.unitId }),
@@ -248,6 +253,146 @@ describe('feature e permissao (composta)', () => {
     ).catch((e: unknown) => e);
 
     expect(isAppError(erro) && erro.code).toBe('AUTHORIZATION_ERROR');
+  });
+});
+
+/**
+ * EFFECTIVE ACCESS x ai.core — GATE DEDICADO (correcao de modularidade
+ * pos-CI #33). Prova, com banco real, os 4 cenarios da matriz composta
+ * Plan entitlement + Tenant feature + User permission, deixando `ai.core`
+ * deliberadamente FORA da equacao (nunca e pre-requisito nem substituto).
+ */
+describe('effective access: operations.part_search x ai.core (matriz composta)', () => {
+  it('A. Part Search ON + ai.core OFF + permissao ON -> acesso permitido, busca interna real executa', async () => {
+    // `tenant` (beforeEach) ja tem operations.part_search ON e ai.core NUNCA foi ligado.
+    const partId = await criarPeca(tenant, { partNumber: 'X123' });
+    await darEstoque(tenant, partId);
+
+    const result = await run(() =>
+      performPartSearch(tenant.context, {
+        term: 'placa fonte',
+        partNumberHint: 'X123',
+        unitId: tenant.unitId,
+        includeExternal: false,
+      }),
+    );
+
+    expect(result.status).toBe('completed');
+    expect(result.internalSearched).toBe(true);
+    expect(result.candidates.some((c) => c.sourceType === 'internal_inventory')).toBe(true);
+    expect(await contarSessoes()).toBe(1);
+  });
+
+  it('B. Part Search OFF + ai.core ON + permissao ON -> acesso negado (ligar ai.core nunca supre operations.part_search)', async () => {
+    const semBusca = await createTenantFixture('ps-integ-sem-busca-b', planId);
+    await run(() =>
+      setTenantFeature(semBusca.context, { featureKey: FEATURES.AI_CORE, enabled: true }),
+    );
+    const usuario = await usuarioCom(semBusca, [PERMISSIONS.PARTS_SEARCH]);
+
+    const erro = await run(() =>
+      performPartSearch(usuario, { term: 'placa fonte', unitId: semBusca.unitId }),
+    ).catch((e: unknown) => e);
+
+    expect(errorCode(erro)).toBe('PART_SEARCH_FEATURE_DISABLED');
+  });
+
+  it('C. Part Search ON + ai.core ON + permissao OFF -> acesso negado (ai.core ligado nao concede parts.search)', async () => {
+    const comAiCore = await createTenantFixture('ps-integ-com-ai-core-c', planId);
+    await ligarBusca(comAiCore);
+    await run(() =>
+      setTenantFeature(comAiCore.context, { featureKey: FEATURES.AI_CORE, enabled: true }),
+    );
+    const semPermissao = await usuarioCom(comAiCore, [PERMISSIONS.INVENTORY_VIEW]);
+
+    const erro = await run(() =>
+      performPartSearch(semPermissao, { term: 'placa fonte', unitId: comAiCore.unitId }),
+    ).catch((e: unknown) => e);
+
+    expect(errorCode(erro)).toBe('PART_SEARCH_PERMISSION_DENIED');
+  });
+
+  it('D. Part Search ON + ai.core OFF + permissao OFF -> acesso negado (a permissao continua exigida, com ou sem ai.core)', async () => {
+    const semPermissao = await usuarioCom(tenant, [PERMISSIONS.INVENTORY_VIEW]);
+
+    const erro = await run(() =>
+      performPartSearch(semPermissao, { term: 'placa fonte', unitId: tenant.unitId }),
+    ).catch((e: unknown) => e);
+
+    expect(errorCode(erro)).toBe('PART_SEARCH_PERMISSION_DENIED');
+  });
+});
+
+describe('independente de ai.core: busca interna, provedor e producao (itens 15 a 17)', () => {
+  it('busca interna real com ai.core OFF: sessao, Compatibility Assessor e Ranking executam sem nenhuma falha relacionada a ai.core', async () => {
+    const partId = await criarPeca(tenant, { partNumber: 'X123' });
+    await darEstoque(tenant, partId);
+
+    const result = await run(() =>
+      performPartSearch(tenant.context, {
+        term: 'placa fonte',
+        partNumberHint: 'X123',
+        unitId: tenant.unitId,
+        includeExternal: false,
+      }),
+    );
+
+    expect(await contarSessoes()).toBe(1);
+    const found = result.candidates.find((c) => c.sourceType === 'internal_inventory');
+    expect(found).toBeDefined();
+    expect(found!.compatibilityLabel).toBe('alta_probabilidade');
+    expect(result.status).toBe('completed');
+  });
+
+  it('CapturePartSearchProvider fora de producao funciona normalmente com ai.core OFF (PartSearchProvider != AiGateway)', async () => {
+    const capture = getCapturePartSearchProvider();
+    capture?.respondNext({
+      outcome: 'ok',
+      items: [
+        {
+          providerResultId: 'r1',
+          title: 'Peca externa via captura',
+          partNumber: null,
+          manufacturer: null,
+          sourceName: 'Loja X',
+          price: { amount: '10.00', currency: 'BRL' },
+          availability: 'available',
+          leadTimeDays: 3,
+          url: null,
+          compatibilityData: null,
+          observedAt: new Date(),
+        },
+      ],
+    });
+
+    const result = await run(() =>
+      performPartSearch(tenant.context, { term: 'peca x', unitId: tenant.unitId }),
+    );
+
+    expect(result.externalOutcome).toBe('ok');
+    expect(result.candidates.some((c) => c.sourceType === 'external')).toBe(true);
+  });
+
+  it('producao, ai.core OFF, sem provider real: busca interna continua e a secao externa informa "nao configurado" (NUNCA "IA indisponivel")', async () => {
+    const partId = await criarPeca(tenant, { partNumber: 'X123' });
+    await darEstoque(tenant, partId);
+    ligarProducao();
+
+    const result = await run(() =>
+      performPartSearch(tenant.context, { term: 'placa fonte', unitId: tenant.unitId }),
+    );
+
+    expect(result.externalOutcome).toBe('not_configured');
+    expect(result.candidates.some((c) => c.sourceType === 'internal_inventory')).toBe(true);
+
+    const providerCallRows = await getDb().execute(
+      sql`SELECT error_code FROM part_search_provider_calls WHERE session_id = ${result.sessionId}`,
+    );
+    const errorCodeGravado = (
+      providerCallRows as unknown as Array<Array<{ error_code: string }>>
+    )[0]?.[0]?.error_code;
+    expect(errorCodeGravado).toBe('PART_SEARCH_PROVIDER_NOT_CONFIGURED');
+    expect(errorCodeGravado).not.toMatch(/AI/i);
   });
 });
 

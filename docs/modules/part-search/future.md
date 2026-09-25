@@ -9,7 +9,10 @@
   implementado nesta V1 porque a busca deterministica já cumpre o
   requisito de "funcionar sem IA real" (item 12) sozinha, e adicionar uma
   superfície de IA nova é trabalho arquitetural genuíno que merece seu
-  próprio ciclo de decisão (vendor, prompt, guardas), não um adendo.
+  próprio ciclo de decisão (vendor, prompt, guardas), não um adendo. Nota:
+  o Feature Catalog do CI #33 declarava `ai.part_search` dependente de
+  `ai.core`, contradizendo esta mesma frase — corrigido logo em seguida
+  (ver `ai-independence.md`); a busca em si nunca chamou IA nenhuma.
 - **Base de Conhecimento / Diagnóstico** (Prompt 22) — manuais, PDFs,
   histórico de diagnóstico, embeddings, RAG. Não iniciado.
 - **APIs/Integrações** (Prompt 23). Não iniciado.

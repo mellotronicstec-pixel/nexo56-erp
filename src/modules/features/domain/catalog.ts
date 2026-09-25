@@ -89,16 +89,30 @@ export const FEATURES = {
   AI_CORE: 'ai.core',
   AI_WRITING: 'ai.writing',
   /**
-   * Busca de Pecas por IA (Prompt 21). Cumpre exatamente a promessa
-   * registrada no comentario de `AI_CORE`: sua PROPRIA feature, dependente
-   * de `ai.core`, sem reabrir o bloco de escrita.
+   * Busca de Pecas (Prompt 21, correcao de modularidade pos-CI #33).
    *
-   * OPTIONAL: desligada, a acao "Buscar peca (IA)" some da OS, nenhuma
+   * Prefixo `operations.` e NAO `ai.` — de proposito (mesmo raciocinio do
+   * `OPERATIONS_INVENTORY`, acima): a capacidade PRINCIPAL desta feature e
+   * busca tecnica deterministica (cruza Estoque/historico de compra
+   * internos, aplica o Compatibility Assessor e o Ranking, ambos puros) —
+   * NENHUMA parte do fluxo principal chama `AiGateway`/`AiProvider`. A
+   * unica coisa que o modulo reaproveita do Nexo56 AI e uma funcao pura de
+   * texto (`extractTechnicalAnchors`), sem chamada de rede nem inferencia.
+   *
+   * Por isso NAO depende de `ai.core` (`dependsOn: []`): desligar o Nexo56
+   * AI inteiro NUNCA pode desligar a Busca de Pecas junto — o Prompt 03
+   * (item 12) exige que o ERP funcione inteiro com AI desligada, e uma
+   * dependencia aqui violaria isso silenciosamente. Se um enriquecimento
+   * por IA REAL for adicionado no futuro sobre os resultados desta busca,
+   * essa subcapacidade especifica podera exigir `ai.core` — sem tornar a
+   * busca em si dependente (degradacao graciosa, nunca desligamento total).
+   *
+   * OPTIONAL: desligada, a acao "Buscar peca" some da OS, nenhuma
    * `part_search_session` nova e criada, e Estoque/Compras/OS continuam
    * funcionando inteiros (item 70/136) — a busca de pecas por LIKE que o
    * Estoque ja tem (`partSearchKey`) e completamente independente disto.
    */
-  AI_PART_SEARCH: 'ai.part_search',
+  OPERATIONS_PART_SEARCH: 'operations.part_search',
 } as const;
 
 export type FeatureKey = (typeof FEATURES)[keyof typeof FEATURES];
@@ -480,12 +494,12 @@ export const FEATURE_CATALOG: readonly FeatureDefinition[] = [
     dependsOn: [FEATURES.AI_CORE],
   },
   {
-    key: FEATURES.AI_PART_SEARCH,
-    name: 'Nexo56 AI — Busca de Pecas',
+    key: FEATURES.OPERATIONS_PART_SEARCH,
+    name: 'Busca de Pecas',
     description:
-      'Busca peca por termo ou codigo a partir da OS: cruza estoque e historico de compra internos, e opcionalmente fontes externas configuradas, classificando cada resultado por compatibilidade (nunca por preco). Nenhuma compra, reserva ou movimentacao de estoque acontece sozinha — selecionar um resultado exige confirmacao humana.',
+      'Busca peca por termo ou codigo a partir da OS: cruza estoque e historico de compra internos, e opcionalmente fontes externas configuradas, classificando cada resultado por compatibilidade (nunca por preco). Busca deterministica, independente do Nexo56 AI. Nenhuma compra, reserva ou movimentacao de estoque acontece sozinha — selecionar um resultado exige confirmacao humana.',
     type: 'OPTIONAL',
-    dependsOn: [FEATURES.AI_CORE],
+    dependsOn: [],
   },
 ];
 

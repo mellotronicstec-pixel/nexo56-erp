@@ -140,3 +140,22 @@ clique humano, nunca automação em lote). Ver
   (`PART_SEARCH_PROVIDER_NOT_CONFIGURED`) em produção — a busca interna
   (Estoque + histórico de compra) é a capacidade real e comprovada desta
   V1.
+
+## Nota de correção (pós-CI #33)
+
+Esta ADR sempre descreveu a Busca de Peças como determinística e capaz de
+funcionar sem provedor real (seção "Sem provedor externo real definido",
+acima) — mas a implementação mergeada no CI #33 (commit `74b6c87`)
+declarou a feature no catálogo como `ai.part_search`, `dependsOn:
+['ai.core']`, contradizendo essa própria decisão: desligar o Nexo56 AI
+inteiro desligava, por efeito colateral, a busca determinística junto —
+inclusive a parte que nunca chama IA nenhuma.
+
+Corrigido no mesmo dia: a feature foi renomeada para
+`operations.part_search`, `dependsOn: []`, e a permissão `parts.search`
+passou a apontar para ela. Nenhuma outra decisão desta ADR mudou —
+Candidate/Offer/Inventory Item, o Compatibility Assessor, o Ranking, o
+`PartSearchProvider` e a integração com Compras permanecem exatamente
+como descritos acima. Detalhes completos, incluindo a investigação e a
+matriz de testes que prova a independência, em
+`docs/modules/part-search/ai-independence.md`.

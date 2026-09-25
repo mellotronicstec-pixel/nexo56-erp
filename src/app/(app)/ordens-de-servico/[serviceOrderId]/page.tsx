@@ -329,16 +329,19 @@ export default async function ServiceOrderDetailPage({
   });
 
   /**
-   * BUSCA DE PECAS POR IA (Prompt 21). ACAO/FERRAMENTA, nao status (item
-   * 80) — ao contrario de `PartPickupPanel`, nao depende de
+   * BUSCA DE PECAS (Prompt 21). ACAO/FERRAMENTA, nao status (item 80) — ao
+   * contrario de `PartPickupPanel`, nao depende de
    * `order.status === 'awaiting_part'`: a pessoa pode buscar uma peca a
-   * qualquer momento do atendimento. `ai.part_search` e OPTIONAL e
-   * dependente de `ai.core` (Prompt 21/ADR-086): desligada, o botao
-   * simplesmente nao aparece e a OS continua inteira.
+   * qualquer momento do atendimento. `operations.part_search` e OPTIONAL e
+   * SEM dependencia de `ai.core` (correcao de modularidade pos-CI #33/
+   * ADR-086): a busca e deterministica (Estoque/historico + Compatibility
+   * Assessor + Ranking, todos puros) — desligar o Nexo56 AI nunca pode
+   * desligar isto junto. Desligada, o botao simplesmente nao aparece e a
+   * OS continua inteira.
    */
   const canSearchPartsDecision = await can(context, {
     permission: PERMISSIONS.PARTS_SEARCH,
-    featureKey: FEATURES.AI_PART_SEARCH,
+    featureKey: FEATURES.OPERATIONS_PART_SEARCH,
     unitId: order.unitId,
   });
 
@@ -653,10 +656,12 @@ export default async function ServiceOrderDetailPage({
             ) : null}
 
             {/*
-              "Buscar peca (IA)" — ferramenta de busca tecnica, disponivel em
-              qualquer situacao da OS (item 80). NAO substitui o painel acima:
-              aquele cria uma tarefa manual de retirada; este classifica
-              candidatos por compatibilidade e nunca compra/reserva sozinho.
+              "Buscar peca" — ferramenta de busca tecnica deterministica,
+              disponivel em qualquer situacao da OS (item 80), independente
+              do Nexo56 AI (correcao pos-CI #33). NAO substitui o painel
+              acima: aquele cria uma tarefa manual de retirada; este
+              classifica candidatos por compatibilidade e nunca compra/
+              reserva sozinho.
             */}
             {canSearchPartsDecision.allowed ? (
               <PartSearchPanel

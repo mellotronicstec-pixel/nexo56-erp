@@ -299,7 +299,9 @@ export const PERMISSIONS = {
   /**
    * Buscar peca (interna e, quando configurada, externa) a partir da OS.
    *
-   * Composta com a feature `ai.part_search` E com `service_orders.view` na
+   * Composta com a feature `operations.part_search` (correcao de
+   * modularidade pos-CI #33: NAO e mais `ai.part_search` nem depende de
+   * `ai.core` — a busca e deterministica) E com `service_orders.view` na
    * mesma unidade quando a busca parte de uma OS (item 74) — esta permissao
    * sozinha nao abre nenhuma OS nem eleva acesso a Estoque/Compras: ver
    * `part_search_candidates` continua exigindo `inventory.view`, e criar
@@ -861,7 +863,7 @@ export const PERMISSION_CATALOG: readonly PermissionDefinition[] = [
     name: 'Buscar pecas',
     description:
       'Busca peca por termo ou codigo, a partir da OS: estoque e historico de compra internos, e fontes externas quando configuradas. Selecionar um resultado nao compra nem reserva nada; criar necessidade de compra a partir da selecao exige tambem "Criar solicitacoes de compra".',
-    featureKey: 'ai.part_search',
+    featureKey: 'operations.part_search',
   },
 ];
 
@@ -1140,8 +1142,15 @@ export const PERMISSION_GROUPS = [
   {
     key: 'nexo56-ai',
     name: 'Nexo56 AI',
-    description: 'Rascunhos de escrita assistida sobre campos autorizados e busca de pecas.',
-    permissions: [PERMISSIONS.AI_USE, PERMISSIONS.PARTS_SEARCH],
+    description: 'Rascunhos de escrita assistida sobre campos autorizados.',
+    permissions: [PERMISSIONS.AI_USE],
+  },
+  {
+    key: 'busca-de-pecas',
+    name: 'Busca de Pecas',
+    description:
+      'Busca tecnica de pecas por termo ou codigo, com classificacao de compatibilidade. Capacidade deterministica, independente do Nexo56 AI.',
+    permissions: [PERMISSIONS.PARTS_SEARCH],
   },
 ] as const satisfies ReadonlyArray<{
   key: string;

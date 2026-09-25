@@ -2,12 +2,14 @@
 
 ## Onde vive
 
-Botão "Buscar peça (IA)" na página da OS
+Botão "Buscar peça" na página da OS
 (`ordens-de-servico/[serviceOrderId]/part-search-panel.tsx`), ao lado do
 `PartPickupPanel` existente — **não é a mesma coisa**: o painel existente
 cria uma tarefa manual de retirada ("o que buscar e onde"), sempre em
-`awaiting_part`; este é uma ferramenta de classificação técnica,
-disponível em qualquer situação da OS (item 80).
+`awaiting_part`; este é uma ferramenta de classificação técnica
+determinística, disponível em qualquer situação da OS (item 80). Sem
+"(IA)" no rótulo (correção pós-CI #33): a busca não depende do Nexo56 AI
+— ver `ai-independence.md`.
 
 ## Fluxo
 

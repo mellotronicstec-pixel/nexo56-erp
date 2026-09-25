@@ -38,8 +38,9 @@ import type {
  *   2. Se veio de uma OS: carrega a OS (leitura tenant-scoped), autoriza
  *      `service_orders.view` NA UNIDADE DA OS (nunca aceita unitId solto do
  *      cliente quando ha OS — a OS e que manda qual e a unidade real).
- *   3. Autorizacao composta: `parts.search` + feature `ai.part_search`, na
- *      MESMA unidade (item 74).
+ *   3. Autorizacao composta: `parts.search` + feature `operations.part_search`
+ *      (independente de `ai.core` — correcao pos-CI #33), na MESMA unidade
+ *      (item 74).
  *   4. Normaliza a consulta (nunca altera parte tecnica do termo).
  *   5. Busca interna (Estoque + historico de compra), SO se o usuario tiver
  *      as permissoes daqueles modulos NA MESMA unidade — senao, omite a
@@ -159,13 +160,13 @@ export interface PerformPartSearchResult {
   candidates: readonly PerformPartSearchResultCandidate[];
 }
 
-/** Decora `AuthorizationError` de `parts.search`/`ai.part_search` com o codigo estavel do item 127. */
+/** Decora `AuthorizationError` de `parts.search`/`operations.part_search` com o codigo estavel do item 127. */
 async function authorizePartSearch(context: TenantContext, unitId: string): Promise<void> {
   try {
     await authorize(context, {
       permission: PERMISSIONS.PARTS_SEARCH,
       unitId,
-      featureKey: FEATURES.AI_PART_SEARCH,
+      featureKey: FEATURES.OPERATIONS_PART_SEARCH,
     });
   } catch (error) {
     if (isAppError(error) && error.code === 'AUTHORIZATION_ERROR') {

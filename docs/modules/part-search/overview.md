@@ -44,19 +44,21 @@ com uma classificação honesta de compatibilidade — nunca inventada.
   embedding, nem RAG.
 - Não faz busca por imagem/OCR (isso é Prompt 06, Captura de Etiqueta).
 - Não decide margem/preço de venda.
-- Não altera o status da OS — "Buscar peça (IA)" é ação, nunca estado,
+- Não altera o status da OS — "Buscar peça" é ação, nunca estado,
   igual à `PartPickupPanel` já existente (que continua sendo outra coisa:
   um lembrete manual de retirada, não uma busca técnica).
 
 ## Onde entra no produto
 
-Botão "Buscar peça (IA)" na página da Ordem de Serviço, disponível em
+Botão "Buscar peça" na página da Ordem de Serviço, disponível em
 qualquer situação da OS (não depende de status). Abre um diálogo com
-formulário de busca e lista de resultados classificados. Ver `ui.md`.
+formulário de busca e lista de resultados classificados. Ver `ui.md` e
+`ai-independence.md` (a busca é determinística, independente do Nexo56 AI).
 
 ## Documentos relacionados
 
 `architecture.md`, `sources.md`, `compatibility.md`, `ranking.md`,
-`providers.md`, `privacy-security.md`, `purchasing-integration.md`,
-`observability.md`, `ui.md`, `future.md`. ADR-086 registra as decisões
-arquiteturais.
+`providers.md`, `ai-independence.md`, `privacy-security.md`,
+`purchasing-integration.md`, `observability.md`, `ui.md`, `future.md`.
+ADR-086 registra as decisões arquiteturais (com nota de correção sobre a
+independência de `ai.core`).

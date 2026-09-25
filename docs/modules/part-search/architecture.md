@@ -39,10 +39,12 @@ padrão de `src/app/(app)/ai/actions.ts`); a UI vive em
 2. Se veio de uma OS: carrega a OS (leitura tenant-scoped via
    `findServiceOrderDetail`), autoriza `service_orders.view` **na unidade
    real da OS** — nunca aceita `unitId` solto do cliente quando há OS.
-3. Autorização composta: `parts.search` + feature `ai.part_search`, na
-   mesma unidade.
-4. Normaliza a consulta (reaproveita `extractTechnicalAnchors` do Nexo56
-   AI — nunca altera parte técnica do termo).
+3. Autorização composta: `parts.search` + feature `operations.part_search`,
+   na mesma unidade — **sem depender de `ai.core`** (correção de
+   modularidade pós-CI #33; ver `ai-independence.md`).
+4. Normaliza a consulta (reaproveita `extractTechnicalAnchors`, uma
+   função **pura** de texto do Nexo56 AI — nenhuma chamada de rede/IA;
+   nunca altera parte técnica do termo).
 5. Busca interna: só roda se o usuário tiver `inventory.view` na unidade
    — senão, a seção some silenciosamente (Estoque continua opcional).
 6. Busca externa opcional: provedor ausente ou indisponível nunca derruba
@@ -75,6 +77,13 @@ nem Compras sabem que Part Search existe — nenhum dos dois importa nada
 do módulo, e um teste de arquitetura garante isso. Automations e Portal
 também nunca são importados por Part Search, e o inverso também nunca
 acontece.
+
+## Independência do Nexo56 AI
+
+Part Search Core (busca interna, Compatibility Assessor, Ranking,
+`PartSearchProvider`, seleção humana) **nunca** depende de `ai.core` —
+ver `ai-independence.md` para a explicação completa e a prova de que
+nenhum uso real de `AiGateway`/`AiProvider` existe no fluxo principal.
 
 ## Por que uma tabela por conceito, e não uma tabela “resultado” genérica
 

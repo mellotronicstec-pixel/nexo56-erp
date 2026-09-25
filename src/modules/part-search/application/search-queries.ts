@@ -91,7 +91,7 @@ export async function getSessionResults(
   await authorize(context, {
     permission: PERMISSIONS.PARTS_SEARCH,
     unitId: session.unitId,
-    featureKey: FEATURES.AI_PART_SEARCH,
+    featureKey: FEATURES.OPERATIONS_PART_SEARCH,
   });
 
   const candidateRows = await db
