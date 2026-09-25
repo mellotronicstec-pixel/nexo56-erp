@@ -101,6 +101,13 @@ export default async function QuotePage({
     unitId: quote.unitId,
   });
 
+  /** Autorizacao composta do Nexo56 AI para o campo "Observacoes para o cliente" (Prompt 20, item 95). */
+  const aiWritingAccess = await can(context, {
+    permission: PERMISSIONS.AI_USE,
+    featureKey: FEATURES.AI_WRITING,
+    unitId: quote.unitId,
+  });
+
   const partOptions = podeVerEstoque.allowed
     ? (await searchPartsForPicker(context, '', 50)).map((part) => ({
         id: part.id,
@@ -340,6 +347,7 @@ export default async function QuotePage({
           initialInternalNotes={quote.internalNotes ?? ''}
           action={saveQuoteDraftAction}
           parts={partOptions}
+          aiAvailable={aiWritingAccess.allowed}
         />
       ) : (
         <Section id="itens" title="Itens" description="Os valores desta proposta, como ficaram.">

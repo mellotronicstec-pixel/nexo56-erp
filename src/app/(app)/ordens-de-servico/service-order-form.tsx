@@ -17,7 +17,11 @@ import {
   CUSTOMER_REPORT_MAX,
   INTERNAL_NOTES_MAX,
 } from '@/modules/service-orders/domain/service-order';
+import { findAiSurface } from '@/modules/ai/domain/surface-catalog';
+import { AiWritingMenu } from '../ai/ai-writing-menu';
 import { EMPTY_SERVICE_ORDER_STATE, type ServiceOrderActionState } from './action-state';
+
+const INTERNAL_NOTES_SURFACE = findAiSurface('service_order.internal_notes')!;
 
 /**
  * Abertura da Ordem de Servico (Prompt 07, itens 89 a 93).
@@ -144,6 +148,7 @@ export function ServiceOrderEditForm({
   customerReport,
   internalNotes,
   cancelHref,
+  aiAvailable,
 }: {
   action: (
     previous: ServiceOrderActionState,
@@ -153,8 +158,16 @@ export function ServiceOrderEditForm({
   customerReport: string;
   internalNotes: string;
   cancelHref: string;
+  /** Autorizacao composta do Nexo56 AI ja resolvida no servidor (item 95). */
+  aiAvailable: boolean;
 }) {
   const [state, formAction] = useActionState(action, EMPTY_SERVICE_ORDER_STATE);
+  /**
+   * CONTROLADO, e nao `defaultValue`: "Usar texto" (item 18/134) precisa
+   * atualizar o campo e marcar o formulario como alterado, sem recarregar o
+   * valor antigo do banco.
+   */
+  const [internalNotesValue, setInternalNotesValue] = useState(internalNotes);
 
   return (
     <form action={formAction} className="space-y-6">
@@ -198,10 +211,21 @@ export function ServiceOrderEditForm({
                 name="internalNotes"
                 rows={3}
                 maxLength={INTERNAL_NOTES_MAX}
-                defaultValue={internalNotes}
+                value={internalNotesValue}
+                onChange={(event) => setInternalNotesValue(event.target.value)}
               />
             )}
           </FormField>
+
+          {aiAvailable ? (
+            <AiWritingMenu
+              surfaceKey={INTERNAL_NOTES_SURFACE.key}
+              entityId={serviceOrderId}
+              tasks={INTERNAL_NOTES_SURFACE.allowedTasks}
+              currentText={internalNotesValue}
+              onApply={setInternalNotesValue}
+            />
+          ) : null}
         </CardBody>
         <CardFooter className="flex flex-wrap items-center justify-end gap-3">
           <Link href={cancelHref} className="text-ui font-medium text-ink-600 hover:underline">

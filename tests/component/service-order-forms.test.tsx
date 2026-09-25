@@ -173,6 +173,7 @@ describe('correcao dos dados de abertura (itens 41 a 43 e 111)', () => {
         customerReport="Cliente informa que nao liga."
         internalNotes="Combinado retorno por telefone."
         cancelHref="/ordens-de-servico/os-1"
+        aiAvailable={false}
       />,
     );
   }

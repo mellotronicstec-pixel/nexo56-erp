@@ -102,8 +102,11 @@ async function main(): Promise<void> {
       await enableOptionalFeature(devTenant.id, FEATURES.COMMUNICATIONS_CORE);
       await enableOptionalFeature(devTenant.id, FEATURES.CUSTOMER_PORTAL);
       await enableOptionalFeature(devTenant.id, FEATURES.ANALYTICS_DASHBOARD);
+      // ai.writing depende de ai.core — precisa ser ligado depois dele.
+      await enableOptionalFeature(devTenant.id, FEATURES.AI_CORE);
+      await enableOptionalFeature(devTenant.id, FEATURES.AI_WRITING);
       console.log(
-        '[seed] modulos Estoque, Compras, Financeiro, Garantias, Agenda, Central de Trabalho, Comunicacao, Portal do Cliente e Painel habilitados no tenant de desenvolvimento.',
+        '[seed] modulos Estoque, Compras, Financeiro, Garantias, Agenda, Central de Trabalho, Comunicacao, Portal do Cliente, Painel e Nexo56 AI habilitados no tenant de desenvolvimento.',
       );
     }
 

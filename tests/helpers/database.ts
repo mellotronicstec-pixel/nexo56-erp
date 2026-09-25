@@ -20,6 +20,9 @@ export async function migrateTestDatabase(): Promise<void> {
  */
 const TABLES_IN_DELETE_ORDER = [
   'audit_logs',
+  // Nexo56 AI (Prompt 20): folha pura — referencia tenant/unit/user, nada
+  // referencia `ai_requests`. Nunca guarda conteudo, so metadados.
+  'ai_requests',
   // Motor de Automacoes (Prompt 19): tentativa pende da execucao, execucao e
   // versao pendem da regra, unidade da regra pende da regra. Nenhuma FK para
   // OS/cliente/etc — as referencias a outros modulos sao idRef sem FK.

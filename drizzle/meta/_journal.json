@@ -127,6 +127,13 @@
       "when": 1790266123171,
       "tag": "0017_automations_execution_claim",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "5",
+      "when": 1790336412185,
+      "tag": "0018_ai_requests",
+      "breakpoints": true
     }
   ]
 }

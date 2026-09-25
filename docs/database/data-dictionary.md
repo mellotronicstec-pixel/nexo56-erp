@@ -1029,3 +1029,48 @@ a definição, que é o que realmente muda. Separar Execution de ActionAttempt �
 o que permite uma execução com várias ações, cada uma com seu próprio
 histórico de tentativas (retry), sem misturar o status agregado da execução
 com o status de cada passo.
+
+## Nexo56 AI (Prompt 20, migration 0018)
+
+Uma tabela só. Ver [ADR-085](../adr/ADR-085-nexo56-ai-gateway-e-assistencia-segura-de-escrita.md)
+e `docs/modules/ai/` para o detalhamento por assunto.
+
+### `ai_requests`
+
+Telemetria operacional de uma chamada de geração — **nunca conteúdo**. A
+tabela não tem nenhuma coluna capaz de guardar texto livre: nenhum
+`prompt`, nenhum `input_text`, nenhum `output_text`. Isso é deliberado
+(itens 20 a 23 do Prompt 20), não uma omissão a corrigir depois — inclusive
+a assinatura de `insertAiRequest`/`completeAiRequest`
+(`infrastructure/ai-request-repository.ts`) não aceita nenhum parâmetro de
+texto, o que torna impossível acrescentar conteúdo sem uma mudança de
+código deliberada e revisada.
+
+**PII: sem conteúdo textual persistido.**
+
+| Coluna                          | Tipo             | Nota                                                                                                         |
+| ------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------ |
+| `id`                            | `id()`           | PK                                                                                                           |
+| `tenant_id`                     | `tenantId()`     | isolamento; FK `ON DELETE RESTRICT`                                                                          |
+| `unit_id`                       | `unitId()`       | anulável (item 21: "quando aplicável"); FK composta `(unit_id, tenant_id)`                                   |
+| `requested_by`                  | `idRef`          | quem pediu; FK composta `(requested_by, tenant_id)`                                                          |
+| `task_key`                      | `techKey`        | uma das cinco chaves de `AI_TASK_CATALOG`                                                                    |
+| `surface_key`                   | `techKey`        | uma das chaves de `AI_SURFACE_CATALOG`                                                                       |
+| `entity_type`                   | `varchar(40)`    | `service_order` \| `quote`                                                                                   |
+| `entity_id`                     | `idRef`          | **sem FK** — mesmo padrão de `automation_action_attempts.domain_result_ref`: IA lê o dado, nunca é dona dele |
+| `prompt_version`                | `varchar(40)`    | versão do prompt interno usado (item 47)                                                                     |
+| `provider_key`, `model_key`     | anuláveis        | nulos até a chamada terminar; seguem nulos se `status = 'rejected'`                                          |
+| `status`                        | `varchar(20)`    | `requested` \| `succeeded` \| `failed` \| `rejected` — `CHECK`                                               |
+| `error_code`                    | `varchar(60)`    | um `AiErrorCode`, nulo quando `status = 'succeeded'`                                                         |
+| `input_char_count`              | `int`            | contagem Unicode-safe do prompt enviado — nunca o texto                                                      |
+| `output_char_count`             | `int`, anulável  | idem para a saída; nulo até terminar                                                                         |
+| `input_tokens`, `output_tokens` | `int`, anuláveis | só quando o provedor informa (item 79) — nunca inventado                                                     |
+| `latency_ms`                    | `int`, anulável  | tempo da chamada ao provedor                                                                                 |
+| `created_at`, `completed_at`    | `instant()`      | ciclo de vida da requisição                                                                                  |
+
+Índices: `ix_ai_request_tenant_created (tenant_id, created_at)` e
+`ix_ai_request_tenant_user_created (tenant_id, requested_by, created_at)`.
+
+Sem hash de conteúdo por decisão explícita (item 23): um hash de texto curto
+é adivinhável e viraria fingerprint do próprio dado sensível que a tabela
+existe para não guardar.

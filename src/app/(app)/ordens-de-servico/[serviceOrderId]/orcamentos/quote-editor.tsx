@@ -18,7 +18,11 @@ import {
 import { formatBRL, normalizeAmountInput, normalizeQuantityInput } from '@/core/money/format';
 import { Money } from '@/core/money/money';
 import { QUOTE_ITEM_KINDS, QUOTE_ITEM_KIND_LABEL } from '@/modules/quotes/domain/quote';
+import { findAiSurface } from '@/modules/ai/domain/surface-catalog';
+import { AiWritingMenu } from '../../../ai/ai-writing-menu';
 import { EMPTY_QUOTE_STATE, type QuoteActionState } from './action-state';
+
+const CUSTOMER_NOTES_SURFACE = findAiSurface('quote.customer_notes')!;
 
 /**
  * Editor de itens do orcamento (Prompt 09, itens 84 a 88).
@@ -124,6 +128,7 @@ export function QuoteEditor({
   initialInternalNotes,
   action,
   parts = [],
+  aiAvailable = false,
 }: {
   serviceOrderId: string;
   quoteId: string;
@@ -140,8 +145,11 @@ export function QuoteEditor({
    * continua inteiro, com linha PART escrita a mao (item 86).
    */
   parts?: PartOption[];
+  /** Autorizacao composta do Nexo56 AI ja resolvida no servidor (Prompt 20, item 95). */
+  aiAvailable?: boolean;
 }) {
   const [state, formAction] = useActionState(action, EMPTY_QUOTE_STATE);
+  const [customerNotesValue, setCustomerNotesValue] = useState(initialCustomerNotes);
 
   const [rows, setRows] = useState<Row[]>(() =>
     initialItems.length > 0
@@ -390,10 +398,20 @@ export function QuoteEditor({
                   name="customerNotes"
                   rows={3}
                   maxLength={2000}
-                  defaultValue={initialCustomerNotes}
+                  value={customerNotesValue}
+                  onChange={(event) => setCustomerNotesValue(event.target.value)}
                 />
               )}
             </FormField>
+            {aiAvailable ? (
+              <AiWritingMenu
+                surfaceKey={CUSTOMER_NOTES_SURFACE.key}
+                entityId={quoteId}
+                tasks={CUSTOMER_NOTES_SURFACE.allowedTasks}
+                currentText={customerNotesValue}
+                onApply={setCustomerNotesValue}
+              />
+            ) : null}
           </div>
 
           <div className="sm:col-span-2">

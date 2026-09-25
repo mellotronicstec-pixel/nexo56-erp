@@ -75,6 +75,19 @@ export const FEATURES = {
    * configurar automacao nenhuma acao nenhuma.
    */
   AUTOMATION_CORE: 'automation.core',
+  /**
+   * Nexo56 AI (Prompt 20). Duas features, uma dependendo da outra, porque o
+   * plano tecnico do Prompt 26 exige distinguir "a empresa tem acesso ao AI
+   * Gateway" (`ai.core`) de "o pacote de escrita esta habilitado" (`ai.writing`)
+   * — Prompt 21 (Busca de Pecas) e Prompt 22 (Base de Conhecimento) ganham
+   * suas proprias features dependentes de `ai.core`, sem reabrir esta.
+   *
+   * OPTIONAL as duas, e de proposito nenhuma delas e CORE: o Prompt 03
+   * (item 12, "Nexo56 AI NAO e dependencia necessaria para o ERP funcionar")
+   * exige que o sistema inteiro continue operando com AI desligada.
+   */
+  AI_CORE: 'ai.core',
+  AI_WRITING: 'ai.writing',
 } as const;
 
 export type FeatureKey = (typeof FEATURES)[keyof typeof FEATURES];
@@ -438,6 +451,22 @@ export const FEATURE_CATALOG: readonly FeatureDefinition[] = [
       'Regras que reagem a fatos do sistema (eventos) ou a horarios agendados e disparam acoes controladas: enviar uma comunicacao por modelo, criar uma tarefa na Agenda.',
     type: 'OPTIONAL',
     dependsOn: [],
+  },
+  {
+    key: FEATURES.AI_CORE,
+    name: 'Nexo56 AI',
+    description:
+      'Fundacao do AI Gateway: autorizacao, catalogo de tarefas e superficies, selecao de provedor. Sem pacote nenhum ligado, nao oferece nenhuma acao visivel.',
+    type: 'OPTIONAL',
+    dependsOn: [],
+  },
+  {
+    key: FEATURES.AI_WRITING,
+    name: 'Nexo56 AI — Assistencia de escrita',
+    description:
+      'Rascunhos de texto em portugues: corrigir, profissionalizar, resumir, deixar claro para o cliente e gerar parecer tecnico. Sempre rascunho revisado por humano, nunca escrita automatica.',
+    type: 'OPTIONAL',
+    dependsOn: [FEATURES.AI_CORE],
   },
 ];
 

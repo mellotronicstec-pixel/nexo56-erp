@@ -858,6 +858,33 @@ erDiagram
     SERVICE_ORDERS ||--o| WARRANTY_RETURNS : "OS NOVA em awaiting_repair"
     WARRANTIES ||--o{ WARRANTY_COSTS : "custa a loja - sem tocar o Financeiro"
     WARRANTIES ||--o{ WARRANTY_TIMELINE : "historia"
+
+    AI_REQUESTS {
+        char36 id PK
+        char36 tenant_id FK
+        char36 unit_id FK "anulavel - quando aplicavel"
+        char36 requested_by FK
+        varchar task_key "uma das 5 chaves fechadas do catalogo"
+        varchar surface_key "allowlist fechada de campo"
+        varchar entity_type "service_order quote"
+        char36 entity_id "SEM FK - IA le, nunca e dona do dado"
+        varchar prompt_version
+        varchar provider_key "nulo ate terminar"
+        varchar model_key "nulo ate terminar"
+        varchar status "requested succeeded failed rejected"
+        varchar error_code
+        int input_char_count "NUNCA o texto"
+        int output_char_count
+        int input_tokens "so quando o provedor informa"
+        int output_tokens
+        int latency_ms
+        datetime created_at
+        datetime completed_at
+    }
+
+    TENANTS ||--o{ AI_REQUESTS : isola
+    UNITS ||--o{ AI_REQUESTS : "escopo, quando aplicavel"
+    USERS ||--o{ AI_REQUESTS : pede
 ```
 
 ### Destaques do diagrama
@@ -1003,3 +1030,5 @@ erDiagram
 | `automation_executions` trava duplicata por **UNIQUE**, nunca `SELECT`-then-`INSERT` | **Prompt 19**: `UNIQUE(tenant_id, idempotency_key)` decide a corrida no próprio banco (ADR-082)                            |
 | `automation_action_attempts` é **append-only**                                       | **Prompt 19**: uma linha por tentativa; claim de ação concorrente por `UNIQUE(execution_id, action_index, attempt_number)` |
 | `automation_rule_units` **nunca deriva** "todas as unidades" dinamicamente           | **Prompt 19**: escopo fixado na criação da regra, mesmo se a autorização do criador mudar depois                           |
+| `ai_requests` **não tem nenhuma coluna de texto**                                    | **Prompt 20**: telemetria operacional, nunca conteúdo — por construção de assinatura, não por convenção (ADR-085)          |
+| `ai_requests.entity_id` é **referência sem FK**                                      | **Prompt 20**: mesmo padrão de `automation_action_attempts.domain_result_ref` — a IA lê o dado, nunca é dona dele          |

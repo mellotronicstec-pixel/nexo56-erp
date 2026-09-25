@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { Alert, PageHeader } from '@/design-system/components';
+import { can } from '@/modules/access-control/application/authorization-service';
 import { requireAccessForPage } from '@/modules/access-control/application/guard';
 import { PERMISSIONS } from '@/modules/access-control/domain/permissions';
 import { FEATURES } from '@/modules/features/domain/catalog';
@@ -48,6 +49,19 @@ export default async function EditServiceOrderPage({
     numberFormat.padding,
   );
 
+  /**
+   * "Melhorar com Nexo56 AI" so aparece com a autorizacao COMPOSTA ja
+   * satisfeita (item 29): feature `ai.writing` + `ai.use` + a permissao de
+   * dominio ja garantida por `requireAccessForPage` acima. Sem isso, o
+   * controle simplesmente nao existe na pagina (item 95) — o backend
+   * (`generateAiDraft`) recusa de qualquer forma, mesmo que a UI tentasse.
+   */
+  const aiWritingAccess = await can(context, {
+    permission: PERMISSIONS.AI_USE,
+    unitId: detail.order.unitId,
+    featureKey: FEATURES.AI_WRITING,
+  });
+
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <PageHeader
@@ -71,6 +85,7 @@ export default async function EditServiceOrderPage({
         customerReport={detail.order.customerReport}
         internalNotes={detail.order.internalNotes ?? ''}
         cancelHref={`/ordens-de-servico/${detail.order.id}`}
+        aiAvailable={aiWritingAccess.allowed}
       />
     </div>
   );

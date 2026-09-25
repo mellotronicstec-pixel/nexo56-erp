@@ -282,6 +282,18 @@ export const PERMISSIONS = {
    * salvar, pela RuleValidator, nunca herdado.
    */
   AUTOMATIONS_MANAGE: 'automations.manage',
+
+  // --- Prompt 20: Nexo56 AI -------------------------------------------------
+  /**
+   * Usar o Nexo56 AI (gerar rascunho com qualquer das cinco acoes).
+   *
+   * NAO substitui a permissao do dominio (item 28/93 do prompt): usar AI
+   * sobre `service_orders.internal_notes` exige TAMBEM
+   * `service_orders.update`, e sobre `quotes.customer_notes` exige TAMBEM
+   * `quotes.update_draft` — checado por superficie em
+   * `generateAiDraft`, nunca herdado desta permissao sozinha.
+   */
+  AI_USE: 'ai.use',
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -825,6 +837,13 @@ export const PERMISSION_CATALOG: readonly PermissionDefinition[] = [
       'Cria, edita, habilita, desabilita e arquiva regras de automacao. Configurar uma acao especifica (Comunicacao, Agenda) exige tambem a permissao daquele modulo no mesmo escopo.',
     featureKey: 'automation.core',
   },
+  {
+    key: PERMISSIONS.AI_USE,
+    name: 'Usar o Nexo56 AI',
+    description:
+      'Gera rascunho com o Nexo56 AI (corrigir portugues, profissionalizar, resumir, deixar claro para o cliente, gerar parecer tecnico). Exige tambem a permissao do modulo do campo onde a acao roda — esta permissao sozinha nao concede acesso a nenhum registro.',
+    featureKey: 'ai.writing',
+  },
 ];
 
 /** Papeis estruturais criados no bootstrap de cada tenant. */
@@ -1098,6 +1117,12 @@ export const PERMISSION_GROUPS = [
     name: 'Motor de Automacoes',
     description: 'Regras que reagem a eventos ou horarios e disparam acoes controladas.',
     permissions: [PERMISSIONS.AUTOMATIONS_VIEW, PERMISSIONS.AUTOMATIONS_MANAGE],
+  },
+  {
+    key: 'nexo56-ai',
+    name: 'Nexo56 AI',
+    description: 'Rascunhos de escrita assistida sobre campos autorizados.',
+    permissions: [PERMISSIONS.AI_USE],
   },
 ] as const satisfies ReadonlyArray<{
   key: string;
