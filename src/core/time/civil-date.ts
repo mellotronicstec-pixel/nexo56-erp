@@ -1,3 +1,5 @@
+import { zonedCivilToInstant } from '@/core/time/zoned-time';
+
 /**
  * Data civil no fuso do tenant (ADR-017; Prompt 08, itens 37 e 96).
  *
@@ -88,6 +90,26 @@ export function civilDaysFromNow(timeZone: string, days: number, now: Date = new
   return addDays(todayIn(timeZone, now), days);
 }
 
+/**
+ * Dias corridos ENTRE duas datas civis (`to - from`). Aritmetica em UTC sobre
+ * as datas ja resolvidas, mesma base de `addDays` — nao reintroduz fuso.
+ *
+ * Substitui `DATEDIFF(DATE(coluna_instante), ...)` (ADR-084, Prompt 19.1):
+ * a data civil de cada lado deve vir de `formatCivilDate(instante, timeZone)`,
+ * nao de `DATE()` do MariaDB, que usa o fuso da SESSAO (UTC) e nao o do
+ * tenant.
+ */
+export function civilDaysBetween(from: string, to: string): number {
+  const [fromYear, fromMonth, fromDay] = from.split('-').map(Number);
+  if (!fromYear || !fromMonth || !fromDay) throw new Error(`Data civil invalida: ${from}`);
+  const [toYear, toMonth, toDay] = to.split('-').map(Number);
+  if (!toYear || !toMonth || !toDay) throw new Error(`Data civil invalida: ${to}`);
+
+  const fromMs = Date.UTC(fromYear, fromMonth - 1, fromDay);
+  const toMs = Date.UTC(toYear, toMonth - 1, toDay);
+  return Math.round((toMs - fromMs) / 86_400_000);
+}
+
 /** `true` quando a data civil ja passou ou e hoje, no fuso indicado. */
 export function isDueOrOverdue(civil: string, timeZone: string, now: Date = new Date()): boolean {
   return civil <= todayIn(timeZone, now);
@@ -119,4 +141,74 @@ export function formatCivilDateBR(civil: string): string {
   const [year, month, day] = civil.split('-');
   if (!year || !month || !day) return civil;
   return `${day}/${month}/${year}`;
+}
+
+// ---------------------------------------------------------------------------
+// Fronteira civil -> instante UTC (Prompt 19.1 — ADR-084)
+// ---------------------------------------------------------------------------
+
+/**
+ * DATA CIVIL NAO E INSTANTE UTC (ADR-084).
+ *
+ * Um periodo como "hoje" ou "ultimos 30 dias" e sempre um par de DATAS CIVIS
+ * no fuso do tenant/unidade — nunca um par de instantes UTC. Tratar
+ * `2026-09-24T00:00:00.000Z` como "o inicio do dia 24 de setembro" so esta
+ * certo quando o fuso E UTC. Para qualquer outro fuso (`America/Sao_Paulo`,
+ * UTC-3), a meia-noite local do dia 24 e `2026-09-24T03:00:00.000Z` — nao
+ * `2026-09-24T00:00:00.000Z`. O bug classico (medido e corrigido no
+ * fechamento do Prompt 19): comparar uma coluna `DATETIME` UTC contra o
+ * limite ingenuo `${civil}T00:00:00.000Z`/`${civil}T23:59:59.999Z` exclui
+ * dados reais gravados nas primeiras horas UTC do dia, sempre que o fuso do
+ * tenant estiver ATRAS de UTC.
+ *
+ * A funcao abaixo e o UNICO lugar do sistema que resolve essa fronteira para
+ * PERIODOS/RANGES — nenhum modulo deve reimplementar a conversao (item 24 do
+ * hotfix). Ela NAO reimplementa a aritmetica de fuso: delega para
+ * `zonedCivilToInstant` (`@/core/time/zoned-time`), o mesmo primitivo ja
+ * usado pela Agenda (`appointment-service.ts`) para resolver
+ * `startAtLocal`/`endAtLocal` — que ja trata corretamente as bordas de
+ * horario de verao (`gap`/`ambiguous`), entao criar uma segunda formula aqui
+ * so divergiria dele com o tempo. Nunca depende do fuso do processo Node
+ * (`process.env.TZ`) nem da sessao do MariaDB: a aplicacao produz o instante
+ * UTC explicitamente antes de consultar a coluna.
+ */
+
+function parseCivilDateStrict(civil: string): { year: number; month: number; day: number } {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(civil);
+  if (!match) throw new Error(`Data civil invalida: ${civil}`);
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (month < 1 || month > 12 || day < 1 || day > 31) {
+    throw new Error(`Data civil invalida: ${civil}`);
+  }
+  return { year, month, day };
+}
+
+/** Instante UTC do INICIO (00:00:00.000 local) da data civil, no fuso indicado. */
+export function startOfCivilDayUtc(civil: string, timeZone: string): Date {
+  parseCivilDateStrict(civil); // valida formato/limites antes de delegar
+  return zonedCivilToInstant(`${civil}T00:00`, timeZone).instant;
+}
+
+/**
+ * Converte um par de datas civis INCLUSIVO `[from, to]`, no fuso indicado,
+ * para um intervalo de instantes UTC MEIO-ABERTO `[startUtc, endExclusiveUtc)`
+ * — a forma segura de consultar uma coluna `DATETIME` UTC (item 11/55 do
+ * hotfix): nunca depende de `23:59:59.999`, nunca perde milissegundos, e
+ * continua correta mesmo quando o dia civil final tem 23 ou 25 horas (DST) —
+ * `endExclusiveUtc` e o INICIO REAL do dia seguinte, calculado independente
+ * da duracao do dia anterior, nunca `start + 24h`.
+ *
+ * Uso pretendido: `WHERE column >= startUtc AND column < endExclusiveUtc`.
+ */
+export function civilDateRangeToUtc(
+  from: string,
+  to: string,
+  timeZone: string,
+): { startUtc: Date; endExclusiveUtc: Date } {
+  return {
+    startUtc: startOfCivilDayUtc(from, timeZone),
+    endExclusiveUtc: startOfCivilDayUtc(addDays(to, 1), timeZone),
+  };
 }

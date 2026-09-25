@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   addDays,
+  civilDateRangeToUtc,
   civilDaysFromNow,
   formatCivilDate,
   formatCivilDateBR,
   isDueOrOverdue,
   isOverdue,
+  startOfCivilDayUtc,
   todayIn,
 } from '@/core/time/civil-date';
 
@@ -89,5 +91,89 @@ describe('exibicao', () => {
 
   it('texto que nao e data civil volta como veio', () => {
     expect(formatCivilDateBR('sem data')).toBe('sem data');
+  });
+});
+
+describe('civil -> UTC boundary (ADR-084, Prompt 19.1)', () => {
+  it('UTC: inicio do dia civil e literalmente 00:00:00.000Z', () => {
+    expect(startOfCivilDayUtc('2026-09-24', 'UTC').toISOString()).toBe('2026-09-24T00:00:00.000Z');
+  });
+
+  it('America/Sao_Paulo (UTC-3, sem DST): meia-noite local e 03:00 UTC', () => {
+    expect(startOfCivilDayUtc('2026-09-24', 'America/Sao_Paulo').toISOString()).toBe(
+      '2026-09-24T03:00:00.000Z',
+    );
+  });
+
+  it('fuso POSITIVO (Asia/Tokyo, UTC+9): meia-noite local cai no dia UTC ANTERIOR — prova que a solucao nao e "UTC-3 hardcoded"', () => {
+    expect(startOfCivilDayUtc('2026-09-24', 'Asia/Tokyo').toISOString()).toBe(
+      '2026-09-23T15:00:00.000Z',
+    );
+  });
+
+  it('range de 1 dia civil em America/Sao_Paulo: [03:00Z do dia, 03:00Z do dia seguinte)', () => {
+    const { startUtc, endExclusiveUtc } = civilDateRangeToUtc(
+      '2026-09-24',
+      '2026-09-24',
+      'America/Sao_Paulo',
+    );
+    expect(startUtc.toISOString()).toBe('2026-09-24T03:00:00.000Z');
+    expect(endExclusiveUtc.toISOString()).toBe('2026-09-25T03:00:00.000Z');
+  });
+
+  it('fronteira de MES: ultimo dia de setembro ainda entra; 1o de outubro fica de fora (limite exclusivo)', () => {
+    const { endExclusiveUtc } = civilDateRangeToUtc(
+      '2026-09-01',
+      '2026-09-30',
+      'America/Sao_Paulo',
+    );
+    expect(endExclusiveUtc.toISOString()).toBe('2026-10-01T03:00:00.000Z');
+  });
+
+  it('fronteira de ANO: 31/dez ainda entra; 1o/jan do ano seguinte fica de fora', () => {
+    const { endExclusiveUtc } = civilDateRangeToUtc(
+      '2026-12-01',
+      '2026-12-31',
+      'America/Sao_Paulo',
+    );
+    expect(endExclusiveUtc.toISOString()).toBe('2027-01-01T03:00:00.000Z');
+  });
+
+  it('ANTIGA JANELA UTC 00:00-03:00: um instante gravado nessa janela pertence ao dia civil ANTERIOR em America/Sao_Paulo, e o range o inclui corretamente', () => {
+    // 2026-09-24T02:00:00Z e, em Sao Paulo, ainda 2026-09-23 23:00 — dentro
+    // do dia civil de 23/09, nao de 24/09. Esta e exatamente a janela que
+    // causava o bug deterministico medido no fechamento do Prompt 19.
+    const instanteNaJanelaProblematica = new Date('2026-09-24T02:00:00.000Z');
+    const { startUtc, endExclusiveUtc } = civilDateRangeToUtc(
+      '2026-09-23',
+      '2026-09-23',
+      'America/Sao_Paulo',
+    );
+    expect(instanteNaJanelaProblematica >= startUtc).toBe(true);
+    expect(instanteNaJanelaProblematica < endExclusiveUtc).toBe(true);
+
+    // E o range do dia 24 (o que o codigo antigo calcularia erroneamente
+    // como dono desse instante) corretamente o EXCLUI.
+    const rangeDoDia24 = civilDateRangeToUtc('2026-09-24', '2026-09-24', 'America/Sao_Paulo');
+    expect(instanteNaJanelaProblematica >= rangeDoDia24.startUtc).toBe(false);
+  });
+
+  it('DST (America/New_York, spring-forward 2026-03-08): o dia civil tem 23 horas, nao 24 — prova que a implementacao usa fuso IANA real, nao offset fixo', () => {
+    const inicioDia8 = startOfCivilDayUtc('2026-03-08', 'America/New_York');
+    const inicioDia9 = startOfCivilDayUtc('2026-03-09', 'America/New_York');
+    const horasNoDia = (inicioDia9.getTime() - inicioDia8.getTime()) / (60 * 60 * 1000);
+    expect(horasNoDia).toBe(23);
+    expect(inicioDia8.toISOString()).toBe('2026-03-08T05:00:00.000Z'); // ainda EST (UTC-5)
+    expect(inicioDia9.toISOString()).toBe('2026-03-09T04:00:00.000Z'); // ja EDT (UTC-4)
+  });
+
+  it('timezone invalido lanca erro (nunca produz um instante silenciosamente errado)', () => {
+    expect(() => startOfCivilDayUtc('2026-09-24', 'Nao/Existe')).toThrow();
+  });
+
+  it('data civil invalida lanca erro (formato errado, mes/dia fora do intervalo)', () => {
+    expect(() => startOfCivilDayUtc('2026-13-01', 'UTC')).toThrow();
+    expect(() => startOfCivilDayUtc('24-09-2026', 'UTC')).toThrow();
+    expect(() => startOfCivilDayUtc('nao e uma data', 'UTC')).toThrow();
   });
 });

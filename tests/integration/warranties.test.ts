@@ -4,6 +4,8 @@ import { runWithContext } from '@/core/context/request-context';
 import { addDays, todayIn } from '@/core/time/civil-date';
 import { getDb } from '@/core/db/client';
 import { BusinessRuleError, NotFoundError } from '@/core/errors';
+import { loadWarrantyMetrics } from '@/modules/analytics/application/warranty-metrics';
+import { resolveAnalyticsScope } from '@/modules/analytics/domain/analytics-scope';
 import { auditLogs } from '@/modules/audit/infrastructure/schema';
 import { createCustomer } from '@/modules/customers/application/customer-service';
 import { createEquipment } from '@/modules/equipment/application/equipment-service';
@@ -899,5 +901,48 @@ describe('isolamento entre empresas (itens 39 e 107)', () => {
     await expect(
       run(() => findCertificateByToken(tenantB.context, cert.token)),
     ).rejects.toBeInstanceOf(NotFoundError);
+  });
+});
+
+describe('fronteira civil -> UTC dos retornos em garantia (ADR-084, Prompt 19.1)', () => {
+  /**
+   * ANTIGA JANELA UTC 00:00-03:00: reproduz o bug deterministico do
+   * fechamento do Prompt 19 com um INSTANTE FIXO, nunca esperando o relogio
+   * real passar por ela. `2026-09-24T02:00:00.000Z` e, em America/Sao_Paulo
+   * (fuso do tenant fixture), ainda `2026-09-23` as 23h — dentro do dia civil
+   * de 23/09, nao de 24/09. Antes da correcao, `loadWarrantyMetrics` usava
+   * `${civil}T00:00:00.000Z` literal e excluiria este retorno do periodo
+   * "23/09", contando-o (erradamente) so a partir do periodo "24/09".
+   */
+  it('retorno registrado as 23h locais entra no dia civil de ONTEM em UTC, nunca no de hoje', async () => {
+    const osId = await osFinalizada();
+    const g = await run(() => issueWarranty(tenantA.context, emissao(osId)));
+    const retorno = await run(() =>
+      registerWarrantyReturn(tenantA.context, {
+        warrantyId: g.warrantyId,
+        customerReport: 'Retorno na janela antiga do bug.',
+        coverageAssessment: 'covered',
+      }),
+    );
+
+    const instanteNaJanelaProblematica = new Date('2026-09-24T02:00:00.000Z');
+    await getDb()
+      .update(warrantyReturns)
+      .set({ registeredAt: instanteNaJanelaProblematica })
+      .where(eq(warrantyReturns.id, retorno.returnId));
+
+    const periodoDia23 = resolveAnalyticsScope(tenantA.context, {
+      period: 'custom',
+      from: '2026-09-23',
+      to: '2026-09-23',
+    });
+    const periodoDia24 = resolveAnalyticsScope(tenantA.context, {
+      period: 'custom',
+      from: '2026-09-24',
+      to: '2026-09-24',
+    });
+
+    expect((await run(() => loadWarrantyMetrics(periodoDia23))).returnsInPeriod).toBe(1);
+    expect((await run(() => loadWarrantyMetrics(periodoDia24))).returnsInPeriod).toBe(0);
   });
 });

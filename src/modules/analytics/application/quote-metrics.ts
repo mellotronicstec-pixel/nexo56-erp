@@ -1,6 +1,7 @@
 import 'server-only';
-import { and, eq, gte, inArray, lte, sql } from 'drizzle-orm';
+import { and, eq, gte, inArray, lt, sql } from 'drizzle-orm';
 import { getDb } from '@/core/db/client';
+import { civilDateRangeToUtc } from '@/core/time/civil-date';
 import { quotes } from '@/modules/quotes/infrastructure/schema';
 import type { AnalyticsScope } from '@/modules/analytics/domain/analytics-scope';
 import { computeApprovalRate } from '@/modules/analytics/domain/service-order-analytics';
@@ -21,27 +22,32 @@ function emptyMetrics(): QuoteMetrics {
   return { sentInPeriod: 0, approvedInPeriod: 0, rejectedInPeriod: 0, approvalRate: null };
 }
 
-function startOfDayUtc(civilDate: string): Date {
-  return new Date(`${civilDate}T00:00:00.000Z`);
-}
-function endOfDayUtc(civilDate: string): Date {
-  return new Date(`${civilDate}T23:59:59.999Z`);
-}
-
 export async function loadQuoteMetrics(scope: AnalyticsScope): Promise<QuoteMetrics> {
   if (scope.selectedUnitIds.length === 0) return emptyMetrics();
 
   const db = getDb();
   const unitIds = [...scope.selectedUnitIds];
   const tenantScope = and(eq(quotes.tenantId, scope.tenantId), inArray(quotes.unitId, unitIds));
-  const periodStart = startOfDayUtc(scope.period.from);
-  const periodEnd = endOfDayUtc(scope.period.to);
+  /**
+   * Fronteira civil -> UTC (ADR-084, Prompt 19.1): `scope.period.from/to` sao
+   * datas civis no fuso do tenant, nunca instantes UTC. `civilDateRangeToUtc`
+   * converte para `[periodStart, periodEndExclusive)` no fuso correto — nunca
+   * `${civil}T00:00:00.000Z` literal, que excluiria dados reais gravados nas
+   * primeiras horas UTC do dia para qualquer fuso atras de UTC.
+   */
+  const { startUtc: periodStart, endExclusiveUtc: periodEndExclusive } = civilDateRangeToUtc(
+    scope.period.from,
+    scope.period.to,
+    scope.timezone,
+  );
 
   const [sentRows, approvedRows, rejectedRows] = await Promise.all([
     db
       .select({ total: sql<number>`COUNT(*)` })
       .from(quotes)
-      .where(and(tenantScope, gte(quotes.sentAt, periodStart), lte(quotes.sentAt, periodEnd))),
+      .where(
+        and(tenantScope, gte(quotes.sentAt, periodStart), lt(quotes.sentAt, periodEndExclusive)),
+      ),
     db
       .select({ total: sql<number>`COUNT(*)` })
       .from(quotes)
@@ -50,7 +56,7 @@ export async function loadQuoteMetrics(scope: AnalyticsScope): Promise<QuoteMetr
           tenantScope,
           eq(quotes.status, 'approved'),
           gte(quotes.decidedAt, periodStart),
-          lte(quotes.decidedAt, periodEnd),
+          lt(quotes.decidedAt, periodEndExclusive),
         ),
       ),
     db
@@ -61,7 +67,7 @@ export async function loadQuoteMetrics(scope: AnalyticsScope): Promise<QuoteMetr
           tenantScope,
           eq(quotes.status, 'rejected'),
           gte(quotes.decidedAt, periodStart),
-          lte(quotes.decidedAt, periodEnd),
+          lt(quotes.decidedAt, periodEndExclusive),
         ),
       ),
   ]);

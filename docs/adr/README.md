@@ -16,7 +16,8 @@ do Prompt 10 (Estoque e Peças); 048–052 do Prompt 11 (Fornecedores e Compras)
 Prompt 13.1 (certificado em PDF); 073–076 do Prompt 14 (Agenda e Tarefas); 077
 do Prompt 15 (Central de Trabalho); 078–079 do Prompt 16 (Comunicação); 080 do
 Prompt 17 (Portal do Cliente); 081 do Prompt 18 (Painel/Analytics); 082–083 do
-Prompt 19 (Motor de Automações).
+Prompt 19 (Motor de Automações); 084 do Prompt 19.1 (hotfix de semântica
+temporal).
 
 Um ADR não é reescrito quando a decisão muda: cria-se um novo ADR que o
 substitui, e o antigo passa a `Substituído por ADR-XXX`.
@@ -106,3 +107,4 @@ substitui, e o antigo passa a `Substituído por ADR-XXX`.
 | [081](ADR-081-o-painel-e-live-query-sem-data-warehouse.md)                 | O Painel é live query, sem Data Warehouse             | Aceito |
 | [082](ADR-082-motor-de-automacoes-fechado-por-catalogo.md)                 | O Motor de Automações é fechado por catálogo          | Aceito |
 | [083](ADR-083-autoridade-de-configuracao-nao-e-autoridade-de-runtime.md)   | Autoridade de configuração ≠ autoridade de runtime    | Aceito |
+| [084](ADR-084-data-civil-nao-e-instante-utc.md)                            | Data civil não é instante UTC                         | Aceito |

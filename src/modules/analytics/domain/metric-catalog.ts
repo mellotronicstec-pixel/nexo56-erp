@@ -163,7 +163,7 @@ export const METRIC_CATALOG: readonly MetricDefinition[] = [
       'Dias corridos entre abertura (opened_at) e finalizacao (status_changed_at) das OS finalizadas no periodo. Mediana e media, lado a lado.',
     domain: 'service_orders',
     formula:
-      "Para status='completed' com status_changed_at no periodo: DATEDIFF(status_changed_at, opened_at); mediana e media da amostra.",
+      "Para status='completed' com status_changed_at no periodo: dias corridos entre a data civil de opened_at e a de status_changed_at, no fuso do tenant (ADR-084); mediana e media da amostra.",
     unit: 'days',
     granularity: 'period',
     requiredFeatureKey: FEATURES.CORE_SERVICE_ORDERS,

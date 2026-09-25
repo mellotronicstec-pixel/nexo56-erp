@@ -4,7 +4,7 @@ import { runWithContext } from '@/core/context/request-context';
 import { getDb } from '@/core/db/client';
 import { newId } from '@/core/ids/id';
 import { Money } from '@/core/money/money';
-import { todayIn, addDays } from '@/core/time/civil-date';
+import { todayIn, addDays, startOfCivilDayUtc } from '@/core/time/civil-date';
 import { createCustomer } from '@/modules/customers/application/customer-service';
 import { createEquipment } from '@/modules/equipment/application/equipment-service';
 import { setTenantFeature } from '@/modules/features/application/tenant-configuration';
@@ -36,6 +36,9 @@ import {
 import { loadDashboard } from '@/modules/analytics/application/dashboard-query-service';
 import { resolveAnalyticsScope } from '@/modules/analytics/domain/analytics-scope';
 import { loadServiceOrderMetrics } from '@/modules/analytics/application/service-order-metrics';
+import { loadQuoteMetrics } from '@/modules/analytics/application/quote-metrics';
+import { loadCommunicationMetrics } from '@/modules/analytics/application/communication-metrics';
+import { listServiceOrders } from '@/modules/service-orders/application/service-order-queries';
 import { closeTestDatabase, migrateTestDatabase, truncateAll } from '../helpers/database';
 import {
   assignTenantRole,
@@ -656,5 +659,185 @@ describe('comunicacao: nunca promete entrega', () => {
     const dashboard = await run(() => loadDashboard(tenantA.context));
     expect(dashboard.communications?.registeredInPeriod).toBe(3);
     expect(dashboard.communications?.failedInPeriod).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Fronteira civil -> UTC (ADR-084, Prompt 19.1)
+// ---------------------------------------------------------------------------
+
+/**
+ * ANTIGA JANELA UTC 00:00-03:00, com INSTANTE FIXO calculado a partir de HOJE
+ * — nunca esperando o relogio real passar por ela, e nunca um ano-calendario
+ * fixo no texto do teste (o que faria o teste "vencer" em anos futuros). O
+ * instante e literalmente 1h antes da meia-noite civil de HOJE em
+ * America/Sao_Paulo — ou seja, 23h de ONTEM local, que cai por volta de
+ * `02:00Z` do dia UTC de hoje. Este e exatamente o padrao do instante medido
+ * no fechamento do Prompt 19: antes da correcao, um periodo "ontem-ontem"
+ * usava `${civil}T00:00:00.000Z`/`T23:59:59.999Z` literais e excluia este
+ * dado, que so aparecia (erradamente) no periodo de hoje.
+ */
+const DIA_ERRADO = hoje();
+const DIA_CORRETO = addDays(DIA_ERRADO, -1);
+const JANELA_PROBLEMATICA = new Date(startOfCivilDayUtc(DIA_ERRADO, TZ).getTime() - 60 * 60 * 1000);
+
+function escopoDoDia(fixture: TenantFixture, dia: string) {
+  return resolveAnalyticsScope(fixture.context, { period: 'custom', from: dia, to: dia });
+}
+
+describe('service orders: fronteira civil -> UTC dos periodos', () => {
+  it('OS aberta as 23h locais entra no dia civil de ONTEM em UTC, nunca no de hoje', async () => {
+    const serviceOrderId = await abrirOrdem(tenantA);
+    await getDb()
+      .update(serviceOrders)
+      .set({ openedAt: JANELA_PROBLEMATICA })
+      .where(eq(serviceOrders.id, serviceOrderId));
+
+    const metricasDiaCorreto = await run(() =>
+      loadServiceOrderMetrics(escopoDoDia(tenantA, DIA_CORRETO)),
+    );
+    const metricasDiaErrado = await run(() =>
+      loadServiceOrderMetrics(escopoDoDia(tenantA, DIA_ERRADO)),
+    );
+
+    expect(metricasDiaCorreto.createdInPeriod).toBe(1);
+    expect(metricasDiaErrado.createdInPeriod).toBe(0);
+  });
+
+  it('finalizacao as 23h locais entra no dia civil de ONTEM em UTC, nunca no de hoje', async () => {
+    const serviceOrderId = await abrirOrdem(tenantA);
+    await finalizar(tenantA, serviceOrderId);
+    await getDb()
+      .update(serviceOrders)
+      .set({ statusChangedAt: JANELA_PROBLEMATICA })
+      .where(eq(serviceOrders.id, serviceOrderId));
+
+    const metricasDiaCorreto = await run(() =>
+      loadServiceOrderMetrics(escopoDoDia(tenantA, DIA_CORRETO)),
+    );
+    const metricasDiaErrado = await run(() =>
+      loadServiceOrderMetrics(escopoDoDia(tenantA, DIA_ERRADO)),
+    );
+
+    expect(metricasDiaCorreto.completedInPeriod).toBe(1);
+    expect(metricasDiaErrado.completedInPeriod).toBe(0);
+  });
+
+  it('listagem por from/to respeita a mesma fronteira civil', async () => {
+    const serviceOrderId = await abrirOrdem(tenantA);
+    await getDb()
+      .update(serviceOrders)
+      .set({ openedAt: JANELA_PROBLEMATICA })
+      .where(eq(serviceOrders.id, serviceOrderId));
+
+    const paginaDiaCorreto = await run(() =>
+      listServiceOrders(tenantA.context, { from: DIA_CORRETO, to: DIA_CORRETO }),
+    );
+    const paginaDiaErrado = await run(() =>
+      listServiceOrders(tenantA.context, { from: DIA_ERRADO, to: DIA_ERRADO }),
+    );
+
+    expect(paginaDiaCorreto.items.map((item) => item.id)).toContain(serviceOrderId);
+    expect(paginaDiaErrado.items.map((item) => item.id)).not.toContain(serviceOrderId);
+  });
+
+  it('antiguidade do backlog usa o dia civil do tenant, nao DATE() em UTC', async () => {
+    /**
+     * Aberta as 23h locais de um dia civil 3 dias antes de hoje: a
+     * antiguidade CORRETA e exatamente 3 dias corridos (faixa '3-7'). O bug
+     * antigo (`DATEDIFF(hoje, DATE(opened_at))` em UTC) leria o dia UTC do
+     * instante — 1 dia DEPOIS do dia civil local, pois 23h em
+     * America/Sao_Paulo cai as 02h UTC do dia seguinte — e computaria 2 dias,
+     * caindo na faixa ERRADA '0-2'. As duas faixas sao mutuamente exclusivas:
+     * este teste so passa se a conversao usar o fuso do tenant.
+     */
+    const diaAbertura = addDays(DIA_ERRADO, -3);
+    const instanteAbertura = new Date(
+      startOfCivilDayUtc(addDays(diaAbertura, 1), TZ).getTime() - 60 * 60 * 1000,
+    );
+
+    const serviceOrderId = await abrirOrdem(tenantA);
+    await getDb()
+      .update(serviceOrders)
+      .set({ openedAt: instanteAbertura })
+      .where(eq(serviceOrders.id, serviceOrderId));
+
+    const metricas = await run(() => loadServiceOrderMetrics(escopoDoDia(tenantA, DIA_ERRADO)));
+    const faixaCorreta = metricas.backlogAging.find((faixa) => faixa.key === '3-7');
+    const faixaDoBugAntigo = metricas.backlogAging.find((faixa) => faixa.key === '0-2');
+
+    expect(faixaCorreta?.total).toBe(1);
+    expect(faixaDoBugAntigo?.total).toBe(0);
+  });
+});
+
+describe('orcamentos: fronteira civil -> UTC dos periodos', () => {
+  it('envio e decisao as 23h locais entram no dia civil de ONTEM em UTC, nunca no de hoje', async () => {
+    const serviceOrderId = await abrirOrdem(tenantA);
+    const base = {
+      tenantId: tenantA.tenantId,
+      unitId: tenantA.unitId,
+      serviceOrderId,
+      subtotal: '100.00',
+      discount: '0.00',
+      total: '100.00',
+      currency: 'BRL',
+      createdAt: JANELA_PROBLEMATICA,
+      updatedAt: JANELA_PROBLEMATICA,
+    };
+
+    await getDb()
+      .insert(quotes)
+      .values([
+        {
+          id: newId(),
+          number: 101,
+          status: 'approved',
+          sentAt: JANELA_PROBLEMATICA,
+          decidedAt: JANELA_PROBLEMATICA,
+          ...base,
+        },
+      ]);
+
+    const metricasDiaCorreto = await run(() => loadQuoteMetrics(escopoDoDia(tenantA, DIA_CORRETO)));
+    const metricasDiaErrado = await run(() => loadQuoteMetrics(escopoDoDia(tenantA, DIA_ERRADO)));
+
+    expect(metricasDiaCorreto.sentInPeriod).toBe(1);
+    expect(metricasDiaCorreto.approvedInPeriod).toBe(1);
+    expect(metricasDiaErrado.sentInPeriod).toBe(0);
+    expect(metricasDiaErrado.approvedInPeriod).toBe(0);
+  });
+});
+
+describe('comunicacao: fronteira civil -> UTC dos periodos', () => {
+  it('mensagem registrada as 23h locais entra no dia civil de ONTEM em UTC, nunca no de hoje', async () => {
+    await getDb()
+      .insert(communicationMessages)
+      .values([
+        {
+          id: newId(),
+          tenantId: tenantA.tenantId,
+          unitId: tenantA.unitId,
+          channel: 'whatsapp',
+          origin: 'manual',
+          recipientValue: '11999998888',
+          recipientDisplay: '11999998888',
+          body: 'Ola',
+          status: 'sent',
+          sentAt: JANELA_PROBLEMATICA,
+          createdAt: JANELA_PROBLEMATICA,
+          updatedAt: JANELA_PROBLEMATICA,
+        },
+      ]);
+
+    const metricasDiaCorreto = await run(() =>
+      loadCommunicationMetrics(escopoDoDia(tenantA, DIA_CORRETO)),
+    );
+    const metricasDiaErrado = await run(() =>
+      loadCommunicationMetrics(escopoDoDia(tenantA, DIA_ERRADO)),
+    );
+
+    expect(metricasDiaCorreto.registeredInPeriod).toBe(1);
+    expect(metricasDiaErrado.registeredInPeriod).toBe(0);
   });
 });

@@ -1,6 +1,7 @@
 import 'server-only';
-import { and, eq, gte, inArray, lte, sql } from 'drizzle-orm';
+import { and, eq, gte, inArray, lt, sql } from 'drizzle-orm';
 import { getDb } from '@/core/db/client';
+import { civilDateRangeToUtc } from '@/core/time/civil-date';
 import { communicationMessages } from '@/modules/communications/infrastructure/schema';
 import type { AnalyticsScope } from '@/modules/analytics/domain/analytics-scope';
 
@@ -19,26 +20,26 @@ export interface CommunicationMetrics {
   failedInPeriod: number;
 }
 
-function startOfDayUtc(civilDate: string): Date {
-  return new Date(`${civilDate}T00:00:00.000Z`);
-}
-function endOfDayUtc(civilDate: string): Date {
-  return new Date(`${civilDate}T23:59:59.999Z`);
-}
-
 export async function loadCommunicationMetrics(
   scope: AnalyticsScope,
 ): Promise<CommunicationMetrics> {
   if (scope.selectedUnitIds.length === 0) return { registeredInPeriod: 0, failedInPeriod: 0 };
 
   const unitIds = [...scope.selectedUnitIds];
-  const periodStart = startOfDayUtc(scope.period.from);
-  const periodEnd = endOfDayUtc(scope.period.to);
+  /**
+   * Fronteira civil -> UTC (ADR-084, Prompt 19.1): ver quote-metrics.ts para
+   * a explicacao completa do bug que isto substitui.
+   */
+  const { startUtc: periodStart, endExclusiveUtc: periodEndExclusive } = civilDateRangeToUtc(
+    scope.period.from,
+    scope.period.to,
+    scope.timezone,
+  );
   const baseScope = and(
     eq(communicationMessages.tenantId, scope.tenantId),
     inArray(communicationMessages.unitId, unitIds),
     gte(communicationMessages.createdAt, periodStart),
-    lte(communicationMessages.createdAt, periodEnd),
+    lt(communicationMessages.createdAt, periodEndExclusive),
   );
 
   const [registeredRows, failedRows] = await Promise.all([

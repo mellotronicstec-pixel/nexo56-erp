@@ -1,6 +1,7 @@
 import 'server-only';
-import { and, eq, gte, inArray, lte, sql } from 'drizzle-orm';
+import { and, eq, gte, inArray, lt, sql } from 'drizzle-orm';
 import { getDb } from '@/core/db/client';
+import { civilDateRangeToUtc } from '@/core/time/civil-date';
 import { warranties, warrantyReturns } from '@/modules/warranties/infrastructure/schema';
 import type { AnalyticsScope } from '@/modules/analytics/domain/analytics-scope';
 
@@ -17,17 +18,21 @@ export interface WarrantyMetrics {
   returnsInPeriod: number;
 }
 
-function startOfDayUtc(civilDate: string): Date {
-  return new Date(`${civilDate}T00:00:00.000Z`);
-}
-function endOfDayUtc(civilDate: string): Date {
-  return new Date(`${civilDate}T23:59:59.999Z`);
-}
-
 export async function loadWarrantyMetrics(scope: AnalyticsScope): Promise<WarrantyMetrics> {
   if (scope.selectedUnitIds.length === 0) return { activeCount: 0, returnsInPeriod: 0 };
 
   const unitIds = [...scope.selectedUnitIds];
+  /**
+   * Fronteira civil -> UTC (ADR-084, Prompt 19.1): ver quote-metrics.ts para
+   * a explicacao completa do bug que isto substitui. `warranties.startsOn`/
+   * `endsOn` abaixo permanecem comparacao DATA CIVIL x DATA CIVIL (`scope.today`)
+   * — nao sao instantes, entao nao entram nesta correcao.
+   */
+  const { startUtc: periodStart, endExclusiveUtc: periodEndExclusive } = civilDateRangeToUtc(
+    scope.period.from,
+    scope.period.to,
+    scope.timezone,
+  );
 
   const [activeRows, returnRows] = await Promise.all([
     getDb()
@@ -49,8 +54,8 @@ export async function loadWarrantyMetrics(scope: AnalyticsScope): Promise<Warran
         and(
           eq(warrantyReturns.tenantId, scope.tenantId),
           inArray(warrantyReturns.unitId, unitIds),
-          gte(warrantyReturns.registeredAt, startOfDayUtc(scope.period.from)),
-          lte(warrantyReturns.registeredAt, endOfDayUtc(scope.period.to)),
+          gte(warrantyReturns.registeredAt, periodStart),
+          lt(warrantyReturns.registeredAt, periodEndExclusive),
         ),
       ),
   ]);

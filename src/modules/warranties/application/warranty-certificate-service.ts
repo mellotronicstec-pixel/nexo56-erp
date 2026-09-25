@@ -3,6 +3,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { and, eq } from 'drizzle-orm';
 import { getDb } from '@/core/db/client';
 import { runInTransaction, type TransactionExecutor } from '@/core/db/unit-of-work';
+import { todayIn } from '@/core/time/civil-date';
 import { BusinessRuleError, NotFoundError } from '@/core/errors';
 import { newId } from '@/core/ids/id';
 import { authorize } from '@/modules/access-control/application/authorization-service';
@@ -105,7 +106,13 @@ async function buildSnapshot(
     : [];
 
   return {
-    emitidoEm: new Date().toISOString().slice(0, 10),
+    /**
+     * Data civil de EMISSAO, no fuso do tenant (ADR-084, Prompt 19.1) — nao
+     * `new Date().toISOString().slice(0, 10)`, que e o dia civil em UTC. Perto
+     * da virada, um certificado emitido as 23h locais (madrugada em UTC, em
+     * qualquer fuso atras de UTC) mostraria a data de AMANHA no documento.
+     */
+    emitidoEm: todayIn(context.tenantTimezone),
     empresa: { nome: tenant?.name ?? '', unidade: unit?.name ?? '' },
     garantia: {
       numero: formatWarrantyNumber(warranty.number),

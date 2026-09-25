@@ -1,8 +1,9 @@
 import 'server-only';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, gte, lt, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { getDb } from '@/core/db/client';
 import { runInTransaction, type TransactionExecutor } from '@/core/db/unit-of-work';
+import { civilDateRangeToUtc } from '@/core/time/civil-date';
 import { ValidationError } from '@/core/errors';
 import { newId } from '@/core/ids/id';
 import { Money } from '@/core/money/money';
@@ -155,18 +156,34 @@ export async function listWarrantyCosts(context: TenantContext, warrantyId: stri
   return { items: rows, total: total.toString() };
 }
 
-/** Custo de garantia no periodo, para o painel. Somado no BANCO, nunca em JS. */
+/**
+ * Custo de garantia no periodo, para o painel. Somado no BANCO, nunca em JS.
+ *
+ * `period.from`/`to` sao datas civis no fuso do tenant — nao instantes UTC.
+ * Antes comparava com `DATE(created_at) BETWEEN from AND to`: `DATE()` do
+ * MariaDB usa o fuso da SESSAO (UTC, `client.ts`), nao o do tenant, o mesmo
+ * bug de ADR-084 (Prompt 19.1) — e ainda quebra o uso do indice em
+ * `created_at`, pois a coluna fica dentro de uma funcao. `civilDateRangeToUtc`
+ * resolve a fronteira certa e mantem a comparacao sargable.
+ */
 export async function sumWarrantyCosts(
   context: TenantContext,
   period: { from: string; to: string },
 ): Promise<string> {
+  const { startUtc, endExclusiveUtc } = civilDateRangeToUtc(
+    period.from,
+    period.to,
+    context.tenantTimezone,
+  );
+
   const [row] = await getDb()
     .select({ total: sql<string>`COALESCE(SUM(${warrantyCosts.amount}), 0)` })
     .from(warrantyCosts)
     .where(
       and(
         eq(warrantyCosts.tenantId, context.tenantId),
-        sql`DATE(${warrantyCosts.createdAt}) BETWEEN ${period.from} AND ${period.to}`,
+        gte(warrantyCosts.createdAt, startUtc),
+        lt(warrantyCosts.createdAt, endExclusiveUtc),
       ),
     );
 

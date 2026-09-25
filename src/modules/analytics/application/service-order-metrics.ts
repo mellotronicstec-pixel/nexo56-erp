@@ -1,6 +1,7 @@
 import 'server-only';
-import { and, eq, gte, inArray, lte, sql } from 'drizzle-orm';
+import { and, eq, gte, inArray, lt, sql } from 'drizzle-orm';
 import { getDb } from '@/core/db/client';
+import { civilDateRangeToUtc, civilDaysBetween, formatCivilDate } from '@/core/time/civil-date';
 import {
   isKnownStatus,
   SERVICE_ORDER_STATUSES,
@@ -60,15 +61,6 @@ function emptyMetrics(): ServiceOrderMetrics {
   };
 }
 
-/** Mesma conversao civil->instante usada em `listServiceOrders` (item 13). */
-function startOfDayUtc(civilDate: string): Date {
-  return new Date(`${civilDate}T00:00:00.000Z`);
-}
-
-function endOfDayUtc(civilDate: string): Date {
-  return new Date(`${civilDate}T23:59:59.999Z`);
-}
-
 interface StatusCountRow {
   status: string;
   total: number | string;
@@ -84,8 +76,15 @@ export async function loadServiceOrderMetrics(scope: AnalyticsScope): Promise<Se
     inArray(serviceOrders.unitId, unitIds),
   );
 
-  const periodStart = startOfDayUtc(scope.period.from);
-  const periodEnd = endOfDayUtc(scope.period.to);
+  /**
+   * Fronteira civil -> UTC (ADR-084, Prompt 19.1): ver quote-metrics.ts para
+   * a explicacao completa do bug que isto substitui.
+   */
+  const { startUtc: periodStart, endExclusiveUtc: periodEndExclusive } = civilDateRangeToUtc(
+    scope.period.from,
+    scope.period.to,
+    scope.timezone,
+  );
 
   const [
     distributionRows,
@@ -110,7 +109,7 @@ export async function loadServiceOrderMetrics(scope: AnalyticsScope): Promise<Se
         and(
           tenantScope,
           gte(serviceOrders.openedAt, periodStart),
-          lte(serviceOrders.openedAt, periodEnd),
+          lt(serviceOrders.openedAt, periodEndExclusive),
         ),
       ),
 
@@ -125,7 +124,7 @@ export async function loadServiceOrderMetrics(scope: AnalyticsScope): Promise<Se
           tenantScope,
           eq(serviceOrders.status, 'completed'),
           gte(serviceOrders.statusChangedAt, periodStart),
-          lte(serviceOrders.statusChangedAt, periodEnd),
+          lt(serviceOrders.statusChangedAt, periodEndExclusive),
         ),
       ),
 
@@ -138,28 +137,34 @@ export async function loadServiceOrderMetrics(scope: AnalyticsScope): Promise<Se
           tenantScope,
           eq(serviceOrders.status, 'cancelled'),
           gte(serviceOrders.statusChangedAt, periodStart),
-          lte(serviceOrders.statusChangedAt, periodEnd),
+          lt(serviceOrders.statusChangedAt, periodEndExclusive),
         ),
       ),
 
-    // Antiguidade do backlog aberto, AGORA — a partir de `opened_at` (item 40).
+    /**
+     * Antiguidade do backlog aberto, AGORA — a partir de `opened_at` (item 40).
+     *
+     * NAO usa `DATEDIFF(hoje, DATE(opened_at))`: `DATE()` do MariaDB usa o
+     * fuso da SESSAO (UTC, `client.ts`), nao o do tenant — o mesmo bug de
+     * ADR-084. Busca o instante bruto e converte para dia civil no fuso do
+     * tenant em JS, com `civilDaysBetween`.
+     */
     db
-      .select({ ageDays: sql<number>`DATEDIFF(${scope.today}, DATE(${serviceOrders.openedAt}))` })
+      .select({ openedAt: serviceOrders.openedAt })
       .from(serviceOrders)
       .where(and(tenantScope, sql`${serviceOrders.status} NOT IN ('completed','cancelled')`)),
 
-    // Tempo de ciclo: so OS finalizadas NO PERIODO (item 42).
+    // Tempo de ciclo: so OS finalizadas NO PERIODO (item 42). Mesma razao
+    // acima para nao usar `DATEDIFF(DATE(...), DATE(...))`.
     db
-      .select({
-        durationDays: sql<number>`DATEDIFF(DATE(${serviceOrders.statusChangedAt}), DATE(${serviceOrders.openedAt}))`,
-      })
+      .select({ openedAt: serviceOrders.openedAt, statusChangedAt: serviceOrders.statusChangedAt })
       .from(serviceOrders)
       .where(
         and(
           tenantScope,
           eq(serviceOrders.status, 'completed'),
           gte(serviceOrders.statusChangedAt, periodStart),
-          lte(serviceOrders.statusChangedAt, periodEnd),
+          lt(serviceOrders.statusChangedAt, periodEndExclusive),
         ),
       ),
   ]);
@@ -192,11 +197,18 @@ export async function loadServiceOrderMetrics(scope: AnalyticsScope): Promise<Se
       (cancelledCountRows[0] as { total: number | string } | undefined)?.total ?? 0,
     ),
     backlogAging: bucketBacklogAging(
-      (agingRows as unknown as { ageDays: number | string }[]).map((row) => Number(row.ageDays)),
+      agingRows.map((row) =>
+        civilDaysBetween(formatCivilDate(row.openedAt, scope.timezone), scope.today),
+      ),
     ),
     cycleTime: computeCycleTimeStats(
-      (cycleRows as unknown as { durationDays: number | string }[]).map((row) =>
-        Number(row.durationDays),
+      // `statusChangedAt` nao-nulo aqui: a query ja filtrou por
+      // `gte/lt(serviceOrders.statusChangedAt, ...)`, que exclui NULL em SQL.
+      cycleRows.map((row) =>
+        civilDaysBetween(
+          formatCivilDate(row.openedAt, scope.timezone),
+          formatCivilDate(row.statusChangedAt as Date, scope.timezone),
+        ),
       ),
     ),
   };

@@ -11,7 +11,6 @@ import {
   isNotNull,
   like,
   lt,
-  lte,
   or,
   type SQL,
 } from 'drizzle-orm';
@@ -37,7 +36,7 @@ import {
   serviceOrderTimeline,
   serviceOrders,
 } from '@/modules/service-orders/infrastructure/schema';
-import { todayIn } from '@/core/time/civil-date';
+import { addDays, startOfCivilDayUtc, todayIn } from '@/core/time/civil-date';
 import { SEQUENCE_TYPES, peekSequence } from '@/modules/tenancy/application/sequence-service';
 import { units } from '@/modules/tenancy/infrastructure/schema';
 import { users } from '@/modules/users/infrastructure/schema';
@@ -147,11 +146,6 @@ function buildSearch(rawQuery: string): SQL | undefined {
   return or(...conditions);
 }
 
-/** Limite superior do dia informado, para `openedAt <= fim do dia`. */
-function endOfDay(isoDate: string): Date {
-  return new Date(`${isoDate}T23:59:59.999Z`);
-}
-
 /**
  * Lista as Ordens de Servico da UNIDADE ATIVA.
  *
@@ -179,10 +173,23 @@ export async function listServiceOrders(
     eq(serviceOrders.unitId, context.activeUnitId),
     filters.query ? buildSearch(filters.query) : undefined,
     filters.customerId ? eq(serviceOrders.customerId, filters.customerId) : undefined,
+    /**
+     * Fronteira civil -> UTC (ADR-084, Prompt 19.1): `filters.from`/`to` sao
+     * datas civis digitadas no filtro, no fuso do tenant — nao instantes UTC.
+     * `${civil}T00:00:00.000Z`/`T23:59:59.999Z` literais excluiam OS abertas
+     * nas primeiras horas UTC do dia em qualquer fuso atras de UTC (o mesmo
+     * bug medido no fechamento do Prompt 19). O limite superior fica
+     * meio-aberto: inicio do dia SEGUINTE, nunca `23:59:59.999`.
+     */
     filters.from
-      ? gte(serviceOrders.openedAt, new Date(`${filters.from}T00:00:00.000Z`))
+      ? gte(serviceOrders.openedAt, startOfCivilDayUtc(filters.from, context.tenantTimezone))
       : undefined,
-    filters.to ? lte(serviceOrders.openedAt, endOfDay(filters.to)) : undefined,
+    filters.to
+      ? lt(
+          serviceOrders.openedAt,
+          startOfCivilDayUtc(addDays(filters.to, 1), context.tenantTimezone),
+        )
+      : undefined,
     filters.status ? eq(serviceOrders.status, filters.status) : undefined,
     filters.technicianId ? eq(serviceOrders.assignedTechnicianId, filters.technicianId) : undefined,
     /**
