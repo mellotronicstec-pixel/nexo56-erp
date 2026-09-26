@@ -180,25 +180,28 @@ describe('o catalogo de acoes de automations nao ganhou nenhuma acao de compra d
   });
 });
 
-describe('independente do Nexo56 AI (correcao de modularidade pos-CI #33)', () => {
-  it('nunca importa modules/ai/application nem modules/ai/infrastructure (nenhum AiGateway/AiProvider real no fluxo principal)', () => {
-    const infratores = PART_SEARCH_MODULE.filter(({ code }) =>
-      /modules\/ai\/(application|infrastructure)\//.test(code),
-    );
+describe('independente do Nexo56 AI (correcao de modularidade pos-CI #33; boundary de codigo pos-CI #34)', () => {
+  /**
+   * ZERO imports de `modules/ai`, sem excecao — nem domain, nem application,
+   * nem infrastructure, nem UI. A extracao de ancoras tecnicas que Part
+   * Search reutiliza NAO mora mais em `modules/ai`: subiu para
+   * `@/core/text/technical-anchors`, uma primitive compartilhada que os dois
+   * modulos importam simetricamente (nenhum importa do outro). Este teste
+   * falha se alguem reintroduzir qualquer dependencia de codigo de Part
+   * Search para o modulo de IA no futuro.
+   */
+  it('nao importa NADA de modules/ai (domain, application, infrastructure ou UI)', () => {
+    const padrao = /from\s+'@\/modules\/ai\//;
+    const infratores = PART_SEARCH_MODULE.filter(({ code }) => padrao.test(code));
     expect(infratores.map((f) => f.path)).toEqual([]);
   });
 
-  it('a UNICA importacao de modules/ai e a funcao pura extractTechnicalAnchors (domain, sem chamada de rede/IA)', () => {
-    const padrao = /from\s+'@\/modules\/ai\/([a-z/-]+)'/g;
-    for (const { path, code } of PART_SEARCH_MODULE) {
-      const matches = [...code.matchAll(padrao)];
-      for (const match of matches) {
-        expect(
-          match[1],
-          `${path} importa modules/ai/${match[1]} — so modules/ai/domain/technical-anchors e permitido`,
-        ).toBe('domain/technical-anchors');
-      }
-    }
+  it('a extracao de ancoras tecnicas vem da primitive compartilhada do core, nunca de modules/ai', () => {
+    const consumidor = PART_SEARCH_MODULE.find(({ path }) =>
+      path.endsWith(join('domain', 'query-normalization.ts')),
+    );
+    expect(consumidor).toBeDefined();
+    expect(consumidor!.code).toMatch(/from\s+'@\/core\/text\/technical-anchors'/);
   });
 
   it('nenhum arquivo referencia FEATURES.AI_CORE nem FEATURES.AI_WRITING (a busca nao gateia por feature de IA)', () => {

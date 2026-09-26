@@ -159,3 +159,13 @@ Candidate/Offer/Inventory Item, o Compatibility Assessor, o Ranking, o
 como descritos acima. Detalhes completos, incluindo a investigação e a
 matriz de testes que prova a independência, em
 `docs/modules/part-search/ai-independence.md`.
+
+**Segunda nota (pós-CI #34, mesmo dia):** a correção acima resolveu a
+dependência de _feature_, mas `query-normalization.ts` ainda importava
+`extractTechnicalAnchors` de `modules/ai/domain/technical-anchors` — uma
+dependência de código, nunca de execução (a função é pura), mas ainda
+incorreta para uma primitive genérica usada por dois módulos. A extração
+subiu para `src/core/text/technical-anchors.ts` (mesmo padrão de
+`normalize.ts`); o Nexo56 AI e a Busca de Peças agora importam a mesma
+primitive do core, simetricamente. Zero imports de Part Search para
+`modules/ai` a partir de então, garantido por teste de arquitetura.

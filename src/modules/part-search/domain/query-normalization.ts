@@ -1,13 +1,17 @@
-import { extractTechnicalAnchors } from '@/modules/ai/domain/technical-anchors';
+import { extractTechnicalAnchors } from '@/core/text/technical-anchors';
 import { normalizeSearchable } from '@/core/text/normalize';
 
 /**
  * NORMALIZACAO DA CONSULTA (Prompt 21, itens 29, 30, 105, 170, 171).
  *
- * REUTILIZA a mesma extracao de "ancoras" do Nexo56 AI (ADR-085) em vez de
- * reimplementar — `extractTechnicalAnchors` ja resolve exatamente o problema
- * do item 30 (`ABC-123` nunca pode virar `ABC-132`): qualquer trecho com
- * digito, com sufixo de unidade/letra colado, tratado como bloco atomico.
+ * REUTILIZA a mesma extracao de "ancoras" tecnicas do core (primitive
+ * compartilhada, `@/core/text/technical-anchors` — a mesma que o Nexo56 AI
+ * usa no seu Technical Anchor Guard, ADR-085/086) em vez de reimplementar —
+ * `extractTechnicalAnchors` ja resolve exatamente o problema do item 30
+ * (`ABC-123` nunca pode virar `ABC-132`): qualquer trecho com digito, com
+ * sufixo de unidade/letra colado, tratado como bloco atomico. Part Search
+ * NAO importa nada de `modules/ai` — a primitive mora no core, usada pelos
+ * dois de forma simetrica.
  *
  * DUAS SAIDAS, DOIS PROPOSITOS DIFERENTES:
  *

@@ -12,14 +12,14 @@ Compatibility Assessor e o Ranking — nenhum dos quais chama IA nenhuma.
 
 ## Investigação (antes da correção)
 
-| Pergunta                                                             | Resposta, com evidência                                                                                                                                                                                                      |
-| -------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Com `ai.core = OFF`, a ação "Buscar peça" desaparecia?               | **Sim** — `evaluateAccess` (Effective Access) nega `ai.part_search` inteira por `DEPENDENCY_UNSATISFIED` quando `ai.core` não está ligado, e `canSearchPartsDecision.allowed` vira `false` na página da OS.                  |
-| Com `ai.core = OFF`, o backend rejeitava a busca?                    | **Sim** — `performPartSearch` chamava `authorizePartSearch`, que exigia a feature `ai.part_search` (e, por dependência, `ai.core`) **antes** de qualquer busca interna.                                                      |
-| A busca interna de Inventory deixava de funcionar?                   | **Sim, por efeito colateral** — o gate composto bloqueava a função inteira, inclusive a parte 100% determinística.                                                                                                           |
-| `PartSearchProvider` deixava de funcionar?                           | **Sim, pelo mesmo motivo** — nunca chegava a ser chamado.                                                                                                                                                                    |
-| Existe algum uso real de `AiGateway` no Prompt 21?                   | **Não.** Busca no módulo inteiro por `AiGateway`/`AiProvider`/`modules/ai/application`/`modules/ai/infrastructure`: zero ocorrências.                                                                                        |
-| Existe AI enrichment implementado hoje, ou só arquitetura preparada? | **Nem arquitetura preparada.** A única importação de `modules/ai` é `extractTechnicalAnchors` (`modules/ai/domain/technical-anchors.ts`) — uma função **pura** de normalização de texto, sem chamada de rede nem inferência. |
+| Pergunta                                                             | Resposta, com evidência                                                                                                                                                                                                                                 |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Com `ai.core = OFF`, a ação "Buscar peça" desaparecia?               | **Sim** — `evaluateAccess` (Effective Access) nega `ai.part_search` inteira por `DEPENDENCY_UNSATISFIED` quando `ai.core` não está ligado, e `canSearchPartsDecision.allowed` vira `false` na página da OS.                                             |
+| Com `ai.core = OFF`, o backend rejeitava a busca?                    | **Sim** — `performPartSearch` chamava `authorizePartSearch`, que exigia a feature `ai.part_search` (e, por dependência, `ai.core`) **antes** de qualquer busca interna.                                                                                 |
+| A busca interna de Inventory deixava de funcionar?                   | **Sim, por efeito colateral** — o gate composto bloqueava a função inteira, inclusive a parte 100% determinística.                                                                                                                                      |
+| `PartSearchProvider` deixava de funcionar?                           | **Sim, pelo mesmo motivo** — nunca chegava a ser chamado.                                                                                                                                                                                               |
+| Existe algum uso real de `AiGateway` no Prompt 21?                   | **Não.** Busca no módulo inteiro por `AiGateway`/`AiProvider`/`modules/ai/application`/`modules/ai/infrastructure`: zero ocorrências.                                                                                                                   |
+| Existe AI enrichment implementado hoje, ou só arquitetura preparada? | **Nem arquitetura preparada.** A única importação era `extractTechnicalAnchors`, uma função **pura** de normalização de texto, sem chamada de rede nem inferência — desde a correção de código abaixo, nem essa importação de `modules/ai` existe mais. |
 
 ## A regra corrigida
 
@@ -76,6 +76,18 @@ Provado com banco real em
 e `describe('independente de ai.core: busca interna, provedor e producao ...')`)
 e estaticamente em `tests/unit/feature-catalog.test.ts` e
 `tests/unit/part-search-boundary.test.ts`.
+
+## Fechamento arquitetural: dependência de CÓDIGO também removida (pós-CI #34)
+
+A correção acima resolveu a dependência de **feature** (`ai.core`). Restava
+uma dependência de **código**: `query-normalization.ts` ainda importava
+`extractTechnicalAnchors` de `@/modules/ai/domain/technical-anchors` — nunca
+uma dependência de execução (a função é pura, sem I/O), mas ainda um edge no
+grafo de módulos que uma primitive genérica usada por dois módulos não deveria
+ter. Ver `docs/modules/part-search/architecture.md` (seção "Independência do
+Nexo56 AI") para o desenho final: a extração de âncoras técnicas mora em
+`src/core/text/technical-anchors.ts`, e tanto o Nexo56 AI quanto a Busca de
+Peças a importam do core, simetricamente — nenhum dos dois importa do outro.
 
 ## Migração de dados
 

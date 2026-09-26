@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  checkTechnicalAnchors,
-  extractTechnicalAnchors,
-} from '@/modules/ai/domain/technical-anchors';
+import { checkTechnicalAnchors } from '@/modules/ai/domain/technical-anchors';
 
 /**
  * PROTECAO DE SIGNIFICADO TECNICO (Prompt 20, itens 56 a 62, 105 a 107,
@@ -11,16 +8,14 @@ import {
  * Estes sao os testes de seguranca mais importantes do prompt: provam que a
  * troca silenciosa de um dado tecnico e DETECTADA, sempre, independente de o
  * provedor ter obedecido uma instrucao maliciosa ou simplesmente alucinado.
+ *
+ * A EXTRACAO de ancoras em si (`extractTechnicalAnchors`) e uma primitive
+ * generica que subiu para `@/core/text/technical-anchors` (correcao pos-CI
+ * #34 — Part Search tambem a usa, sem depender de `modules/ai`) — seus
+ * testes diretos ficam em `tests/unit/core-text-technical-anchors.test.ts`.
+ * Aqui testamos so a POLITICA de comparacao do AI Gateway
+ * (`checkTechnicalAnchors`), que e especifica deste modulo.
  */
-
-describe('normalizacao (item 58): apresentacao nao e fato', () => {
-  it('"220V" e "220 V" normalizam para a mesma ancora', () => {
-    const semEspaco = extractTechnicalAnchors('A tensao e 220V.');
-    const comEspaco = extractTechnicalAnchors('A tensao e 220 V.');
-    expect(semEspaco[0]?.normalized).toBe('220v');
-    expect(comEspaco.map((a) => a.normalized)).toContain('220v');
-  });
-});
 
 describe('item 105: ancoras tecnicas nao podem trocar', () => {
   it('220V nao pode virar 127V', () => {

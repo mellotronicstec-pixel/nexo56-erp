@@ -81,9 +81,22 @@ acontece.
 ## Independência do Nexo56 AI
 
 Part Search Core (busca interna, Compatibility Assessor, Ranking,
-`PartSearchProvider`, seleção humana) **nunca** depende de `ai.core` —
-ver `ai-independence.md` para a explicação completa e a prova de que
-nenhum uso real de `AiGateway`/`AiProvider` existe no fluxo principal.
+`PartSearchProvider`, seleção humana) **nunca** depende de `ai.core` — nem
+como feature, nem como código. Ver `ai-independence.md` para a explicação
+completa e a prova de que nenhum uso real de `AiGateway`/`AiProvider` existe
+no fluxo principal.
+
+**Zero imports de `modules/ai`**: a extração de âncoras técnicas
+(`extractTechnicalAnchors`) que a normalização de consulta reutiliza é uma
+primitive de texto pura e genérica — mora em `src/core/text/technical-anchors.ts`,
+ao lado de `normalize.ts` (mesmo padrão: uma operação que nasceu num módulo e
+subiu para o core quando um segundo módulo precisou dela, em vez de um
+importar do outro ou duplicar a regex). O Nexo56 AI usa a mesma primitive no
+seu Technical Anchor Guard (`modules/ai/domain/technical-anchors.ts`,
+`checkTechnicalAnchors` — que é a política de comparação, específica de IA,
+e continua lá). Um teste de arquitetura (`part-search-boundary.test.ts`)
+garante que nenhum arquivo do módulo importa qualquer coisa de
+`modules/ai` — domain, application, infrastructure ou UI.
 
 ## Por que uma tabela por conceito, e não uma tabela “resultado” genérica
 
