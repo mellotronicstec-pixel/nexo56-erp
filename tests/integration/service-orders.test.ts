@@ -2,6 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { eq, sql } from 'drizzle-orm';
 import { runWithContext } from '@/core/context/request-context';
 import { getDb } from '@/core/db/client';
+import { todayIn } from '@/core/time/civil-date';
 import { BusinessRuleError, NotFoundError, ValidationError } from '@/core/errors';
 import { auditLogs } from '@/modules/audit/infrastructure/schema';
 import { createCustomer } from '@/modules/customers/application/customer-service';
@@ -681,9 +682,54 @@ describe('busca e listagem (itens 45 a 50)', () => {
     const porCliente = await listServiceOrders(tenantA.context, { customerId: clienteA });
     expect(porCliente.total).toBe(2);
 
-    const hoje = new Date().toISOString().slice(0, 10);
+    /**
+     * `hoje` precisa ser a data civil no FUSO DO TENANT (ADR-084) — a mesma
+     * que `listServiceOrders` usa para resolver `from`/`to` via
+     * `startOfCivilDayUtc(..., context.tenantTimezone)`. `new
+     * Date().toISOString().slice(0, 10)` e a data civil em UTC: entre 00:00 e
+     * 02:59 UTC ela ja e o dia SEGUINTE ao dia civil de `America/Sao_Paulo`
+     * (UTC-3) — um bug real de determinismo do teste, medido no CI (run
+     * #35, falhou as 00:26 UTC), nunca um bug da query de producao. Usar
+     * `todayIn` (a mesma primitive oficial que a query consome
+     * indiretamente) faz o teste concordar com a producao em qualquer hora
+     * do dia.
+     */
+    const hoje = todayIn(tenantA.context.tenantTimezone);
     expect((await listServiceOrders(tenantA.context, { from: hoje, to: hoje })).total).toBe(2);
     expect((await listServiceOrders(tenantA.context, { from: '2099-01-01' })).total).toBe(0);
+  });
+
+  it('filtro de periodo usa a data civil do fuso do tenant, nunca UTC — prova da antiga janela 00:00-03:00 UTC (item 24/55 do hotfix, ADR-084)', async () => {
+    const criada = await run(() => createServiceOrder(tenantA.context, ordem()));
+
+    /**
+     * 2026-09-24T00:30:00.000Z: dentro da antiga janela perigosa. Em
+     * `America/Sao_Paulo` (UTC-3, sem DST) isso e 2026-09-23 21:30 local —
+     * dia civil ANTERIOR ao dia civil UTC. Grava o instante direto na
+     * coluna (mesmo padrao de outros testes de fronteira temporal do
+     * projeto, ex. `service-order-follow-up-job.test.ts`) em vez de mockar
+     * o relogio.
+     */
+    const instanteNaJanela = new Date('2026-09-24T00:30:00.000Z');
+    await getDb()
+      .update(serviceOrders)
+      .set({ openedAt: instanteNaJanela })
+      .where(eq(serviceOrders.id, criada.serviceOrderId));
+
+    const diaCivilEmSaoPaulo = todayIn(tenantA.context.tenantTimezone, instanteNaJanela);
+    expect(diaCivilEmSaoPaulo).toBe('2026-09-23');
+
+    const noDiaCivilCorreto = await listServiceOrders(tenantA.context, {
+      from: '2026-09-23',
+      to: '2026-09-23',
+    });
+    expect(noDiaCivilCorreto.items.map((i) => i.id)).toContain(criada.serviceOrderId);
+
+    const noDiaCivilUtcIngenuo = await listServiceOrders(tenantA.context, {
+      from: '2026-09-24',
+      to: '2026-09-24',
+    });
+    expect(noDiaCivilUtcIngenuo.items.map((i) => i.id)).not.toContain(criada.serviceOrderId);
   });
 
   it('traz cliente, equipamento e unidade sem consulta por linha', async () => {
